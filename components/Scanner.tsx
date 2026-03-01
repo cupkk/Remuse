@@ -22,6 +22,7 @@ interface ScannerProps {
   onItemAdded: (item: CollectedItem) => void;
   onStickerCreated: (sticker: Sticker) => void;
   onCancel: () => void;
+  onReset?: () => void;
   onViewDetail: (item: CollectedItem) => void;
   onCompleteItem?: (id: string) => void;
   onUpdateItem?: (item: CollectedItem) => void;
@@ -89,7 +90,7 @@ const ScrambleButton: React.FC<{
     );
 };
 
-const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem }) => {
+const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
   
@@ -508,8 +509,8 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
             </div>
 
             <div className="mt-6 flex gap-3">
-              <button 
-                onClick={onCancel}
+              <button
+                onClick={onReset || onCancel}
                 className="flex-1 py-3 border border-neutral-700 text-neutral-400 hover:text-white hover:border-white transition-colors font-display text-sm"
               >
                 结束批量归档
@@ -718,13 +719,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
-                    <button 
-                        onClick={onCancel}
+                    <button
+                        onClick={onReset || onCancel}
                         className="py-3 border border-neutral-700 text-neutral-400 hover:text-white hover:border-white transition-colors font-display text-sm"
                     >
-                        返回首页
+                        继续归档
                     </button>
-                    <button 
+                    <button
                         onClick={() => analysisResult && onViewDetail(analysisResult)}
                         className="py-3 bg-remuse-accent text-black font-bold hover:bg-white transition-colors font-display text-sm flex items-center justify-center gap-2"
                     >

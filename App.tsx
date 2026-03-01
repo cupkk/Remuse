@@ -279,6 +279,7 @@ const App: React.FC = () => {
               halls={halls}
               onItemAdded={handleAddItem} 
               onStickerCreated={handleStickerCreated}
+              onReset={() => setScannerKey(k => k + 1)}
               onCancel={() => {
                 setScannerKey(k => k + 1); // 点击取消/关闭时重置扫描仪并返回画廊
                 handleChangeView('MUSEUM');
