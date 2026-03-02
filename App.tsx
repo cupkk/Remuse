@@ -7,13 +7,12 @@ import IdeaGenerator from './components/IdeaGenerator';
 import LaunchScreen from './components/LaunchScreen';
 import Onboarding from './components/Onboarding';
 import CuratorOffice from './components/CuratorOffice';
-import CollectionGuide from './components/CollectionGuide';
 import StickerLibrary from './components/StickerLibrary';
 import InspirationPlaza from './components/InspirationPlaza';
 import ErrorBoundary from './components/ErrorBoundary';
 import SkeletonScreen from './components/SkeletonScreen';
 import MilestoneCelebration, { isMilestone } from './components/MilestoneCelebration';
-import { CollectedItem, ItemCategory, ViewState, Difficulty, ExhibitionHall, GuideData, Sticker } from './types';
+import { CollectedItem, ItemCategory, ViewState, Difficulty, ExhibitionHall, Sticker } from './types';
 
 // Mock Data for Initial Load
 const MOCK_ITEMS: CollectedItem[] = [
@@ -115,13 +114,6 @@ const App: React.FC = () => {
 
   // Milestone celebration state
   const [milestoneInfo, setMilestoneInfo] = useState<{ count: number; name: string } | null>(null);
-  
-  // Guide State
-  const [guideData, setGuideData] = useState<GuideData>({
-    common: [],
-    rare: [],
-    seasonal: []
-  });
 
   // --- View transition with skeleton ---
   const handleChangeView = useCallback((newView: ViewState) => {
@@ -239,13 +231,6 @@ const App: React.FC = () => {
     };
     setHalls(prev => [...prev, newHall]);
   };
-  
-  const handleUpdateGuide = (category: keyof GuideData, itemId: string) => {
-    setGuideData(prev => ({
-        ...prev,
-        [category]: [...prev[category], itemId]
-    }));
-  };
 
   return (
     <ErrorBoundary>
@@ -300,14 +285,6 @@ const App: React.FC = () => {
               halls={halls}
               onSelectItem={handleSelectItem} 
               onAddHall={handleAddHall}
-            />
-          )}
-          
-          {currentView === 'GUIDE' && (
-            <CollectionGuide 
-                items={items}
-                guideData={guideData}
-                onUpdateGuide={handleUpdateGuide}
             />
           )}
 

@@ -95,21 +95,15 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
                active={currentView === 'SCANNER'} 
                onClick={() => onChangeView('SCANNER')}
              />
-             <NavItem 
-               icon={<Box size={20}/>} 
-               label="藏品馆" 
-               active={currentView === 'MUSEUM' || currentView === 'ITEM_DETAIL'} 
+             <NavItem
+               icon={<Box size={20}/>}
+               label="藏品馆"
+               active={currentView === 'MUSEUM' || currentView === 'ITEM_DETAIL'}
                onClick={() => onChangeView('MUSEUM')}
              />
-             <NavItem 
-               icon={<BookOpen size={20}/>} 
-               label="收集图鉴" 
-               active={currentView === 'GUIDE'} 
-               onClick={() => onChangeView('GUIDE')}
-             />
-             <NavItem 
-               icon={<Sticker size={20}/>} 
-               label="贴纸库" 
+             <NavItem
+               icon={<Sticker size={20}/>}
+               label="贴纸库"
                active={currentView === 'STICKER_LIBRARY'} 
                onClick={() => onChangeView('STICKER_LIBRARY')}
              />
@@ -186,12 +180,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
         </div>
 
         {/* Right Group */}
-        <NavItem 
-          icon={<BookOpen size={20}/>} 
-          label="图鉴" 
-          active={currentView === 'GUIDE'} 
-          onClick={() => onChangeView('GUIDE')}
-        />
+
         <NavItem 
           icon={<Trophy size={20}/>} 
           label="我的" 

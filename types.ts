@@ -70,10 +70,4 @@ export interface Tool {
   color: string;
 }
 
-export interface GuideData {
-  common: string[];
-  rare: string[];
-  seasonal: string[];
-}
-
-export type ViewState = 'MUSEUM' | 'SCANNER' | 'ITEM_DETAIL' | 'PROFILE' | 'GUIDE' | 'STICKER_LIBRARY' | 'INSPIRATION';
+export type ViewState = 'MUSEUM' | 'SCANNER' | 'ITEM_DETAIL' | 'PROFILE' | 'STICKER_LIBRARY' | 'INSPIRATION';

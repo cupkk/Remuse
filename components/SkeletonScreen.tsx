@@ -85,7 +85,7 @@ const SkeletonScreen: React.FC<SkeletonScreenProps> = ({ view }) => {
     SCANNER: <ScannerSkeleton />,
     MUSEUM: <GallerySkeleton />,
     ITEM_DETAIL: <DetailSkeleton />,
-    GUIDE: <CardListSkeleton />,
+
     STICKER_LIBRARY: <CardListSkeleton />,
     INSPIRATION: <CardListSkeleton />,
     PROFILE: <CardListSkeleton />,
