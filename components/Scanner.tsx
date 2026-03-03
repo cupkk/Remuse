@@ -523,10 +523,39 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
         {!isBatchMode && (isAnalyzing || isGeneratingSticker) && (
           <div className="bg-remuse-panel border border-remuse-border p-8 rounded-none clip-corner flex flex-col items-center animate-fade-in">
             <div className="relative w-32 h-32 mb-6">
-               <div className="absolute inset-0 border-2 border-remuse-accent rounded-full animate-ping opacity-20"></div>
-               <div className="absolute inset-0 border-2 border-remuse-secondary rounded-full animate-spin border-t-transparent"></div>
-               {previewUrl && (
-                 <img src={previewUrl} alt="Scanning" className="w-full h-full object-cover rounded-full opacity-50 grayscale" />
+                 {/* 底部脉冲光圈 */}
+                 <div className="absolute inset-[-10px] border-2 border-remuse-accent rounded-full animate-ping opacity-20"></div>
+                 <div className="absolute inset-[-20px] border border-remuse-secondary rounded-full animate-ping opacity-10" style={{ animationDelay: '0.5s' }}></div>
+                 
+                 {/* 蓝边动态闭环 / 扫描环 */}
+                 <div className="absolute inset-0 z-10">
+                   <svg className="w-full h-full animate-spin" viewBox="0 0 120 120" style={{ animationDuration: '3s' }}>
+                     <defs>
+                       <linearGradient id="scan-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                         <stop offset="0%" stopColor="#00ffff" stopOpacity="1" />
+                         <stop offset="50%" stopColor="#00ffff" stopOpacity="0.5" />
+                         <stop offset="100%" stopColor="#ccff00" stopOpacity="0" />
+                       </linearGradient>
+                     </defs>
+                     <circle cx="60" cy="60" r="58" stroke="url(#scan-gradient)" strokeWidth="3" fill="none" strokeDasharray="360" strokeDashoffset="60" className="opacity-80" />
+                   </svg>
+                 </div>
+                 
+                 {/* 扫描线上下移动特效 */}
+                 <div className="absolute inset-0 z-20 overflow-hidden rounded-full">
+                     <div className="w-full h-[2px] bg-remuse-secondary opacity-70 shadow-[0_0_8px_2px_#00ffff] animate-[pulse_2s_ease-in-out_infinite]" style={{
+                         animation: 'scan-line 2s ease-in-out infinite alternate',
+                     }}></div>
+                     <style>{`
+                         @keyframes scan-line {
+                             0% { transform: translateY(0); }
+                             100% { transform: translateY(128px); }
+                         }
+                     `}</style>
+                 </div>
+
+                 {previewUrl && (
+                   <img src={previewUrl} alt="Scanning" className="w-full h-full object-cover rounded-full opacity-60 mix-blend-luminosity grayscale" />
                )}
             </div>
             <h3 className="text-xl font-display text-remuse-accent animate-pulse text-center">{statusText}</h3>
