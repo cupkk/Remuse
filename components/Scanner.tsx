@@ -27,6 +27,7 @@ interface ScannerProps {
   onCompleteItem?: (id: string) => void;
   onUpdateItem?: (item: CollectedItem) => void;
   onDeleteItem?: (id: string) => void;
+  existingStickers?: Sticker[];
 }
 
 const ScrambleButton: React.FC<{ 
@@ -90,7 +91,7 @@ const ScrambleButton: React.FC<{
     );
 };
 
-const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem }) => {
+const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
   

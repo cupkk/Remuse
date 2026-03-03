@@ -276,6 +276,7 @@ const App: React.FC = () => {
               onCompleteItem={handleCompleteRemuse}
               onUpdateItem={handleUpdateItem}
               onDeleteItem={handleDeleteItem}
+              existingStickers={stickers}
             />
           </div>
 
@@ -296,13 +297,14 @@ const App: React.FC = () => {
           )}
           
           {currentView === 'ITEM_DETAIL' && selectedItem && (
-            <IdeaGenerator 
-              item={selectedItem} 
+            <IdeaGenerator
+              item={selectedItem}
               onBack={() => handleChangeView('MUSEUM')}
               onComplete={handleCompleteRemuse}
               onUpdateItem={handleUpdateItem}
               onDeleteItem={handleDeleteItem}
               onStickerCreated={handleStickerCreated}
+              hasExistingSticker={stickers.some(s => s.originalItemId === selectedItem.id)}
             />
           )}
 

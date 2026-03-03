@@ -11,6 +11,7 @@ interface IdeaGeneratorProps {
   onUpdateItem?: (updatedItem: CollectedItem) => void;
   onDeleteItem?: (itemId: string) => void;
   onStickerCreated?: (sticker: Sticker) => void;
+  hasExistingSticker?: boolean;
 }
 
 const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
@@ -31,12 +32,13 @@ const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
   );
 };
 
-const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated }) => {
+const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated, hasExistingSticker: initialHasSticker }) => {
   const [selectedIdea, setSelectedIdea] = useState<RemuseIdea | null>(item.ideas?.[0] || null);
   const [showCelebration, setShowCelebration] = useState(false);
 
   const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
   const [showStickerSuccess, setShowStickerSuccess] = useState(false);
+  const [localHasSticker, setLocalHasSticker] = useState(!!initialHasSticker);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -67,6 +69,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
       };
       
       onStickerCreated(newSticker);
+      setLocalHasSticker(true);
       setShowStickerSuccess(true);
       setTimeout(() => setShowStickerSuccess(false), 3000);
     } catch (err) {
@@ -307,17 +310,24 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                        <CheckCircle2 size={16} /> 已生成并添加到贴纸库
                     </div>
                   ) : (
-                    <button
-                        onClick={handleGenerateSticker}
-                        disabled={isGeneratingSticker}
-                        className="w-full bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group"
-                    >
-                        {isGeneratingSticker ? (
-                           <><Loader2 size={16} className="animate-spin text-remuse-secondary" /> 正在生成...</>
-                        ) : (
-                           <><StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" /> 生成数字贴纸</>
+                    <div className="space-y-2">
+                        {localHasSticker && (
+                           <div className="w-full bg-remuse-accent/10 border border-remuse-accent/20 text-remuse-accent py-2 px-3 text-center text-xs font-mono flex items-center justify-center gap-2">
+                              <CheckCircle2 size={14} /> 该藏品已生成数字贴纸
+                           </div>
                         )}
-                    </button>
+                        <button
+                            onClick={handleGenerateSticker}
+                            disabled={isGeneratingSticker}
+                            className="w-full bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group"
+                        >
+                            {isGeneratingSticker ? (
+                               <><Loader2 size={16} className="animate-spin text-remuse-secondary" /> 正在生成...</>
+                            ) : (
+                               <><StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" /> {localHasSticker ? '重新生成数字贴纸' : '生成数字贴纸'}</>
+                            )}
+                        </button>
+                    </div>
                   )}
                 </div>
              )}
