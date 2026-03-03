@@ -73,18 +73,18 @@ const MOCK_ITEMS: CollectedItem[] = [
 
 // Default Covers
 const DEFAULT_COVERS: Record<string, string> = {
-  // 牛皮纸+麻绳礼物包装，暖色调手工感
-  [ItemCategory.PACKAGING]: 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?auto=format&fit=crop&q=80&w=400',
-  // 陶瓷器皿，大地色系温暖质感
-  [ItemCategory.CONTAINER]: 'https://images.unsplash.com/photo-1604079628040-94301bb21b91?auto=format&fit=crop&q=80&w=400',
-  // 复古信件与明信片，怀旧浪漫
-  [ItemCategory.PAPER]: 'https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?auto=format&fit=crop&q=80&w=400',
-  // 复古胶片相机，暖色温文艺感
-  [ItemCategory.ELECTRONIC]: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400',
-  // 彩色毛线团，温暖舒适手工感
-  [ItemCategory.TEXTILE]: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&q=80&w=400',
-  // 画笔与美术用品，创意生活感
-  [ItemCategory.OTHER]: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=400',
+  // 奶茶周边 — 两杯梅森罐饮品，温暖柔和
+  [ItemCategory.PACKAGING]: 'https://images.unsplash.com/photo-1525803377221-4f6ccdaa5133?auto=format&fit=crop&q=80&w=400',
+  // 瓶瓶罐罐 — 窗台彩色复古玻璃花瓶
+  [ItemCategory.CONTAINER]: 'https://images.unsplash.com/photo-1709346727368-dc3e2b8c6124?auto=format&fit=crop&q=80&w=400',
+  // 手办玩偶 — 穿裙子戴皇冠的可爱兔兔
+  [ItemCategory.PAPER]: 'https://images.unsplash.com/photo-1692935318316-8315eb21761e?auto=format&fit=crop&q=80&w=400',
+  // 徽章冰箱贴 — 贴满旅行磁贴的白色冰箱
+  [ItemCategory.ELECTRONIC]: 'https://images.unsplash.com/photo-1597502321303-ac7965ad7e8e?auto=format&fit=crop&q=80&w=400',
+  // 纪念票根 — 日本地铁纸质车票，复古文艺
+  [ItemCategory.TEXTILE]: 'https://images.unsplash.com/photo-1611550082883-a65b37a8ea89?auto=format&fit=crop&q=80&w=400',
+  // 其他好物 — 手帐本+贴纸+和纸胶带平铺
+  [ItemCategory.OTHER]: 'https://images.unsplash.com/photo-1609338177258-4ce9fafc513e?auto=format&fit=crop&q=80&w=400',
 };
 
 const INITIAL_HALLS: ExhibitionHall[] = Object.values(ItemCategory).map(cat => ({

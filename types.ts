@@ -1,10 +1,10 @@
 
 export enum ItemCategory {
-  PACKAGING = '包装',
-  CONTAINER = '容器',
-  PAPER = '纸质',
-  ELECTRONIC = '电子',
-  TEXTILE = '纺织',
+  PACKAGING = '奶茶周边',
+  CONTAINER = '瓶瓶罐罐',
+  PAPER = '手办玩偶',
+  ELECTRONIC = '徽章冰箱贴',
+  TEXTILE = '纪念票根',
   OTHER = '其他'
 }
 

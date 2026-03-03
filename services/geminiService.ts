@@ -225,7 +225,7 @@ export const analyzeItemImage = async (base64Image: string): Promise<{
             请返回符合以下 Schema 的 JSON:
             {
               "name": "简短的中文物品名称",
-              "category": "必须是以下之一: 包装, 容器, 纸质, 电子, 纺织, 其他",
+              "category": "必须是以下之一: 奶茶周边, 瓶瓶罐罐, 手办玩偶, 徽章冰箱贴, 纪念票根, 其他",
               "material": "主要材质 (例如: 塑料, 玻璃, 金属)",
               "story": "一句富有创意、略带哲理的中文描述。",
               "tags": ["标签1", "标签2", "标签3"]

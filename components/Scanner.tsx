@@ -372,7 +372,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
     }
 
     setIsGeneratingSticker(true);
-    setStatusText("正在生成矢量贴纸与短剧...");
+    setStatusText("正在生成专属贴纸与藏品物语");
 
     try {
         // Extract base64 from stored data URL (no blob fetch needed)
@@ -504,7 +504,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                             onClick={() => setPreviewDetailItem(item.result!)}
                             className="flex items-center gap-1.5 text-xs font-mono bg-remuse-accent/10 hover:bg-remuse-accent/20 text-remuse-accent px-2 py-1 rounded border border-remuse-accent/20 transition-colors shrink-0"
                           >
-                            <Box size={12} className="shrink-0" /> 查看详情
+                            <Box size={12} className="shrink-0" /> 查看再生协议
                           </button>
                         </div>
                       </>
@@ -765,7 +765,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                         className="w-full mb-4 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group"
                     >
                         <StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" />
-                        生成数字贴纸 & 短剧
+                        生成专属贴纸
                     </button>
                 )}
 
@@ -780,7 +780,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                         onClick={() => analysisResult && onViewDetail(analysisResult)}
                         className="py-3 bg-remuse-accent text-black font-bold hover:bg-white transition-colors font-display text-sm flex items-center justify-center gap-2"
                     >
-                        查看详情 <ArrowRight size={16} />
+                        查看再生协议 <ArrowRight size={16} />
                     </button>
                 </div>
             </div>
