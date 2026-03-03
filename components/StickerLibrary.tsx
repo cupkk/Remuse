@@ -41,6 +41,71 @@ const XHS_TEMPLATES: XhsTemplate[] = [
     { id: 'peachy-keen', name: '蜜桃生活', ratio: '4:3', width: 1080, height: 810, bgColor: '#FFF0F0', accentColor: '#F48FB1', textColor: '#C62828', layout: 'quad-grid' },
 ];
 
+const isMobileDevice = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+const saveBlobToDevice = async (blob: Blob, filename: string) => {
+    const mobile = isMobileDevice();
+
+    if (mobile && navigator.share) {
+        try {
+            const file = new File([blob], filename, { type: blob.type || 'image/png' });
+            const canShareWithFile = typeof navigator.canShare === 'function'
+                ? navigator.canShare({ files: [file] })
+                : true;
+
+            if (canShareWithFile) {
+                await navigator.share({
+                    files: [file],
+                    title: '保存图片',
+                    text: '保存到相册'
+                });
+                return;
+            }
+        } catch (error) {
+            logger.warn('Share API save failed, fallback to download:', error);
+        }
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = objectUrl;
+    link.click();
+
+    if (mobile) {
+        window.open(objectUrl, '_blank');
+    }
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+};
+
+const saveCanvasToDevice = async (canvas: HTMLCanvasElement, filename: string) => {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) {
+        alert('图片导出失败，请重试');
+        return;
+    }
+    await saveBlobToDevice(blob, filename);
+};
+
+const saveImageUrlToDevice = async (imageUrl: string, filename: string) => {
+    try {
+        const response = await fetch(imageUrl, { mode: 'cors' });
+        const blob = await response.blob();
+        await saveBlobToDevice(blob, filename);
+    } catch (error) {
+        logger.warn('Fetch image as blob failed, fallback to direct open:', error);
+        if (isMobileDevice()) {
+            window.open(imageUrl, '_blank');
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = filename;
+        link.click();
+    }
+};
+
 const StickerCard: React.FC<{ 
     sticker: Sticker; 
     onDelete: () => void; 
@@ -77,12 +142,9 @@ const StickerCard: React.FC<{
             {!selectable && (
                 <div className="absolute top-2 right-2 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
                     <button 
-                        onClick={(e) => {
+                        onClick={async (e) => {
                             e.stopPropagation();
-                            const link = document.createElement('a');
-                            link.href = sticker.stickerImageUrl;
-                            link.download = `remuse-sticker-${sticker.id}.png`;
-                            link.click();
+                            await saveImageUrlToDevice(sticker.stickerImageUrl, `remuse-sticker-${sticker.id}.png`);
                         }}
                         className="p-1.5 bg-neutral-800 text-white hover:text-remuse-accent rounded border border-neutral-700"
                         title="Download"
@@ -300,11 +362,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
              }
         }
         
-        // 3. Download
-        const link = document.createElement('a');
-        link.download = `remuse-layout-${Date.now()}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        await saveCanvasToDevice(canvas, `remuse-layout-${Date.now()}.png`);
     };
 
     // --- 小红书配图导出 ---
@@ -362,7 +420,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
 
         // Layout stickers based on template layout
         const contentTop = titleY + 60;
-        const contentBottom = t.height - 160;
+        const contentBottom = t.height - 190;
         const contentHeight = contentBottom - contentTop;
         const contentLeft = 80;
         const contentRight = t.width - 80;
@@ -425,24 +483,17 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
                 return acc;
             }, []);
             dramaLines.slice(0, 2).forEach((line, i) => {
-                ctx.fillText(line, t.width / 2, contentBottom + 30 + i * 24);
+                ctx.fillText(line, t.width / 2, contentBottom + 36 + i * 24);
             });
         }
 
         // Watermark
         ctx.fillStyle = t.accentColor;
-        ctx.font = `bold 20px "Comfortaa", sans-serif`;
+        ctx.font = `bold 24px "Noto Sans SC", sans-serif`;
         ctx.textAlign = 'right';
-        ctx.fillText('REMUSE', t.width - 60, t.height - 50);
-        ctx.font = `12px "Noto Sans SC", sans-serif`;
-        ctx.fillStyle = t.textColor + '88';
-        ctx.fillText('万物再博物馆', t.width - 60, t.height - 30);
+        ctx.fillText('再生博物馆', t.width - 60, t.height - 42);
 
-        // Download
-        const link = document.createElement('a');
-        link.download = `remuse-xhs-${t.id}-${Date.now()}.png`;
-        link.href = canvas.toDataURL('image/png', 0.95);
-        link.click();
+        await saveCanvasToDevice(canvas, `remuse-xhs-${t.id}-${Date.now()}.png`);
     };
 
     // --- 手账贴纸打印导出 ---
@@ -545,10 +596,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
         ctx.textAlign = 'center';
         ctx.fillText('remuse.app · print on sticker paper for best results', A4_W / 2, A4_H - 40);
 
-        const link = document.createElement('a');
-        link.download = `remuse-sticker-sheet-${Date.now()}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        await saveCanvasToDevice(canvas, `remuse-sticker-sheet-${Date.now()}.png`);
     };
 
     // --- Unified Pointer Logic (mouse + touch) ---
@@ -667,49 +715,50 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
                                     maxHeight: '70vh'
                                 }}
                             >
-                                {/* Decorative border */}
-                                <div className="w-full h-full relative p-6">
-                                    <div className="absolute inset-5 border-2 border-dashed rounded-sm" style={{ borderColor: t.accentColor + '66' }} />
+                                {/* Flex column layout — title / stickers / text / watermark, no overlap */}
+                                <div className="w-full h-full relative p-5 flex flex-col">
+                                    {/* Decorative border (behind everything) */}
+                                    <div className="absolute inset-4 border-2 border-dashed rounded-sm pointer-events-none" style={{ borderColor: t.accentColor + '66' }} />
                                     {/* Corner dots */}
-                                    {[[5,5],[5,'auto'],['auto',5],['auto','auto']].map(([top, left], idx) => (
-                                        <div key={idx} className="absolute w-3 h-3 rounded-full" style={{ 
+                                    {[[4,4],[4,'auto'],['auto',4],['auto','auto']].map(([top, left], idx) => (
+                                        <div key={idx} className="absolute w-3 h-3 rounded-full pointer-events-none" style={{ 
                                             backgroundColor: t.accentColor,
                                             top: typeof top === 'number' ? `${top * 4}px` : undefined,
-                                            bottom: top === 'auto' ? '20px' : undefined,
+                                            bottom: top === 'auto' ? '16px' : undefined,
                                             left: typeof left === 'number' ? `${left * 4}px` : undefined,
-                                            right: left === 'auto' ? '20px' : undefined,
+                                            right: left === 'auto' ? '16px' : undefined,
                                         }} />
                                     ))}
 
-                                    {/* Title */}
-                                    <div className="text-center pt-4 pb-2 relative z-10">
-                                        <p className="font-bold font-display text-lg" style={{ color: t.textColor }}>{xhsTitle}</p>
-                                        <div className="w-16 h-0.5 mx-auto mt-2" style={{ backgroundColor: t.accentColor }} />
+                                    {/* ① Title (固定高度) */}
+                                    <div className="text-center pt-3 pb-1 shrink-0 relative z-10">
+                                        <p className="font-bold font-display text-base leading-tight" style={{ color: t.textColor }}>{xhsTitle}</p>
+                                        <div className="w-12 h-0.5 mx-auto mt-1.5" style={{ backgroundColor: t.accentColor }} />
                                     </div>
 
-                                    {/* Stickers Preview */}
-                                    <div className="flex-1 flex flex-wrap items-center justify-center gap-3 py-4 relative z-10">
+                                    {/* ② Stickers (弹性填充中间所有空间) */}
+                                    <div className="flex-1 min-h-0 flex flex-wrap items-center justify-center gap-2 z-20 overflow-hidden px-4 py-2">
                                         {selectedStickers.slice(0, 4).map((s, i) => (
                                             <div key={s.id} className="transition-transform hover:scale-110" style={{ 
                                                 transform: `rotate(${(i % 2 === 0 ? -1 : 1) * (4 + i * 2)}deg)`,
-                                                width: selectedStickers.length === 1 ? '60%' : selectedStickers.length === 2 ? '45%' : '38%'
+                                                width: selectedStickers.length === 1 ? '54%' : selectedStickers.length === 2 ? '40%' : '34%',
+                                                maxWidth: '120px'
                                             }}>
-                                                <img src={s.stickerImageUrl} alt="" className="w-full h-auto drop-shadow-lg" />
+                                                <img src={s.stickerImageUrl} alt="" className="w-full h-auto max-h-32 object-contain drop-shadow-lg" />
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* Drama text */}
+                                    {/* ③ Drama text (固定在贴纸下方) */}
                                     {selectedStickers[0]?.dramaText && (
-                                        <p className="text-center text-xs mt-1 opacity-60 line-clamp-2 relative z-10" style={{ color: t.textColor }}>
+                                        <p className="shrink-0 text-center text-xs opacity-60 line-clamp-2 z-10 px-4 pb-1 leading-snug" style={{ color: t.textColor }}>
                                             「{selectedStickers[0].dramaText.slice(0, 40)}」
                                         </p>
                                     )}
 
-                                    {/* Watermark */}
-                                    <div className="absolute bottom-5 right-6 text-right z-10">
-                                        <p className="font-display font-bold text-sm" style={{ color: t.accentColor }}>REMUSE</p>
-                                        <p className="text-[10px] opacity-50" style={{ color: t.textColor }}>万物再博物馆</p>
+                                    {/* ④ Watermark (最底部右对齐) */}
+                                    <div className="shrink-0 text-right z-10 pr-1 pb-0.5">
+                                        <p className="font-display font-bold text-xs" style={{ color: t.accentColor }}>再生博物馆</p>
                                     </div>
                                 </div>
                             </div>

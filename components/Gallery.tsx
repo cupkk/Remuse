@@ -198,11 +198,13 @@ const Gallery: React.FC<GalleryProps> = ({ items, halls, onSelectItem, onAddHall
               className="flex flex-col items-center group cursor-pointer z-10 focus:outline-none focus:ring-2 focus:ring-remuse-accent rounded-lg"
             >
                <div className="relative w-full aspect-[4/5] transition-all duration-300 hover:-translate-y-2">
-                 <div className="w-full h-full border-2 border-dashed border-neutral-700 hover:border-remuse-accent bg-transparent clip-house flex flex-col items-center justify-center gap-4 transition-colors">
-                    <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-remuse-accent group-hover:text-black transition-colors">
-                      <Plus size={24} />
+                 <div className="w-full h-full bg-transparent clip-house relative overflow-hidden border border-neutral-800 group-hover:border-remuse-accent/70 transition-colors">
+                    <div className="absolute inset-[10%] border-2 border-dashed border-neutral-700 group-hover:border-remuse-accent flex flex-col items-center justify-center gap-4 transition-colors">
+                      <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center group-hover:bg-remuse-accent group-hover:text-black transition-colors">
+                        <Plus size={24} />
+                      </div>
+                      <span className="font-display text-xs text-neutral-400 group-hover:text-remuse-accent">创建新展馆</span>
                     </div>
-                    <span className="font-display text-xs text-neutral-400 group-hover:text-remuse-accent">创建新展馆</span>
                  </div>
                </div>
             </div>

@@ -146,6 +146,43 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
     };
   }, []);
 
+  // Sync single-scan success UI when sticker is generated in global background task
+  useEffect(() => {
+    if (!analysisResult || !existingStickers?.length) return;
+    const matchedSticker = existingStickers.find(s => s.originalItemId === analysisResult.id);
+    if (matchedSticker) {
+      setGeneratedSticker(matchedSticker);
+    }
+  }, [analysisResult, existingStickers]);
+
+  // Sync batch mode UI with global generation state
+  useEffect(() => {
+    if (!existingStickers) return;
+    setBatchItems(prev => {
+      let changed = false;
+      const next = prev.map(item => {
+        if (!item.result) return item;
+
+        const globalGenerating = !!generatingStickersGlobal[item.result.id];
+        const matchedSticker = existingStickers.find(s => s.originalItemId === item.result!.id);
+
+        const shouldUpdateGenerating = item.isGeneratingSticker !== globalGenerating;
+        const shouldUpdateSticker = !!matchedSticker && item.generatedSticker?.id !== matchedSticker.id;
+
+        if (!shouldUpdateGenerating && !shouldUpdateSticker) return item;
+
+        changed = true;
+        return {
+          ...item,
+          isGeneratingSticker: globalGenerating,
+          generatedSticker: matchedSticker ?? item.generatedSticker,
+        };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [generatingStickersGlobal, existingStickers]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;

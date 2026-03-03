@@ -61,6 +61,7 @@ export interface InspirationPost {
   likes: number;
   comments: number;
   isLiked?: boolean;
+  imageAspect?: string;
 }
 
 export interface Tool {
