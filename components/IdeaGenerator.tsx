@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { CollectedItem, Difficulty, RemuseIdea, ItemCategory } from '../types';
-import { ArrowLeft, Hammer, Clock, CheckCircle2, Share2, Hexagon, Zap, Pencil, Trash2, Save, XCircle } from 'lucide-react';
+import { CollectedItem, Difficulty, RemuseIdea, ItemCategory, Sticker } from '../types';
+import { ArrowLeft, Hammer, Clock, CheckCircle2, Share2, Hexagon, Zap, Pencil, Trash2, Save, XCircle, Sticker as StickerIcon, Loader2, Sparkles } from 'lucide-react';
+import { generateSticker } from '../services/geminiService';
 
 interface IdeaGeneratorProps {
   item: CollectedItem;
@@ -9,6 +10,7 @@ interface IdeaGeneratorProps {
   onComplete: (itemId: string) => void;
   onUpdateItem?: (updatedItem: CollectedItem) => void;
   onDeleteItem?: (itemId: string) => void;
+  onStickerCreated?: (sticker: Sticker) => void;
 }
 
 const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
@@ -29,10 +31,13 @@ const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
   );
 };
 
-const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem }) => {
+const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated }) => {
   const [selectedIdea, setSelectedIdea] = useState<RemuseIdea | null>(item.ideas?.[0] || null);
   const [showCelebration, setShowCelebration] = useState(false);
-  
+
+  const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
+  const [showStickerSuccess, setShowStickerSuccess] = useState(false);
+
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
@@ -44,6 +49,33 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
 
   // Is this item already completed (either from props or just now)?
   const isCompleted = item.status === 'remused';
+
+  const handleGenerateSticker = async () => {
+    if (isGeneratingSticker || !onStickerCreated) return;
+    setIsGeneratingSticker(true);
+    try {
+      const base64 = item.imageUrl.split(',')[1];
+      const { stickerImageUrl, dramaText } = await generateSticker(base64, item.name);
+      
+      const newSticker: Sticker = {
+          id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
+          originalItemId: item.id,
+          stickerImageUrl: stickerImageUrl,
+          dramaText: dramaText,
+          category: item.category,
+          dateCreated: new Date().toISOString()
+      };
+      
+      onStickerCreated(newSticker);
+      setShowStickerSuccess(true);
+      setTimeout(() => setShowStickerSuccess(false), 3000);
+    } catch (err) {
+      console.error("Sticker generation failed", err);
+      alert("贴纸生成失败，请稍后重试");
+    } finally {
+      setIsGeneratingSticker(false);
+    }
+  };
 
   const handleCompleteClick = () => {
     if (isCompleted) return;
@@ -266,6 +298,29 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                </span>
              ))}
            </div>
+
+             {/* Sticker Generation Button */}
+             {onStickerCreated && (
+                <div className="mt-8 border-t border-neutral-800 pt-6">
+                  {showStickerSuccess ? (
+                    <div className="w-full bg-remuse-secondary/20 text-remuse-secondary py-3 text-center text-sm font-display flex items-center justify-center gap-2">
+                       <CheckCircle2 size={16} /> 已生成并添加到贴纸库
+                    </div>
+                  ) : (
+                    <button
+                        onClick={handleGenerateSticker}
+                        disabled={isGeneratingSticker}
+                        className="w-full bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group"
+                    >
+                        {isGeneratingSticker ? (
+                           <><Loader2 size={16} className="animate-spin text-remuse-secondary" /> 正在生成...</>
+                        ) : (
+                           <><StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" /> 生成数字贴纸</>
+                        )}
+                    </button>
+                  )}
+                </div>
+             )}
         </div>
       </div>
 

@@ -302,6 +302,7 @@ const App: React.FC = () => {
               onComplete={handleCompleteRemuse}
               onUpdateItem={handleUpdateItem}
               onDeleteItem={handleDeleteItem}
+              onStickerCreated={handleStickerCreated}
             />
           )}
 

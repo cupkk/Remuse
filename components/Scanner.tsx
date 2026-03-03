@@ -814,6 +814,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
             onComplete={(id) => onCompleteItem?.(id)}
             onUpdateItem={(item) => onUpdateItem?.(item)}
             onDeleteItem={(id) => { setPreviewDetailItem(null); onDeleteItem?.(id); }}
+            onStickerCreated={onStickerCreated}
           />
         </div>
       )}
