@@ -28,6 +28,8 @@ interface ScannerProps {
   onUpdateItem?: (item: CollectedItem) => void;
   onDeleteItem?: (id: string) => void;
   existingStickers?: Sticker[];
+  onGenerateStickerRequest?: (item: CollectedItem) => void;
+  generatingStickersGlobal?: Record<string, boolean>;
 }
 
 const ScrambleButton: React.FC<{ 
@@ -91,10 +93,16 @@ const ScrambleButton: React.FC<{
     );
 };
 
-const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers }) => {
+const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers, onGenerateStickerRequest, generatingStickersGlobal = {} }) => { 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
+  const [isGeneratingStickerLocal, setIsGeneratingSticker] = useState(false);
   
+  // Analysis Result
+  const [analysisResult, setAnalysisResult] = useState<CollectedItem | null>(null);
+
+  // Use global generation state if available for single-item scan mode
+  const isGeneratingSticker = (analysisResult && generatingStickersGlobal[analysisResult.id]) ?? isGeneratingStickerLocal;
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDetailItem, setPreviewDetailItem] = useState<CollectedItem | null>(null);
   const [statusText, setStatusText] = useState("准备归档");
@@ -108,9 +116,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   // Batch Mode State
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
-  
-  // Analysis Result
-  const [analysisResult, setAnalysisResult] = useState<CollectedItem | null>(null);
+
   const [generatedSticker, setGeneratedSticker] = useState<Sticker | null>(null);
   const [errorInfo, setErrorInfo] = useState<AnalysisError | null>(null);
   const [lastFile, setLastFile] = useState<File | null>(null);
@@ -256,6 +262,16 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   const handleGenerateBatchSticker = async (itemId: string) => {
     const item = batchItems.find(i => i.id === itemId);
     if (!item || !item.result) return;
+    
+    if (onGenerateStickerRequest) {
+      onGenerateStickerRequest(item.result);
+      // We don't track the result locally in batch mode if it goes global, 
+      // but to keep UI simple, let's mark it as generating locally just for visuals 
+      // or rely on global state. Since batch mode doesn't easily read from global state
+      // without more mapping, we can set it to generating locally and let them switch away.
+      setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: true } : i));
+      return;
+    }
 
     setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: true } : i));
 
@@ -350,6 +366,11 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   const handleGenerateSticker = async () => {
     if (!analysisResult) return;
     
+    if (onGenerateStickerRequest) {
+      onGenerateStickerRequest(analysisResult);
+      return;
+    }
+
     setIsGeneratingSticker(true);
     setStatusText("正在生成矢量贴纸与短剧...");
 

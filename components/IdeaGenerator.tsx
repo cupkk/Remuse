@@ -12,6 +12,8 @@ interface IdeaGeneratorProps {
   onDeleteItem?: (itemId: string) => void;
   onStickerCreated?: (sticker: Sticker) => void;
   hasExistingSticker?: boolean;
+  onGenerateStickerRequest?: (item: CollectedItem) => void;
+  isGeneratingStickerGlobal?: boolean;
 }
 
 const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
@@ -32,13 +34,21 @@ const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
   );
 };
 
-const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated, hasExistingSticker: initialHasSticker }) => {
+const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated, hasExistingSticker: initialHasSticker, onGenerateStickerRequest, isGeneratingStickerGlobal }) => {
   const [selectedIdea, setSelectedIdea] = useState<RemuseIdea | null>(item.ideas?.[0] || null);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  const [isGeneratingSticker, setIsGeneratingSticker] = useState(false);
+  // If we have a global generator prop, use that instead of our local state
+  // We still keep the local one as fallback in case `onGenerateStickerRequest` isn't provided (e.g., from old usage).
+  const [localIsGeneratingSticker, setIsGeneratingSticker] = useState(false);
+  const isGeneratingSticker = isGeneratingStickerGlobal ?? localIsGeneratingSticker;
   const [showStickerSuccess, setShowStickerSuccess] = useState(false);
   const [localHasSticker, setLocalHasSticker] = useState(!!initialHasSticker);
+
+  // Sync localHasSticker when initialHasSticker changes from App.tsx due to background generation finish
+  React.useEffect(() => {
+     setLocalHasSticker(!!initialHasSticker);
+  }, [initialHasSticker]);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -53,7 +63,14 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
   const isCompleted = item.status === 'remused';
 
   const handleGenerateSticker = async () => {
-    if (isGeneratingSticker || !onStickerCreated) return;
+    if (isGeneratingSticker) return;
+
+    if (onGenerateStickerRequest) {
+      onGenerateStickerRequest(item);
+      return;
+    }
+
+    if (!onStickerCreated) return;
     setIsGeneratingSticker(true);
     try {
       const base64 = item.imageUrl.split(',')[1];

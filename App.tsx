@@ -13,6 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import SkeletonScreen from './components/SkeletonScreen';
 import MilestoneCelebration, { isMilestone } from './components/MilestoneCelebration';
 import { CollectedItem, ItemCategory, ViewState, Difficulty, ExhibitionHall, Sticker } from './types';
+import { generateSticker } from './services/geminiService';
 
 // Mock Data for Initial Load
 const MOCK_ITEMS: CollectedItem[] = [
@@ -103,6 +104,9 @@ const App: React.FC = () => {
   const [halls, setHalls] = useState<ExhibitionHall[]>(INITIAL_HALLS);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [selectedItem, setSelectedItem] = useState<CollectedItem | null>(null);
+  
+  // Track sticker generation tasks globally
+  const [generatingStickers, setGeneratingStickers] = useState<Record<string, boolean>>({});
 
   // Skeleton transition state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -207,6 +211,38 @@ const App: React.FC = () => {
       setStickers(prev => [newSticker, ...prev]);
   };
 
+  const handleGenerateStickerRequest = async (item: CollectedItem) => {
+    if (generatingStickers[item.id]) return;
+
+    setGeneratingStickers(prev => ({ ...prev, [item.id]: true }));
+    
+    try {
+      const base64 = item.imageUrl.split(',')[1];
+      const { stickerImageUrl, dramaText } = await generateSticker(base64, item.name);
+      
+      const newSticker: Sticker = {
+          id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
+          originalItemId: item.id,
+          stickerImageUrl: stickerImageUrl,
+          dramaText: dramaText,
+          category: item.category,
+          dateCreated: new Date().toISOString()
+      };
+      
+      handleStickerCreated(newSticker);
+    } catch (err) {
+      console.error("Background sticker generation failed for item", item.id, err);
+      // Optional: Store error state or show a toast notification here
+      // alert("贴纸生成失败..."); (Only if you want global alerts on failures)
+    } finally {
+      setGeneratingStickers(prev => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+    }
+  };
+
   const handleDeleteSticker = (id: string) => {
       setStickers(prev => prev.filter(s => s.id !== id));
   };
@@ -277,6 +313,8 @@ const App: React.FC = () => {
               onUpdateItem={handleUpdateItem}
               onDeleteItem={handleDeleteItem}
               existingStickers={stickers}
+              onGenerateStickerRequest={handleGenerateStickerRequest}
+              generatingStickersGlobal={generatingStickers}
             />
           </div>
 
@@ -305,6 +343,8 @@ const App: React.FC = () => {
               onDeleteItem={handleDeleteItem}
               onStickerCreated={handleStickerCreated}
               hasExistingSticker={stickers.some(s => s.originalItemId === selectedItem.id)}
+              onGenerateStickerRequest={handleGenerateStickerRequest}
+              isGeneratingStickerGlobal={generatingStickers[selectedItem.id]}
             />
           )}
 
