@@ -466,3 +466,133 @@ export const generateSticker = async (base64Image: string, itemName: string): Pr
     throw classifyError(e);
   }
 };
+
+// ============================================================
+// 表情包生成：基于贴纸图片，生成带有可爱文案气泡的表情包
+// ============================================================
+
+export interface EmojiPackItem {
+  imageUrl: string;   // base64 data URL
+  text: string;       // 表情包文案
+}
+
+/**
+ * 基于一张贴纸图片，批量生成多张表情包贴纸。
+ * 每张表情包会带有不同的可爱文案+表情/动作。
+ */
+export const generateEmojiPack = async (
+  stickerBase64: string,
+  itemName: string,
+  count: number = 9
+): Promise<EmojiPackItem[]> => {
+  try {
+    // Step 1: 生成表情包文案列表
+    const textResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `你是一位微信表情包设计师。请为「${itemName}」这个物品角色设计 ${count} 条表情包短文案。
+
+要求：
+- 每条文案 2-6 个字，简短有力
+- 涵盖常用表情场景：打招呼、开心、伤心、生气、加油、晚安、干杯、谢谢、哈哈、无语等
+- 文案风格：可爱、俏皮、年轻人社交常用
+- 要有创意，结合物品本身的特点和功能
+- 只返回 JSON 数组，每项格式：{"text": "文案", "emotion": "表情描述词(英文)"}
+
+示例输出：
+[{"text": "干杯！", "emotion": "cheering happily"}, {"text": "晚安", "emotion": "sleepy and cute"}]`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              text: { type: Type.STRING },
+              emotion: { type: Type.STRING }
+            },
+            required: ["text", "emotion"]
+          }
+        }
+      }
+    });
+
+    const captions: { text: string; emotion: string }[] = JSON.parse(textResponse.text || '[]');
+    if (captions.length === 0) throw new Error('No captions generated');
+
+    // Step 2: 逐张生成表情包图片（带文案气泡）
+    const results: EmojiPackItem[] = [];
+    
+    // 并行生成所有图片（最多 count 张）
+    const generatePromises = captions.slice(0, count).map(async (caption) => {
+      try {
+        const imageResponse = await ai.models.generateContent({
+          model: "gemini-3.1-flash-image-preview",
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "image/png",
+                  data: stickerBase64
+                }
+              },
+              {
+                text: `Transform this cute sticker character into an emoji/emoticon sticker with the text "${caption.text}" and the emotion: ${caption.emotion}.
+
+IMPORTANT Requirements:
+1) Keep the SAME character/object style from the original sticker, maintain all original visual features and colors.
+2) Add the Chinese text "${caption.text}" as a prominent speech bubble or bold overlay text with white outline.
+3) Adjust the character's pose/expression to match the emotion: ${caption.emotion}.
+4) The character should have exaggerated cute expressions (big eyes, blush marks, sweat drops, etc as appropriate).
+5) THICK WHITE DIE-CUT OUTLINE BORDER around the entire sticker (at least 8px).
+6) Background must be PERFECTLY UNIFORM SOLID BLACK (#000000) — no gradients, no noise.
+7) Flat vector art style, vivid colors.
+8) The text must be clearly readable Chinese characters.
+9) Leave generous black space around the sticker.`
+              }
+            ]
+          },
+          config: {
+            responseModalities: ["IMAGE"],
+            imageConfig: {
+              aspectRatio: "1:1",
+            },
+          },
+        });
+
+        let emojiUrl = "";
+        if (imageResponse.candidates?.[0]?.content?.parts) {
+          for (const part of imageResponse.candidates[0].content.parts) {
+            if (part.inlineData) {
+              emojiUrl = `data:image/png;base64,${part.inlineData.data}`;
+              break;
+            }
+          }
+        }
+
+        if (emojiUrl) {
+          // 抠掉黑色背景
+          emojiUrl = await removeBlackBackground(emojiUrl);
+          return { imageUrl: emojiUrl, text: caption.text };
+        }
+        return null;
+      } catch (err) {
+        logger.warn(`Emoji pack item "${caption.text}" generation failed:`, err);
+        return null;
+      }
+    });
+
+    const settled = await Promise.all(generatePromises);
+    for (const item of settled) {
+      if (item) results.push(item);
+    }
+
+    if (results.length === 0) {
+      throw new Error('All emoji pack items failed to generate');
+    }
+
+    return results;
+  } catch (e) {
+    logger.error("Emoji pack generation failed", e);
+    throw classifyError(e);
+  }
+};

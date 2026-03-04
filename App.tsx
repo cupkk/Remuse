@@ -13,7 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import SkeletonScreen from './components/SkeletonScreen';
 import MilestoneCelebration, { isMilestone } from './components/MilestoneCelebration';
 import { CollectedItem, ItemCategory, ViewState, Difficulty, ExhibitionHall, Sticker } from './types';
-import { generateSticker } from './services/geminiService';
+import { generateSticker, generateEmojiPack } from './services/geminiService';
 
 // Mock Data for Initial Load
 const MOCK_ITEMS: CollectedItem[] = [
@@ -331,6 +331,7 @@ const App: React.FC = () => {
             <StickerLibrary 
                 stickers={stickers}
                 onDeleteSticker={handleDeleteSticker}
+                onStickerCreated={handleStickerCreated}
             />
           )}
           

@@ -1,12 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Sticker, ItemCategory } from '../types';
-import { Sticker as StickerIcon, Download, Trash2, Box, Layers, Move, CheckCircle2, X, Grid, Shuffle, Save, BookImage, Scissors, Printer } from 'lucide-react';
+import { Sticker as StickerIcon, Download, Trash2, Box, Layers, Move, CheckCircle2, X, Grid, Shuffle, Save, BookImage, Scissors, Printer, Smile, Loader2, Plus } from 'lucide-react';
+import { generateEmojiPack, EmojiPackItem } from '../services/geminiService';
 import logger from '../services/logger';
 
 interface StickerLibraryProps {
     stickers: Sticker[];
     onDeleteSticker: (id: string) => void;
+    onStickerCreated?: (sticker: Sticker) => void;
 }
 
 interface LayoutItem {
@@ -19,7 +21,7 @@ interface LayoutItem {
     zIndex: number;
 }
 
-type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT';
+type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT' | 'EMOJI_PACK';
 
 // ==================== 小红书模板定义 ====================
 interface XhsTemplate {
@@ -182,7 +184,7 @@ const StickerCard: React.FC<{
     );
 };
 
-const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteSticker }) => {
+const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteSticker, onStickerCreated }) => {
     // View Mode: 'LIBRARY' (Grid) or 'CANVAS' (Layout Editor)
     const [viewMode, setViewMode] = useState<'LIBRARY' | 'CANVAS'>('LIBRARY');
     const [canvasMode, setCanvasMode] = useState<CanvasMode>('COLLAGE');
@@ -206,6 +208,13 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
     // 手账打印 State
     const printCanvasRef = useRef<HTMLDivElement>(null);
     const [printScale, setPrintScale] = useState<number>(1.0);
+
+    // 表情包生成 State
+    const [emojiPackItems, setEmojiPackItems] = useState<EmojiPackItem[]>([]);
+    const [isGeneratingEmoji, setIsGeneratingEmoji] = useState(false);
+    const [emojiGenProgress, setEmojiGenProgress] = useState('');
+    const [emojiCount, setEmojiCount] = useState(9);
+    const [savedEmojiIds, setSavedEmojiIds] = useState<Set<number>>(new Set());
 
     const categories = ['ALL', ...Object.values(ItemCategory)];
     const filteredStickers = filter === 'ALL' 
@@ -295,6 +304,11 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
         const selectedStickers = stickers.filter(s => selectedIds.has(s.id));
         if (mode === 'COLLAGE') {
             generateRandomLayout(selectedStickers);
+        }
+        if (mode === 'EMOJI_PACK') {
+            // Reset emoji pack state
+            setEmojiPackItems([]);
+            setSavedEmojiIds(new Set());
         }
         setCanvasMode(mode);
         setViewMode('CANVAS');
@@ -597,6 +611,55 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
         ctx.fillText('remuse.app · print on sticker paper for best results', A4_W / 2, A4_H - 40);
 
         await saveCanvasToDevice(canvas, `remuse-sticker-sheet-${Date.now()}.png`);
+    };
+
+    // --- 表情包生成 ---
+    const handleGenerateEmojiPack = async () => {
+        const selectedStickers = stickers.filter(s => selectedIds.has(s.id));
+        if (selectedStickers.length === 0) return;
+        const sourceSticker = selectedStickers[0];
+
+        setIsGeneratingEmoji(true);
+        setEmojiPackItems([]);
+        setSavedEmojiIds(new Set());
+        setEmojiGenProgress('正在生成表情包文案...');
+
+        try {
+            setEmojiGenProgress(`正在并行生成 ${emojiCount} 张表情包图片，请耐心等待...`);
+            const items = await generateEmojiPack(
+                sourceSticker.stickerImageUrl.split(',')[1],
+                sourceSticker.dramaText || '可爱物品',
+                emojiCount
+            );
+            setEmojiPackItems(items);
+            setEmojiGenProgress('');
+        } catch (err) {
+            logger.error('Emoji pack generation failed:', err);
+            setEmojiGenProgress('生成失败，请重试');
+        } finally {
+            setIsGeneratingEmoji(false);
+        }
+    };
+
+    const handleSaveEmojiToLibrary = (item: EmojiPackItem, index: number) => {
+        if (!onStickerCreated) return;
+        const sourceSticker = stickers.find(s => selectedIds.has(s.id));
+        const newSticker: Sticker = {
+            id: (self.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
+            originalItemId: sourceSticker?.originalItemId ?? sourceSticker?.id ?? 'emoji',
+            stickerImageUrl: item.imageUrl,
+            dramaText: item.text,
+            category: sourceSticker?.category ?? '其他',
+            dateCreated: new Date().toISOString(),
+        };
+        onStickerCreated(newSticker);
+        setSavedEmojiIds(prev => new Set([...prev, index]));
+    };
+
+    const handleDownloadAllEmoji = async () => {
+        for (let i = 0; i < emojiPackItems.length; i++) {
+            await saveImageUrlToDevice(emojiPackItems[i].imageUrl, `remuse-emoji-${i + 1}.png`);
+        }
     };
 
     // --- Unified Pointer Logic (mouse + touch) ---
@@ -914,6 +977,184 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
             );
         }
 
+        // --- Sub-render: 表情包生成 ---
+        if (canvasMode === 'EMOJI_PACK') {
+            const sourceSticker = stickers.filter(s => selectedIds.has(s.id))[0];
+            return (
+                <div className="h-full bg-remuse-dark text-white flex flex-col">
+                    {/* Header */}
+                    <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between flex-shrink-0">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white"><X size={24} /></button>
+                            <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
+                                <Smile size={20} className="text-yellow-400" />
+                                表情包生成器
+                            </h2>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {emojiPackItems.length > 0 && (
+                                <button
+                                    onClick={handleDownloadAllEmoji}
+                                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full text-sm font-display transition-colors"
+                                >
+                                    <Download size={15} /> 全部下载
+                                </button>
+                            )}
+                            <button
+                                onClick={handleGenerateEmojiPack}
+                                disabled={isGeneratingEmoji || !sourceSticker}
+                                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-orange-400 text-black rounded-full text-sm font-display font-bold hover:scale-105 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                            >
+                                {isGeneratingEmoji
+                                    ? <><Loader2 size={15} className="animate-spin" /> 生成中...</>
+                                    : <><Smile size={15} /> {emojiPackItems.length > 0 ? '重新生成' : '开始生成'}</>
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                        {/* Main Area */}
+                        <div className="flex-1 overflow-y-auto p-5">
+                            {/* Source Sticker Preview */}
+                            {sourceSticker && (
+                                <div className="mb-5 p-4 bg-neutral-900 border border-neutral-800 rounded-xl flex items-center gap-4">
+                                    <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-neutral-950 flex items-center justify-center"
+                                        style={{ backgroundImage: 'linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)', backgroundSize: '10px 10px', backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0px' }}>
+                                        <img src={sourceSticker.stickerImageUrl} alt="" className="w-12 h-12 object-contain" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-neutral-500 font-display mb-1">基于此贴纸生成表情包</p>
+                                        <p className="text-sm text-white font-mono line-clamp-2">{sourceSticker.dramaText}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Generating Status */}
+                            {isGeneratingEmoji && (
+                                <div className="flex flex-col items-center justify-center py-16 gap-4">
+                                    <div className="relative">
+                                        <div className="w-16 h-16 rounded-full border-4 border-yellow-400/20 border-t-yellow-400 animate-spin" />
+                                        <Smile size={24} className="absolute inset-0 m-auto text-yellow-400" />
+                                    </div>
+                                    <p className="text-sm text-neutral-400 text-center max-w-xs">{emojiGenProgress}</p>
+                                    <p className="text-xs text-neutral-600 text-center">AI 正在为每张表情包生成独特图像，稍等片刻~</p>
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {!isGeneratingEmoji && emojiPackItems.length === 0 && (
+                                <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed border-neutral-800 rounded-xl gap-4">
+                                    <div className="text-5xl">😄 😂 🥹 😎</div>
+                                    <p className="text-neutral-400 font-display text-sm">点击「开始生成」创建你的专属表情包</p>
+                                    <p className="text-xs text-neutral-600 text-center max-w-xs">AI 会基于你的贴纸角色，生成带有不同表情和文案气泡的表情包套组</p>
+                                    {emojiGenProgress && <p className="text-sm text-red-400">{emojiGenProgress}</p>}
+                                </div>
+                            )}
+
+                            {/* Results Grid */}
+                            {!isGeneratingEmoji && emojiPackItems.length > 0 && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    {emojiPackItems.map((item, idx) => (
+                                        <div key={idx} className="group relative bg-neutral-900 rounded-xl border border-neutral-800 hover:border-yellow-400/40 transition-all overflow-hidden">
+                                            {/* Sticker Image */}
+                                            <div className="aspect-square flex items-center justify-center p-3"
+                                                style={{ backgroundImage: 'linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)', backgroundSize: '14px 14px', backgroundPosition: '0 0, 0 7px, 7px -7px, -7px 0px' }}>
+                                                <img src={item.imageUrl} alt={item.text} className="w-full h-full object-contain drop-shadow-lg" />
+                                            </div>
+                                            {/* Text tag */}
+                                            <div className="px-3 py-2 border-t border-neutral-800 bg-neutral-950">
+                                                <p className="text-center text-sm font-bold text-white font-display">{item.text}</p>
+                                            </div>
+                                            {/* Actions overlay */}
+                                            <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => saveImageUrlToDevice(item.imageUrl, `remuse-emoji-${idx + 1}.png`)}
+                                                    className="p-1.5 bg-black/70 hover:bg-black text-white rounded-lg border border-neutral-700 backdrop-blur-sm"
+                                                    title="下载"
+                                                >
+                                                    <Download size={13} />
+                                                </button>
+                                                {onStickerCreated && (
+                                                    <button
+                                                        onClick={() => handleSaveEmojiToLibrary(item, idx)}
+                                                        disabled={savedEmojiIds.has(idx)}
+                                                        className={`p-1.5 rounded-lg border backdrop-blur-sm transition-colors ${
+                                                            savedEmojiIds.has(idx)
+                                                                ? 'bg-yellow-400/20 border-yellow-400 text-yellow-400 cursor-default'
+                                                                : 'bg-black/70 hover:bg-yellow-400/20 text-white hover:text-yellow-400 border-neutral-700'
+                                                        }`}
+                                                        title={savedEmojiIds.has(idx) ? '已存入贴纸库' : '存入贴纸库'}
+                                                    >
+                                                        {savedEmojiIds.has(idx) ? <CheckCircle2 size={13} /> : <Plus size={13} />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {/* Saved badge */}
+                                            {savedEmojiIds.has(idx) && (
+                                                <div className="absolute top-2 left-2">
+                                                    <span className="text-[10px] bg-yellow-400 text-black font-bold px-1.5 py-0.5 rounded-full">已入库</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sidebar */}
+                        <div className="w-full md:w-64 flex-shrink-0 bg-remuse-panel border-t md:border-t-0 md:border-l border-neutral-800 p-5 space-y-5 overflow-y-auto">
+                            <div>
+                                <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-3 block">生成数量</label>
+                                <div className="flex gap-2">
+                                    {[3, 6, 9].map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => setEmojiCount(n)}
+                                            className={`flex-1 py-2 rounded-lg border text-sm font-display font-bold transition-all ${
+                                                emojiCount === n
+                                                    ? 'bg-yellow-400 text-black border-yellow-400'
+                                                    : 'bg-neutral-900 text-neutral-400 border-neutral-700 hover:border-neutral-500'
+                                            }`}
+                                        >
+                                            {n} 张
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-neutral-900 rounded-xl p-4 space-y-2 text-xs text-neutral-400">
+                                <p className="font-display font-bold text-white text-sm mb-1">✨ 功能说明</p>
+                                <p>基于贴纸角色生成带文案气泡的表情包</p>
+                                <p>每张表情包有独特表情和场景文案</p>
+                                <p>可单张下载或全部保存到贴纸库</p>
+                                <p className="pt-2 border-t border-neutral-800 text-neutral-600">生成 9 张约需 30-60 秒</p>
+                            </div>
+
+                            {emojiPackItems.length > 0 && (
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={() => {
+                                            emojiPackItems.forEach((item, idx) => {
+                                                if (!savedEmojiIds.has(idx) && onStickerCreated) {
+                                                    handleSaveEmojiToLibrary(item, idx);
+                                                }
+                                            });
+                                        }}
+                                        disabled={savedEmojiIds.size === emojiPackItems.length}
+                                        className="w-full py-2.5 rounded-xl border border-yellow-400/30 hover:border-yellow-400 hover:bg-yellow-400/10 text-sm font-display font-bold text-yellow-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <Plus size={15} />
+                                        {savedEmojiIds.size === emojiPackItems.length ? '全部已入库 ✓' : '全部存入贴纸库'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // --- Sub-render: 自由拼贴 (COLLAGE, default) ---
         return (
             <div className="h-full bg-remuse-dark text-white flex flex-col">
@@ -1075,8 +1316,8 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
                         </div>
                     </div>
                     
-                    {/* 3 Mode Buttons */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* 4 Mode Buttons */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {/* 小红书配图 */}
                         <button 
                             onClick={() => enterCanvasMode('XIAOHONGSHU')}
@@ -1132,6 +1373,25 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers, onDeleteStick
                                 <span className="font-display font-bold text-sm text-white">自由拼贴</span>
                             </div>
                             <p className="text-[11px] text-neutral-400 leading-relaxed">拖拽排版自由组合，导出透明背景拼贴</p>
+                        </button>
+
+                        {/* 表情包生成 */}
+                        <button
+                            onClick={() => enterCanvasMode('EMOJI_PACK')}
+                            disabled={selectedIds.size === 0}
+                            className={`group relative p-4 rounded-xl border text-left transition-all overflow-hidden
+                                ${selectedIds.size > 0
+                                    ? 'border-yellow-400/30 hover:border-yellow-400 hover:bg-yellow-400/10 cursor-pointer hover:scale-[1.02]'
+                                    : 'border-neutral-800 opacity-40 cursor-not-allowed'}
+                            `}
+                        >
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center text-black">
+                                    <Smile size={16} />
+                                </div>
+                                <span className="font-display font-bold text-sm text-white">表情包</span>
+                            </div>
+                            <p className="text-[11px] text-neutral-400 leading-relaxed">AI 生成带文案气泡的可爱表情包套组</p>
                         </button>
                     </div>
                 </div>
