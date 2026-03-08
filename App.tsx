@@ -9,102 +9,41 @@ import Onboarding from './components/Onboarding';
 import CuratorOffice from './components/CuratorOffice';
 import StickerLibrary from './components/StickerLibrary';
 import InspirationPlaza from './components/InspirationPlaza';
+import MemoryRagStudio from './components/MemoryRagStudio';
 import ErrorBoundary from './components/ErrorBoundary';
 import SkeletonScreen from './components/SkeletonScreen';
+import LoginScreen from './components/LoginScreen';
 import MilestoneCelebration, { isMilestone } from './components/MilestoneCelebration';
-import { CollectedItem, ItemCategory, ViewState, Difficulty, ExhibitionHall, Sticker } from './types';
+import { CollectedItem, ExhibitionHall, ItemCategory, ViewState, Sticker, Tool, User } from './types';
 import { generateSticker, generateEmojiPack } from './services/geminiService';
-
-// Mock Data for Initial Load
-const MOCK_ITEMS: CollectedItem[] = [
-  {
-    id: '1',
-    name: '复古茶叶罐',
-    category: ItemCategory.CONTAINER,
-    material: '金属',
-    imageUrl: 'https://picsum.photos/400/400?random=1',
-    dateCollected: '2023-10-15',
-    story: '承载着一个被遗忘冬日温暖的容器。',
-    tags: ['复古', '收纳', '金属'],
-    status: 'raw',
-    ideas: [
-      {
-        title: '多肉植物盆栽',
-        description: '将铁罐改造成耐旱植物的田园风家园。',
-        difficulty: Difficulty.EASY,
-        materials: ['土壤', '碎石', '多肉植物'],
-        steps: ['在底部钻排水孔', '铺设碎石层', '填入土壤', '种下多肉植物']
-      }
-    ]
-  },
-  {
-    id: '2',
-    name: '电路板碎片',
-    category: ItemCategory.ELECTRONIC,
-    material: '复合材料',
-    imageUrl: 'https://picsum.photos/400/400?random=2',
-    dateCollected: '2023-11-02',
-    story: '一台退役机器的神经系统。',
-    tags: ['科技', '艺术', '环保'],
-    status: 'remused',
-    ideas: []
-  },
-  {
-    id: '3',
-    name: '玻璃汽水瓶',
-    category: ItemCategory.CONTAINER,
-    material: '玻璃',
-    imageUrl: 'https://picsum.photos/400/400?random=3',
-    dateCollected: '2023-11-05',
-    story: '夏日清凉的透明回声。',
-    tags: ['透明', '蓝色', '装饰'],
-    status: 'raw',
-    ideas: [
-       {
-        title: 'LED氛围灯',
-        description: '放入灯串，营造忧郁或温馨的夜间氛围灯。',
-        difficulty: Difficulty.EASY,
-        materials: ['LED灯串', '软木塞'],
-        steps: ['彻底清洗瓶子', '塞入灯串', '固定电池盒']
-      }
-    ]
-  }
-];
-
-// Default Covers
-const DEFAULT_COVERS: Record<string, string> = {
-  // 奶茶周边 — 两杯梅森罐饮品，温暖柔和
-  [ItemCategory.PACKAGING]: 'https://images.unsplash.com/photo-1525803377221-4f6ccdaa5133?auto=format&fit=crop&q=80&w=400',
-  // 瓶瓶罐罐 — 窗台彩色复古玻璃花瓶
-  [ItemCategory.CONTAINER]: 'https://images.unsplash.com/photo-1709346727368-dc3e2b8c6124?auto=format&fit=crop&q=80&w=400',
-  // 手办玩偶 — 穿裙子戴皇冠的可爱兔兔
-  [ItemCategory.PAPER]: 'https://images.unsplash.com/photo-1692935318316-8315eb21761e?auto=format&fit=crop&q=80&w=400',
-  // 徽章冰箱贴 — 贴满旅行磁贴的白色冰箱
-  [ItemCategory.ELECTRONIC]: 'https://images.unsplash.com/photo-1597502321303-ac7965ad7e8e?auto=format&fit=crop&q=80&w=400',
-  // 纪念票根 — 日本地铁纸质车票，复古文艺
-  [ItemCategory.TEXTILE]: 'https://images.unsplash.com/photo-1611550082883-a65b37a8ea89?auto=format&fit=crop&q=80&w=400',
-  // 其他好物 — 手帐本+贴纸+和纸胶带平铺
-  [ItemCategory.OTHER]: 'https://images.unsplash.com/photo-1609338177258-4ce9fafc513e?auto=format&fit=crop&q=80&w=400',
-};
-
-const INITIAL_HALLS: ExhibitionHall[] = Object.values(ItemCategory).map(cat => ({
-  id: cat,
-  name: cat,
-  imageUrl: DEFAULT_COVERS[cat] || DEFAULT_COVERS[ItemCategory.OTHER],
-  isCustom: false
-}));
+import { imageUrlToBase64 } from './services/imageUtils';
+import * as authService from './services/authService';
+import { DEFAULT_HALLS, getHallNameById } from './services/halls';
+import {
+  createItemOnServer, updateItemOnServer, deleteItemOnServer,
+  createStickerOnServer, deleteStickerOnServer,
+  createHallOnServer, deleteHallOnServer, updateHallOnServer,
+} from './services/dataService';
+import { clearSampleData } from './services/sampleData';
+import { loadUserWorkspace } from './services/userDataService';
 
 const App: React.FC = () => {
   const [showLaunch, setShowLaunch] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Default view is SCANNER
+  // ---- Auth State ----
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true); // 初始化期间检测 token
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+
+  // ---- App Data ----
   const [currentView, setCurrentView] = useState<ViewState>('SCANNER');
-  const [items, setItems] = useState<CollectedItem[]>(MOCK_ITEMS);
-  const [halls, setHalls] = useState<ExhibitionHall[]>(INITIAL_HALLS);
+  const [items, setItems] = useState<CollectedItem[]>([]);
+  const [halls, setHalls] = useState<ExhibitionHall[]>(DEFAULT_HALLS);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [selectedItem, setSelectedItem] = useState<CollectedItem | null>(null);
-  
+
   // Track sticker generation tasks globally
   const [generatingStickers, setGeneratingStickers] = useState<Record<string, boolean>>({});
 
@@ -113,24 +52,164 @@ const App: React.FC = () => {
   const [showContent, setShowContent] = useState(true);
   const prevViewRef = useRef<ViewState>(currentView);
 
-  // Scanner remount key — increments to force fresh Scanner state
+  // Scanner remount key
   const [scannerKey, setScannerKey] = useState(0);
 
   // Milestone celebration state
   const [milestoneInfo, setMilestoneInfo] = useState<{ count: number; name: string } | null>(null);
 
-  // --- View transition with skeleton ---
-  const handleChangeView = useCallback((newView: ViewState) => {
-    // 如果已经在 SCANNER 并且再次点击（比如通过导航栏），此时才强制重置 Scanner 状态
-    if (newView === currentView) {
-      if (newView === 'SCANNER') {
-        setScannerKey(k => k + 1);
+  // Gallery: 从 Scanner 跳转时指定展馆
+  const [pendingHallId, setPendingHallId] = useState<string | null>(null);
+
+  // ============================================================
+  // 启动时：验证已存储 token 或自动创建游客
+  // ============================================================
+  useEffect(() => {
+    let isActive = true;
+
+    (async () => {
+      try {
+        const me = await authService.getMe();
+        if (!isActive) return;
+        setUser(me);
+        await loadUserData(me);
+      } catch {
+        // Token 失效，清除
+        authService.resetClientSession();
+      } finally {
+        if (isActive) {
+          setAuthLoading(false);
+        }
       }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  // 加载用户数据（物品 + 贴纸 + 自定义展馆）
+  useEffect(() => {
+    if (showLaunch || authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setShowOnboarding(false);
+      setShowLogin(true);
+      return;
+    }
+
+    setShowLogin(false);
+    if (!user.onboardingSeen) {
+      setShowOnboarding(true);
+    }
+  }, [authLoading, showLaunch, user]);
+
+  const loadUserData = async (currentUser: User | null = user) => {
+    try {
+      const workspace = await loadUserWorkspace(currentUser);
+      setItems(workspace.items);
+      setStickers(workspace.stickers);
+      setHalls(workspace.halls);
+      if (workspace.user) {
+        setUser(workspace.user);
+      }
+      return;
+
+      /* const [fetchedItems, fetchedStickers, fetchedHalls] = await Promise.all([
+        fetchItems(),
+        fetchStickers(),
+        fetchHalls(),
+      ]);
+      const safeItems = Array.isArray(fetchedItems) ? fetchedItems : [];
+      const safeStickers = Array.isArray(fetchedStickers) ? fetchedStickers : [];
+      const safeHalls = Array.isArray(fetchedHalls) ? fetchedHalls : [];
+
+      setItems(safeItems);
+      setStickers(safeStickers);
+      // 合并：内置展馆 + 用户自定义展馆
+      setHalls(mergeHalls(safeHalls));
+
+      // ---- 新用户自动加载示例数据 ----
+      if (safeItems.length === 0 && currentUser && !currentUser.sampleSeeded) {
+        try {
+          const sampleItems = await loadSampleData();
+          if (sampleItems.length > 0) {
+            setItems(sampleItems);
+            const updatedUser = await authService.updatePreferences({ sampleSeeded: true });
+            setUser(updatedUser);
+          }
+        } catch (err) {
+          console.error('加载示例数据失败:', err);
+        }
+      }
+      */
+    } catch (err) {
+      console.error('加载用户数据失败:', err);
+    }
+  };
+
+  // ============================================================
+  // 登录 / 注册 / 游客
+  // ============================================================
+  const handleGuestLogin = async () => {
+    setAuthError(null);
+    setAuthLoading(true);
+    try {
+      const { user: u } = await authService.loginAsGuest();
+      setUser(u);
+      setShowLogin(false);
+      await loadUserData(u);
+    } catch (err: any) {
+      setAuthError(err.message || '游客登录失败');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    setAuthError(null);
+    setAuthLoading(true);
+    try {
+      const { user: u } = await authService.login(email, password);
+      setUser(u);
+      setShowLogin(false);
+      await loadUserData(u);
+    } catch (err: any) {
+      setAuthError(err.message || '登录失败');
+      throw err;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleRegister = async (email: string, password: string, nickname: string) => {
+    setAuthError(null);
+    setAuthLoading(true);
+    try {
+      const { user: u } = await authService.register(email, password, nickname);
+      setUser(u);
+      setShowLogin(false);
+      await loadUserData(u);
+    } catch (err: any) {
+      setAuthError(err.message || '注册失败');
+      throw err;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // ============================================================
+  // 视图切换
+  // ============================================================
+  const handleChangeView = useCallback((newView: ViewState) => {
+    if (newView === currentView) {
+      if (newView === 'SCANNER') setScannerKey(k => k + 1);
       return;
     }
     prevViewRef.current = currentView;
 
-    // 不再默认给 SCANNER 递增 key 强制重新挂载（以便保留后台处理进度）
     if (newView === 'SCANNER') {
       setCurrentView(newView);
       setShowContent(true);
@@ -138,10 +217,8 @@ const App: React.FC = () => {
       return;
     }
 
-    // 带骨架屏过渡动画
     setIsTransitioning(true);
     setShowContent(false);
-
     setTimeout(() => {
       setCurrentView(newView);
       setIsTransitioning(false);
@@ -149,91 +226,224 @@ const App: React.FC = () => {
     }, 280);
   }, [currentView]);
 
-  // Handle Launch Completion
+  // ============================================================
+  // 启动 & 引导
+  // ============================================================
   const handleLaunchComplete = () => {
     setShowLaunch(false);
-    // Check local storage to see if user has already visited
-    const hasVisited = localStorage.getItem('remuse_visited_v1');
-    if (!hasVisited) {
-      setShowOnboarding(true);
-    }
+      // 没有已登录账号，展示登录/游客选择
   };
 
-  // Handle Onboarding Completion
-  const handleOnboardingComplete = () => {
-    localStorage.setItem('remuse_visited_v1', 'true');
+  const handleOnboardingComplete = async () => {
+    try {
+      const updatedUser = await authService.updatePreferences({ onboardingSeen: true });
+      setUser(updatedUser);
+    } catch (err) {
+      console.error('更新引导状态失败:', err);
+    }
     setShowOnboarding(false);
   };
 
-  // Calculate Eco Points dynamically
+  // ============================================================
+  // 数据处理（UI + API 双写）
+  // ============================================================
   const ecoPoints = useMemo(() => {
     return items.reduce((total, item) => {
-        let points = 5; // Base collection points
-        if (item.status === 'remused') {
-            points += 10; // Remuse bonus
-        }
-        return total + points;
+      let points = 5;
+      if (item.status === 'remused') points += 10;
+      return total + points;
     }, 0);
   }, [items]);
 
-  const handleAddItem = (newItem: CollectedItem) => {
+  const handleAddItem = async (newItem: CollectedItem) => {
+    // 先乐观更新 UI
     setItems(prev => {
       const updated = [newItem, ...prev];
-      const newCount = updated.length;
-      // Check for milestone
-      if (isMilestone(newCount)) {
-        setTimeout(() => setMilestoneInfo({ count: newCount, name: newItem.name }), 600);
+      if (isMilestone(updated.length)) {
+        setTimeout(() => setMilestoneInfo({ count: updated.length, name: newItem.name }), 600);
       }
       return updated;
     });
-  };
 
-  const handleUpdateItem = (updatedItem: CollectedItem) => {
-    setItems(prev => prev.map(item => 
-      item.id === updatedItem.id ? updatedItem : item
-    ));
-    // Also sync selectedItem if viewing detail
-    if (selectedItem?.id === updatedItem.id) {
-      setSelectedItem(updatedItem);
+    // 持久化到服务器
+    if (user) {
+      try {
+        // imageUrl 如果是 data: URI，转为 imageBase64 上传
+        const isDataUrl = newItem.imageUrl?.startsWith('data:');
+        const saved = await createItemOnServer({
+          name: newItem.name,
+          hallId: newItem.hallId,
+          category: newItem.category,
+          material: newItem.material,
+          imageBase64: isDataUrl ? newItem.imageUrl : undefined,
+          story: newItem.story,
+          tags: newItem.tags,
+          ideas: newItem.ideas,
+          status: newItem.status,
+          dateCollected: newItem.dateCollected,
+        });
+        // 用服务端 ID 和图片路径替换，但保留本地可能已被用户修改过的字段（防止竞态覆盖）
+        let mergedItem: CollectedItem | null = null;
+        setItems(prev => prev.map(it => {
+          if (it.id === newItem.id) {
+            mergedItem = {
+              ...it,           // 保留当前本地状态（用户可能已修改 category 等字段）
+              id: saved.id,    // 使用服务端 ID
+              imageUrl: saved.imageUrl || it.imageUrl, // 使用服务端图片路径
+            };
+            return mergedItem;
+          }
+          return it;
+        }));
+        // 同步 selectedItem
+        setSelectedItem(prev => {
+          if (prev?.id === newItem.id && mergedItem) return mergedItem;
+          return prev;
+        });
+        // 如果在保存期间用户修改了 category，补发更新到服务器
+        if (
+          mergedItem &&
+          ((mergedItem as CollectedItem).hallId !== newItem.hallId ||
+            (mergedItem as CollectedItem).category !== newItem.category)
+        ) {
+          try {
+            await updateItemOnServer(saved.id, {
+              hallId: (mergedItem as CollectedItem).hallId,
+              category: (mergedItem as CollectedItem).category,
+            });
+          } catch (err) {
+            console.error('补发分类修改到服务器失败:', err);
+          }
+        }
+      } catch (err) {
+        console.error('保存物品到服务器失败:', err);
+      }
     }
   };
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleUpdateItem = async (updatedItem: CollectedItem) => {
+    // 解析实际 ID：Scanner 的 analysisResult 可能持有客户端旧 ID，
+    // 而 items 数组中的 ID 已被服务端 ID 替换，需要兜底匹配。
+    let resolvedId = updatedItem.id;
+
+    setItems(prev => {
+      let idx = prev.findIndex(item => item.id === updatedItem.id);
+      // Fallback: 按 name + dateCollected 匹配（ID 可能因服务端同步而变化）
+      if (idx < 0) {
+        idx = prev.findIndex(item =>
+          item.name === updatedItem.name && item.dateCollected === updatedItem.dateCollected
+        );
+      }
+      if (idx < 0) return prev;
+
+      const existing = prev[idx];
+      resolvedId = existing.id; // 使用 items 数组中的真实 ID
+      const merged: CollectedItem = {
+        ...updatedItem,
+        id: existing.id,
+        // 保留服务端图片路径（避免被客户端 data URL 覆盖）
+        imageUrl: existing.imageUrl?.startsWith('/') ? existing.imageUrl : updatedItem.imageUrl,
+      };
+      return prev.map((item, i) => i === idx ? merged : item);
+    });
+
+    if (selectedItem?.id === updatedItem.id || selectedItem?.id === resolvedId) {
+      setSelectedItem({ ...updatedItem, id: resolvedId });
+    }
+
+    if (user) {
+      try {
+        const imageUrl = updatedItem.imageUrl;
+        const isDataUrl = imageUrl?.startsWith('data:');
+        await updateItemOnServer(resolvedId, {
+          name: updatedItem.name,
+          hallId: updatedItem.hallId,
+          category: updatedItem.category,
+          material: updatedItem.material,
+          imageBase64: isDataUrl ? imageUrl : undefined,
+          story: updatedItem.story,
+          tags: updatedItem.tags,
+          ideas: updatedItem.ideas,
+          status: updatedItem.status,
+        });
+      } catch (err) {
+        console.error('更新物品到服务器失败:', err);
+      }
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
     setItems(prev => prev.filter(item => item.id !== itemId));
-    // Navigate back from detail view
     if (selectedItem?.id === itemId) {
       setSelectedItem(null);
       handleChangeView('MUSEUM');
     }
+
+    if (user) {
+      try {
+        await deleteItemOnServer(itemId);
+      } catch (err) {
+        console.error('删除物品从服务器失败:', err);
+      }
+    }
   };
 
-  const handleStickerCreated = (newSticker: Sticker) => {
-      setStickers(prev => [newSticker, ...prev]);
+  const handleStickerCreated = async (newSticker: Sticker) => {
+    setStickers(prev => [newSticker, ...(Array.isArray(prev) ? prev : [])]);
+
+    if (user) {
+      try {
+        const isDataUrl = newSticker.stickerImageUrl?.startsWith('data:');
+        const saved = await createStickerOnServer({
+          originalItemId: newSticker.originalItemId?.trim() || undefined,
+          imageBase64: isDataUrl ? newSticker.stickerImageUrl : undefined,
+          imageUrl: !isDataUrl ? newSticker.stickerImageUrl : undefined,
+          dramaText: newSticker.dramaText,
+          category: newSticker.category,
+          dateCreated: newSticker.dateCreated,
+        });
+        setStickers(prev => (Array.isArray(prev) ? prev : []).map(s => s.id === newSticker.id ? { ...saved } : s));
+        return;
+      } catch (err) {
+        setStickers(prev => (Array.isArray(prev) ? prev : []).filter(s => s.id !== newSticker.id));
+        throw err;
+        console.error('保存贴纸到服务器失败:', err);
+      }
+    }
+  };
+
+  const handleDeleteSticker = async (id: string) => {
+    setStickers(prev => (Array.isArray(prev) ? prev : []).filter(s => s.id !== id));
+
+    if (user) {
+      try {
+        await deleteStickerOnServer(id);
+      } catch (err) {
+        console.error('删除贴纸从服务器失败:', err);
+      }
+    }
   };
 
   const handleGenerateStickerRequest = async (item: CollectedItem) => {
     if (generatingStickers[item.id]) return;
-
     setGeneratingStickers(prev => ({ ...prev, [item.id]: true }));
-    
+
     try {
-      const base64 = item.imageUrl.split(',')[1];
+      const base64 = await imageUrlToBase64(item.imageUrl);
       const { stickerImageUrl, dramaText } = await generateSticker(base64, item.name);
-      
+
       const newSticker: Sticker = {
-          id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
-          originalItemId: item.id,
-          stickerImageUrl: stickerImageUrl,
-          dramaText: dramaText,
-          category: item.category,
-          dateCreated: new Date().toISOString()
+        id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        originalItemId: item.id,
+        stickerImageUrl,
+        dramaText,
+        category: item.category,
+        dateCreated: new Date().toISOString(),
       };
-      
-      handleStickerCreated(newSticker);
+
+      await handleStickerCreated(newSticker);
     } catch (err) {
-      console.error("Background sticker generation failed for item", item.id, err);
-      // Optional: Store error state or show a toast notification here
-      // alert("贴纸生成失败..."); (Only if you want global alerts on failures)
+      console.error('贴纸生成失败 for item', item.id, err);
     } finally {
       setGeneratingStickers(prev => {
         const next = { ...prev };
@@ -243,66 +453,224 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteSticker = (id: string) => {
-      setStickers(prev => prev.filter(s => s.id !== id));
-  };
-
   const handleSelectItem = (item: CollectedItem) => {
     setSelectedItem(item);
     handleChangeView('ITEM_DETAIL');
   };
 
-  const handleCompleteRemuse = (itemId: string) => {
-    setItems(prev => prev.map(item => 
+  const handleCompleteRemuse = async (itemId: string) => {
+    setItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, status: 'remused' } : item
     ));
+    if (user) {
+      try {
+        await updateItemOnServer(itemId, { status: 'remused' });
+      } catch (err) {
+        console.error('更新 remuse 状态失败:', err);
+      }
+    }
   };
 
-  const handleAddHall = (name: string, imageUrl: string) => {
+  const handleAddHall = async (name: string, imageUrl: string) => {
     const newHall: ExhibitionHall = {
-      id: name,
-      name: name,
-      imageUrl: imageUrl,
-      isCustom: true
+      id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+      name,
+      imageUrl,
+      isCustom: true,
     };
+    // 乐观更新
     setHalls(prev => [...prev, newHall]);
+
+    if (user) {
+      try {
+        // 将 blob URL 转为 base64
+        const saved = await createHallOnServer({ id: newHall.id, name, imageUrl });
+        setHalls(prev => prev.map(h => h.id === newHall.id && h.isCustom ? { ...saved } : h));
+      } catch (err) {
+        console.error('保存展馆到服务器失败:', err);
+      }
+    }
   };
+
+  const handleUpdateHall = async (
+    hallId: string,
+    updates: {
+      name: string;
+      imageUrl?: string;
+    },
+  ) => {
+    const nextName = updates.name.trim();
+    if (!nextName) {
+      return;
+    }
+
+    setHalls(prev => prev.map((hall) => (
+      hall.id === hallId
+        ? { ...hall, name: nextName, imageUrl: updates.imageUrl || hall.imageUrl }
+        : hall
+    )));
+    setItems(prev => prev.map((item) => (
+      item.hallId === hallId ? { ...item, category: nextName } : item
+    )));
+    setSelectedItem(prev => (
+      prev && prev.hallId === hallId ? { ...prev, category: nextName } : prev
+    ));
+
+    if (user) {
+      try {
+        const saved = await updateHallOnServer(hallId, {
+          name: nextName,
+          imageUrl: updates.imageUrl,
+        });
+        setHalls(prev => prev.map((hall) => (
+          hall.id === hallId ? { ...saved } : hall
+        )));
+        setItems(prev => prev.map((item) => (
+          item.hallId === hallId ? { ...item, category: saved.name } : item
+        )));
+        setSelectedItem(prev => (
+          prev && prev.hallId === hallId ? { ...prev, category: saved.name } : prev
+        ));
+      } catch (err) {
+        console.error('鏇存柊灞曢鍒版湇鍔″櫒澶辫触:', err);
+      }
+    }
+  };
+
+  const handleDeleteHall = async (hallId: string) => {
+    if (hallId === ItemCategory.OTHER) {
+      return;
+    }
+
+    const fallbackHallId = ItemCategory.OTHER;
+    const fallbackCategory = getHallNameById(halls, fallbackHallId, fallbackHallId);
+
+    setHalls(prev => prev.filter((hall) => hall.id !== hallId));
+    setItems(prev => prev.map((item) => (
+      item.hallId === hallId
+        ? { ...item, hallId: fallbackHallId, category: fallbackCategory }
+        : item
+    )));
+    setSelectedItem(prev => (
+      prev && prev.hallId === hallId
+        ? { ...prev, hallId: fallbackHallId, category: fallbackCategory }
+        : prev
+    ));
+    setPendingHallId(prev => (prev === hallId ? null : prev));
+
+    if (user) {
+      try {
+        await deleteHallOnServer(hallId);
+      } catch (err) {
+        console.error('鍒犻櫎灞曢浠庢湇鍔″櫒澶辫触:', err);
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setUser(null);
+    setItems([]);
+    setHalls(DEFAULT_HALLS);
+    setStickers([]);
+    setSelectedItem(null);
+    setShowLogin(true);
+  };
+
+  const handleClearSamples = async () => {
+    const itemsBeforeClear = items;
+    // 从本地状态中移除
+    setItems(prev => prev.filter(it => !it.isSample));
+    // 从服务器删除
+    await clearSampleData(itemsBeforeClear, deleteItemOnServer);
+  };
+
+  const handleUpdateToolbox = async (tools: Tool[]) => {
+    try {
+      const updatedUser = await authService.updatePreferences({ toolbox: tools });
+      setUser(updatedUser);
+    } catch (err) {
+      console.error('更新工具箱失败:', err);
+    }
+  };
+
+  // ============================================================
+  // 渲染
+  // ============================================================
+
+  // 启动动画期间不渲染任何内容
+  if (showLaunch) {
+    return (
+      <ErrorBoundary>
+        <LaunchScreen onComplete={handleLaunchComplete} />
+      </ErrorBoundary>
+    );
+  }
+
+  // 展示登录/游客页面
+  if (authLoading) {
+    return (
+      <ErrorBoundary>
+        <div className="min-h-screen bg-remuse-dark text-white flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full border-4 border-neutral-800 border-t-remuse-accent animate-spin" />
+            <p className="text-sm text-neutral-400 font-display tracking-[0.2em] uppercase">Restoring Session</p>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (showLogin) {
+    return (
+      <ErrorBoundary>
+        <LoginScreen
+          onGuestLogin={handleGuestLogin}
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          loading={authLoading}
+          error={authError}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  // 引导页
+  if (showOnboarding) {
+    return (
+      <ErrorBoundary>
+        <Onboarding onComplete={handleOnboardingComplete} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
-      {showLaunch && <LaunchScreen onComplete={handleLaunchComplete} />}
-      
-      {/* Show Onboarding after Launch and before Layout if needed */}
-      {!showLaunch && showOnboarding && (
-        <Onboarding onComplete={handleOnboardingComplete} />
-      )}
-      
-      {!showLaunch && !showOnboarding && (
-        <Layout 
-            currentView={currentView} 
-            onChangeView={handleChangeView}
-            ecoPoints={ecoPoints}
-        >
-          {/* Skeleton overlay during transition */}
-          {isTransitioning && (
-            <div className="absolute inset-0 z-30">
-              <SkeletonScreen view={currentView} />
-            </div>
-          )}
+      <Layout
+        currentView={currentView}
+        onChangeView={handleChangeView}
+        ecoPoints={ecoPoints}
+      >
+        {/* Skeleton overlay during transition */}
+        {isTransitioning && (
+          <div className="absolute inset-0 z-30">
+            <SkeletonScreen view={currentView} />
+          </div>
+        )}
 
-          {/* Actual content with enter animation */}
-          <div className={`h-full transition-opacity duration-200 ${showContent && !isTransitioning ? 'opacity-100 animate-view-enter' : 'opacity-0'}`}>
-          
-          {/* Always render Scanner to preserve background processing state, hide if not currentView */}
+        {/* Actual content with enter animation */}
+        <div className={`h-full transition-opacity duration-200 ${showContent && !isTransitioning ? 'opacity-100 animate-view-enter' : 'opacity-0'}`}>
+
+          {/* Always render Scanner to preserve background processing state */}
           <div className={currentView === 'SCANNER' ? 'block h-full w-full relative' : 'hidden h-full'}>
-            <Scanner 
+            <Scanner
               key={scannerKey}
               halls={halls}
-              onItemAdded={handleAddItem} 
+              onItemAdded={handleAddItem}
               onStickerCreated={handleStickerCreated}
               onReset={() => setScannerKey(k => k + 1)}
               onCancel={() => {
-                setScannerKey(k => k + 1); // 点击取消/关闭时重置扫描仪并返回画廊
+                setScannerKey(k => k + 1);
                 handleChangeView('MUSEUM');
               }}
               onViewDetail={(item) => {
@@ -315,29 +683,43 @@ const App: React.FC = () => {
               existingStickers={stickers}
               onGenerateStickerRequest={handleGenerateStickerRequest}
               generatingStickersGlobal={generatingStickers}
+              onNavigateToHall={(hallId) => {
+                setPendingHallId(hallId);
+                handleChangeView('MUSEUM');
+              }}
+              onNavigateToStickerLibrary={() => {
+                handleChangeView('STICKER_LIBRARY');
+              }}
             />
           </div>
 
           {currentView === 'MUSEUM' && (
-            <Gallery 
-              items={items} 
+            <Gallery
+              items={items}
               halls={halls}
-              onSelectItem={handleSelectItem} 
+              onSelectItem={handleSelectItem}
               onAddHall={handleAddHall}
+              onUpdateHall={handleUpdateHall}
+              onDeleteHall={handleDeleteHall}
+              onUpdateItem={handleUpdateItem}
+              onDeleteItem={handleDeleteItem}
+              initialHallId={pendingHallId}
             />
           )}
 
-          {currentView === 'STICKER_LIBRARY' && (
-            <StickerLibrary 
-                stickers={stickers}
-                onDeleteSticker={handleDeleteSticker}
-                onStickerCreated={handleStickerCreated}
+          {/* Always render StickerLibrary to preserve emoji generation state */}
+          <div className={currentView === 'STICKER_LIBRARY' ? 'block h-full w-full' : 'hidden h-full'}>
+            <StickerLibrary
+              stickers={stickers}
+              onDeleteSticker={handleDeleteSticker}
+              onStickerCreated={handleStickerCreated}
             />
-          )}
-          
+          </div>
+
           {currentView === 'ITEM_DETAIL' && selectedItem && (
             <IdeaGenerator
               item={selectedItem}
+              halls={halls}
               onBack={() => handleChangeView('MUSEUM')}
               onComplete={handleCompleteRemuse}
               onUpdateItem={handleUpdateItem}
@@ -350,15 +732,28 @@ const App: React.FC = () => {
           )}
 
           {currentView === 'PROFILE' && (
-            <CuratorOffice items={items} />
+            <CuratorOffice
+              items={items}
+              user={user}
+              onLogout={handleLogout}
+              onClearSamples={handleClearSamples}
+              onUpdateToolbox={handleUpdateToolbox}
+            />
+          )}
+
+          {currentView === 'MEMORY_RAG' && (
+            <MemoryRagStudio
+              items={items}
+              user={user}
+              onBack={() => handleChangeView('PROFILE')}
+            />
           )}
 
           {currentView === 'INSPIRATION' && (
             <InspirationPlaza />
           )}
-          </div>
-        </Layout>
-      )}
+        </div>
+      </Layout>
 
       {/* Milestone Celebration Overlay */}
       {milestoneInfo && (

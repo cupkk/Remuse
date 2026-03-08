@@ -4,152 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Remuse | 再生博物馆</title>
-    <meta name="description" content="REMUSE 万物再博物馆 — 用 AI 将日常物品数字化归档，发现万物再生的可能性。">
-    <meta name="theme-color" content="#0f0f0f">
-    <!-- Preload critical fonts -->
-    <link rel="preload" href="https://fonts.gstatic.com/s/comfortaa/v45/1Ptsg8LJRfWJmhDAuUsISoFqPfE.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_EnYxNbPzS5HE.woff2" as="font" type="font/woff2" crossorigin>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['"Noto Sans SC"', 'sans-serif'],
-              mono: ['JetBrains Mono', 'monospace'],
-              display: ['Comfortaa', '"Noto Sans SC"', 'sans-serif'],
-            },
-            colors: {
-              'remuse-dark': '#0f0f0f',
-              'remuse-panel': '#1a1a1a',
-              'remuse-border': '#333333',
-              'remuse-accent': '#ccff00', // Lime / Vibrant
-              'remuse-secondary': '#00ffff', // Cyan / Tech
-            },
-            backgroundImage: {
-              'grid-pattern': "linear-gradient(to right, #222 1px, transparent 1px), linear-gradient(to bottom, #222 1px, transparent 1px)",
-            },
-            animation: {
-              'mosaic-flow': 'mosaicMove 10s linear infinite',
-              'text-draw': 'textDraw 3s ease-out forwards',
-              'expand-hall': 'expandHall 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards',
-              'skeleton-pulse': 'skeletonPulse 1.8s ease-in-out infinite',
-              'view-enter': 'viewEnter 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards',
-              'milestone-pop': 'milestonePop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
-              'confetti-fall': 'confettiFall 1.5s ease-out forwards',
-            },
-            keyframes: {
-              mosaicMove: {
-                '0%': { transform: 'translate(0, 0)' },
-                '100%': { transform: 'translate(-20px, -20px)' },
-              },
-              textDraw: {
-                '0%': { strokeDasharray: '50', strokeDashoffset: '50', fill: 'transparent' },
-                '80%': { strokeDasharray: '50', strokeDashoffset: '0', fill: 'transparent' },
-                '100%': { strokeDasharray: '50', strokeDashoffset: '0', fill: 'white' }
-              },
-              expandHall: {
-                '0%': { transform: 'scale(1)', opacity: '1' },
-                '50%': { transform: 'scale(1.1)', opacity: '0.8' },
-                '100%': { transform: 'scale(3)', opacity: '0' }
-              },
-              skeletonPulse: {
-                '0%, 100%': { opacity: '0.4' },
-                '50%': { opacity: '0.8' }
-              },
-              viewEnter: {
-                '0%': { opacity: '0', transform: 'translateY(12px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' }
-              },
-              milestonePop: {
-                '0%': { opacity: '0', transform: 'scale(0.5)' },
-                '70%': { opacity: '1', transform: 'scale(1.1)' },
-                '100%': { opacity: '1', transform: 'scale(1)' }
-              },
-              confettiFall: {
-                '0%': { opacity: '1', transform: 'translateY(0) rotate(0deg)' },
-                '100%': { opacity: '0', transform: 'translateY(120px) rotate(360deg)' }
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      body {
-        background-color: #0f0f0f;
-        color: #e5e5e5;
-        overflow-x: hidden;
-      }
-      /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1a1a1a;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555;
-      }
-      .clip-corner {
-        clip-path: polygon(
-          0 0,
-          100% 0,
-          100% calc(100% - 20px),
-          calc(100% - 20px) 100%,
-          0 100%
-        );
-      }
-      .clip-corner-top {
-        clip-path: polygon(
-          20px 0,
-          100% 0,
-          100% 100%,
-          0 100%,
-          0 20px
-        );
-      }
-      .clip-house {
-        clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%);
-      }
-      /* Thin border workaround for clip-path using drop-shadow */
-      .house-border {
-        filter: drop-shadow(0px 0px 1px rgba(255, 255, 255, 0.5));
-      }
-      /* Safe area insets for notch / home-indicator devices */
-      .safe-area-pt { padding-top: env(safe-area-inset-top); }
-      .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
-      /* Hide scrollbar utility */
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      /* Reduced motion preference */
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
-          animation-duration: 0.01ms !important;
-          animation-iteration-count: 1 !important;
-          transition-duration: 0.01ms !important;
-        }
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0"
-  }
-}
-</script>
-</head>
+    <meta
+      name="description"
+      content="REMUSE 万物再生博物馆，用 AI 将日常物品数字化归档，发现万物再生的可能性。"
+    />
+    <meta name="theme-color" content="#0f0f0f" />
+    <link
+      href="https://fonts.googleapis.cn/css2?family=Comfortaa:wght@400;600;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
+      rel="stylesheet"
+      crossorigin
+    />
+  </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

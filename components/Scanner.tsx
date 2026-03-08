@@ -1,9 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, Loader2, Sparkles, X, Box, Check, Sticker as StickerIcon, ArrowRight, AlertTriangle, RefreshCw, Wifi, WifiOff, ShieldAlert, ImageOff, Clock } from 'lucide-react';
+import { Camera, Upload, Loader2, Sparkles, X, Box, Check, Sticker as StickerIcon, ArrowRight, AlertTriangle, RefreshCw, Wifi, WifiOff, ShieldAlert, ImageOff, Clock, Edit2, Mic, Square, Save } from 'lucide-react';
 import { fileToGenerativePart, analyzeItemImage, generateRemuseIdeas, generateSticker, AnalysisError } from '../services/geminiService';
+import { imageUrlToBase64 } from '../services/imageUtils';
 import { CollectedItem, ExhibitionHall, Sticker } from '../types';
+import { getHallNameById } from '../services/halls';
 import IdeaGenerator from './IdeaGenerator';
+import { isSpeechRecognitionSupported, startSpeechCapture, type SpeechCaptureSession } from '../services/speechRecognition';
 
 type BatchItemStatus = 'pending' | 'analyzing' | 'success' | 'error';
 interface BatchItem {
@@ -20,7 +23,7 @@ interface BatchItem {
 interface ScannerProps {
   halls: ExhibitionHall[];
   onItemAdded: (item: CollectedItem) => void;
-  onStickerCreated: (sticker: Sticker) => void;
+  onStickerCreated: (sticker: Sticker) => Promise<void> | void;
   onCancel: () => void;
   onReset?: () => void;
   onViewDetail: (item: CollectedItem) => void;
@@ -30,6 +33,8 @@ interface ScannerProps {
   existingStickers?: Sticker[];
   onGenerateStickerRequest?: (item: CollectedItem) => void;
   generatingStickersGlobal?: Record<string, boolean>;
+  onNavigateToHall?: (hallId: string) => void;
+  onNavigateToStickerLibrary?: () => void;
 }
 
 const ScrambleButton: React.FC<{ 
@@ -93,7 +98,7 @@ const ScrambleButton: React.FC<{
     );
 };
 
-const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers, onGenerateStickerRequest, generatingStickersGlobal = {} }) => { 
+const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers, onGenerateStickerRequest, generatingStickersGlobal = {}, onNavigateToHall, onNavigateToStickerLibrary }) => { 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingStickerLocal, setIsGeneratingSticker] = useState(false);
   
@@ -112,6 +117,8 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   // Hall Selection State
   const [selectedHallId, setSelectedHallId] = useState<string | null>(null);
   const [showHallSelector, setShowHallSelector] = useState(false);
+  const [editingResultHall, setEditingResultHall] = useState(false);
+  const [aiDetectedCategory, setAiDetectedCategory] = useState<string>('');
   
   // Batch Mode State
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -120,11 +127,29 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   const [generatedSticker, setGeneratedSticker] = useState<Sticker | null>(null);
   const [errorInfo, setErrorInfo] = useState<AnalysisError | null>(null);
   const [lastFile, setLastFile] = useState<File | null>(null);
+  const [memoryDraft, setMemoryDraft] = useState('');
+  const [memoryVoiceError, setMemoryVoiceError] = useState<string | null>(null);
+  const [isRecordingMemoryDraft, setIsRecordingMemoryDraft] = useState(false);
+  const [isSavingMemoryDraft, setIsSavingMemoryDraft] = useState(false);
+  const [memorySaveState, setMemorySaveState] = useState<string | null>(null);
 
-  const selectedHallName = halls.find(h => h.id === selectedHallId)?.name;
+  const hallsSafe = Array.isArray(halls) ? halls : [];
+  const selectedHallName = hallsSafe.find(h => h.id === selectedHallId)?.name;
+  const isExpandedScannerLayout = isBatchMode || isAnalyzing || isGeneratingSticker || !!analysisResult;
+  const memoryDraftDirty = Boolean(analysisResult && memoryDraft.trim() !== (analysisResult.story || '').trim());
 
   // Track blob URLs for cleanup on unmount to avoid revoking on state updates
   const blobUrlsRef = useRef<Set<string>>(new Set());
+  const memoryDraftRef = useRef('');
+  const memoryCaptureRef = useRef<SpeechCaptureSession | null>(null);
+  const analyzingLeftRef = useRef<HTMLDivElement>(null);
+  const resultLeftRef = useRef<HTMLDivElement>(null);
+  const [analyzingPanelHeight, setAnalyzingPanelHeight] = useState<number | null>(null);
+  const [resultPanelHeight, setResultPanelHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    memoryDraftRef.current = memoryDraft;
+  }, [memoryDraft]);
 
   useEffect(() => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -140,6 +165,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
   // Cleanup Blob URLs only on unmount
   useEffect(() => {
     return () => {
+      memoryCaptureRef.current?.stop();
       blobUrlsRef.current.forEach(url => {
         URL.revokeObjectURL(url);
       });
@@ -154,6 +180,66 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
       setGeneratedSticker(matchedSticker);
     }
   }, [analysisResult, existingStickers]);
+
+  useEffect(() => {
+    if (!isAnalyzing && !isGeneratingSticker) {
+      setAnalyzingPanelHeight(null);
+      return;
+    }
+
+    const node = analyzingLeftRef.current;
+    if (!node || typeof window === 'undefined') {
+      return;
+    }
+
+    const updateHeight = () => {
+      if (window.innerWidth < 1024) {
+        setAnalyzingPanelHeight(null);
+        return;
+      }
+      setAnalyzingPanelHeight(Math.ceil(node.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [isAnalyzing, isGeneratingSticker, previewUrl, statusText]);
+
+  useEffect(() => {
+    if (!analysisResult || isAnalyzing || isGeneratingSticker) {
+      setResultPanelHeight(null);
+      return;
+    }
+
+    const node = resultLeftRef.current;
+    if (!node || typeof window === 'undefined') {
+      return;
+    }
+
+    const updateHeight = () => {
+      if (window.innerWidth < 1024) {
+        setResultPanelHeight(null);
+        return;
+      }
+      setResultPanelHeight(Math.ceil(node.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [analysisResult, isAnalyzing, isGeneratingSticker, generatedSticker]);
 
   // Sync batch mode UI with global generation state
   useEffect(() => {
@@ -194,6 +280,12 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
 
     setErrorInfo(null);
     setGeneratedSticker(null);
+    setMemoryDraft('');
+    setMemoryVoiceError(null);
+    setMemorySaveState(null);
+    memoryCaptureRef.current?.stop();
+    memoryCaptureRef.current = null;
+    setIsRecordingMemoryDraft(false);
 
     // Single file flow (camera / album single)
     if (files.length === 1) {
@@ -246,6 +338,87 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
     }
   };
 
+  const stopMemoryCapture = () => {
+    memoryCaptureRef.current?.stop();
+    memoryCaptureRef.current = null;
+    setIsRecordingMemoryDraft(false);
+  };
+
+  const handleSaveMemoryDraft = async () => {
+    if (!analysisResult || !memoryDraftDirty || !onUpdateItem) {
+      return;
+    }
+
+    setIsSavingMemoryDraft(true);
+    setMemorySaveState(null);
+
+    try {
+      const updatedItem = {
+        ...analysisResult,
+        story: memoryDraft.trim(),
+      };
+      setAnalysisResult(updatedItem);
+      await onUpdateItem(updatedItem);
+      setMemorySaveState('记忆内容已更新到藏品档案。');
+    } catch (error) {
+      console.error('Failed to save memory draft from scanner result:', error);
+      setMemorySaveState('保存失败，请稍后重试。');
+    } finally {
+      setIsSavingMemoryDraft(false);
+    }
+  };
+
+  const handleToggleMemoryCapture = () => {
+    if (isRecordingMemoryDraft) {
+      stopMemoryCapture();
+      return;
+    }
+
+    setMemoryVoiceError(null);
+    if (!isSpeechRecognitionSupported()) {
+      setMemoryVoiceError('当前浏览器不支持语音输入，请改用 Chrome 或 Edge。');
+      return;
+    }
+
+    let committed = memoryDraftRef.current.trim();
+    setIsRecordingMemoryDraft(true);
+    memoryCaptureRef.current = startSpeechCapture({
+      lang: 'zh-CN',
+      continuous: true,
+      interimResults: true,
+      onTranscript: (transcript, isFinal) => {
+        const spoken = transcript.trim();
+        const next = [committed, spoken].filter(Boolean).join(committed && spoken ? '\n' : '');
+        setMemoryDraft(next);
+        setMemorySaveState(null);
+
+        if (isFinal) {
+          committed = next;
+          memoryDraftRef.current = next;
+        }
+      },
+      onError: (message) => {
+        setMemoryVoiceError(message);
+        setIsRecordingMemoryDraft(false);
+      },
+      onEnd: () => {
+        memoryCaptureRef.current = null;
+        setIsRecordingMemoryDraft(false);
+      },
+    });
+  };
+
+  const buildArchivedStory = (userMemory: string, aiStory: string) => {
+    const manualStory = userMemory.trim();
+    const generatedStory = aiStory.trim();
+
+    if (manualStory && generatedStory) {
+      return `${manualStory}\n\nAI档案注记：${generatedStory}`;
+    }
+
+    return manualStory || generatedStory;
+  };
+
   const processBatchItem = async (itemId: string, file: File, directUrl: string) => {
     if (abortRef.current?.signal.aborted) return;
     
@@ -261,10 +434,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
       const ideas = await generateRemuseIdeas(analysis.name, analysis.material);
       if (abortRef.current?.signal.aborted) return;
 
+      const hallId = selectedHallId || analysis.category;
+
       const newItem: CollectedItem = {
         id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
         name: analysis.name,
-        category: selectedHallId || analysis.category, 
+        hallId,
+        category: getHallNameById(hallsSafe, hallId, analysis.category),
         material: analysis.material,
         story: analysis.story,
         tags: analysis.tags,
@@ -313,7 +489,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
     setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: true } : i));
 
     try {
-      const base64 = item.result.imageUrl.split(',')[1];
+      const base64 = await imageUrlToBase64(item.result.imageUrl);
       const { stickerImageUrl, dramaText } = await generateSticker(base64, item.result.name);
 
       const newSticker: Sticker = {
@@ -328,7 +504,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
       setBatchItems(prev => prev.map(i => 
         i.id === itemId ? { ...i, isGeneratingSticker: false, generatedSticker: newSticker } : i
       ));
-      onStickerCreated(newSticker);
+      await onStickerCreated(newSticker);
     } catch (e: unknown) {
       console.error("Batch sticker generation failed:", e);
       setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: false } : i));
@@ -356,7 +532,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
       const base64 = await fileToGenerativePart(file);
       if (controller.signal.aborted) return;
       
-      setStatusText("Gemini 视觉系统识别中...");
+      setStatusText("视觉识别中...");
       const analysis = await analyzeItemImage(base64);
       if (controller.signal.aborted) return;
       
@@ -364,12 +540,16 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
       const ideas = await generateRemuseIdeas(analysis.name, analysis.material);
       if (controller.signal.aborted) return;
 
+      const hallId = selectedHallId || analysis.category;
+      const archivedStory = buildArchivedStory(memoryDraftRef.current, analysis.story || '');
+
       const newItem: CollectedItem = {
         id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
         name: analysis.name,
-        category: selectedHallId || analysis.category, 
+        hallId,
+        category: getHallNameById(hallsSafe, hallId, analysis.category),
         material: analysis.material,
-        story: analysis.story,
+        story: archivedStory,
         tags: analysis.tags,
         // Store as data URL so blob URL can be safely revoked
         imageUrl: `data:${file.type || 'image/jpeg'};base64,${base64}`,
@@ -378,8 +558,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
         ideas: ideas
       };
 
+      setAiDetectedCategory(analysis.category);
+      setMemoryDraft(archivedStory);
+      memoryDraftRef.current = archivedStory;
+      setMemorySaveState(null);
       setAnalysisResult(newItem);
       onItemAdded(newItem);
+      stopMemoryCapture();
       setIsAnalyzing(false);
 
     } catch (err: unknown) {
@@ -396,6 +581,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
           suggestion: '请重试。如果问题持续出现，尝试更换图片。',
         });
       }
+      stopMemoryCapture();
       setIsAnalyzing(false);
     }
   };
@@ -412,8 +598,8 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
     setStatusText("正在生成专属贴纸与藏品物语");
 
     try {
-        // Extract base64 from stored data URL (no blob fetch needed)
-        const base64 = analysisResult.imageUrl.split(',')[1];
+        // Support both data URLs and external URLs (e.g. Unsplash)
+        const base64 = await imageUrlToBase64(analysisResult.imageUrl);
 
         const { stickerImageUrl, dramaText } = await generateSticker(base64, analysisResult.name);
         
@@ -427,7 +613,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
         };
 
         setGeneratedSticker(newSticker);
-        onStickerCreated(newSticker);
+        await onStickerCreated(newSticker);
     } catch (e: unknown) {
         const error = e as Record<string, unknown>;
         if (error && error.category && error.title && error.suggestion) {
@@ -461,7 +647,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
         <X size={24} />
       </button>
 
-      <div className="max-w-md w-full relative z-10">
+      <div className={`${isExpandedScannerLayout ? 'max-w-6xl' : 'max-w-md'} w-full relative z-10`}>
         
         {/* Header (Only show if not in result view) */}
         {!isBatchMode && !analysisResult && !isAnalyzing && !errorInfo && (
@@ -580,7 +766,8 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
 
         {/* --- STATE 1: ANALYZING / GENERATING STICKER --- */}
         {!isBatchMode && (isAnalyzing || isGeneratingSticker) && (
-          <div className="bg-remuse-panel border border-remuse-border p-8 rounded-none clip-corner flex flex-col items-center animate-fade-in">
+          <div className="bg-remuse-panel border border-remuse-border p-6 md:p-8 rounded-none clip-corner animate-fade-in grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] items-start">
+            <div ref={analyzingLeftRef} className="rounded-[28px] border border-neutral-800 bg-neutral-950/70 px-6 py-8 flex min-h-[360px] lg:min-h-[430px] flex-col items-center justify-center text-center">
             <div className="relative w-32 h-32 mb-6">
                  {/* 底部脉冲光圈 */}
                  <div className="absolute inset-[-10px] border-2 border-remuse-accent rounded-full animate-ping opacity-20"></div>
@@ -618,9 +805,61 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                )}
             </div>
             <h3 className="text-xl font-display text-remuse-accent animate-pulse text-center">{statusText}</h3>
-            {isGeneratingSticker && (
+            {isGeneratingSticker ? (
                 <p className="text-xs text-neutral-400 mt-2 font-mono">Drawing Vector Lines...</p>
+            ) : (
+                <p className="text-xs text-neutral-500 mt-3 leading-6">在识别结束前，你可以同步补充这件物品和你的记忆。</p>
             )}
+            </div>
+
+            <div
+              className="rounded-[28px] border border-neutral-800 bg-neutral-950/70 p-5 md:p-6 min-w-0 flex flex-col overflow-hidden"
+              style={analyzingPanelHeight ? { height: `${analyzingPanelHeight}px` } : undefined}
+            >
+              <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">Memory Draft</p>
+                  <h4 className="mt-2 text-xl font-display text-white">边识别边写下你和它的故事</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleMemoryCapture}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-display transition-colors ${
+                    isRecordingMemoryDraft
+                      ? 'border-red-500/60 bg-red-500/10 text-red-200'
+                      : 'border-remuse-secondary/40 bg-remuse-secondary/10 text-remuse-secondary hover:border-remuse-secondary'
+                  }`}
+                >
+                  {isRecordingMemoryDraft ? <Square size={14} /> : <Mic size={14} />}
+                  {isRecordingMemoryDraft ? '停止语音输入' : '语音记录记忆'}
+                </button>
+              </div>
+
+              <textarea
+                value={memoryDraft}
+                onChange={(event) => {
+                  setMemoryDraft(event.target.value);
+                  setMemorySaveState(null);
+                }}
+                placeholder="例如：这是我大学毕业前最后一次和室友一起买的玩偶，当时我们约好以后也要一直联系。"
+                className="w-full min-h-[220px] resize-none rounded-[24px] border border-neutral-800 bg-black/60 px-5 py-4 text-sm leading-7 text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-remuse-accent/60 lg:min-h-0 lg:flex-1"
+              />
+
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
+                  可输入文字，也可直接说话
+                </span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
+                  识别完成前输入的内容会和 AI 档案注记一起归档
+                </span>
+              </div>
+
+              {memoryVoiceError && (
+                <p className="mt-3 text-sm text-red-300">{memoryVoiceError}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -762,7 +1001,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
 
         {/* --- STATE 3: RESULT & ACTIONS --- */}
         {!isBatchMode && !isAnalyzing && analysisResult && !isGeneratingSticker && (
-            <div className="bg-remuse-panel border border-remuse-border p-4 md:p-6 clip-corner shadow-2xl animate-fade-in max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <div className="bg-remuse-panel border border-remuse-border p-4 md:p-6 clip-corner shadow-2xl animate-fade-in max-h-[calc(100dvh-8rem)] overflow-y-auto">
                 <div className="flex items-center justify-between mb-4 md:mb-6 border-b border-neutral-800 pb-4">
                     <h3 className="text-xl font-bold font-display text-white flex items-center gap-2">
                         <Check size={20} className="text-remuse-accent" />
@@ -773,14 +1012,22 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                     </div>
                 </div>
 
-                <div className="flex gap-4 mb-6">
-                    <img src={analysisResult.imageUrl} alt="Result" className="w-24 h-24 object-cover border border-neutral-700 bg-neutral-900" />
-                    <div>
-                        <h4 className="font-bold text-white text-lg">{analysisResult.name}</h4>
-                        <span className="inline-block bg-neutral-800 text-neutral-400 text-xs px-2 py-0.5 rounded-full mb-2">
-                            {analysisResult.category}
-                        </span>
-                        <p className="text-neutral-500 text-xs italic font-mono line-clamp-2">"{analysisResult.story}"</p>
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,1.05fr)] items-start">
+                <div ref={resultLeftRef} className="min-w-0 flex flex-col">
+                <div className="flex flex-col gap-4 mb-6 rounded-[28px] border border-neutral-800 bg-neutral-950/70 p-4 md:p-5 sm:flex-row">
+                    <img src={analysisResult.imageUrl} alt="Result" className="h-28 w-28 shrink-0 rounded-2xl object-cover border border-neutral-700 bg-neutral-900" />
+                    <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-white text-2xl leading-tight">{analysisResult.name}</h4>
+                        <button
+                            onClick={() => { setEditingResultHall(true); setShowHallSelector(true); }}
+                            className="mt-1 inline-flex max-w-full items-center gap-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs px-3 py-1.5 rounded-full mb-2 transition-colors group"
+                            title="点击修改所属馆"
+                        >
+                            <Box size={10} className="text-remuse-accent shrink-0" />
+                            <span>已归入：<span className="text-remuse-secondary font-bold">{getHallNameById(hallsSafe, analysisResult.hallId, analysisResult.category)}</span></span>
+                            <Edit2 size={10} className="text-neutral-600 group-hover:text-remuse-accent transition-colors ml-0.5 shrink-0" />
+                        </button>
+                        <p className="text-neutral-400 text-sm leading-7 line-clamp-4">{memoryDraft.trim() || analysisResult.story || '还没有补充这件物品和你的回忆。'}</p>
                     </div>
                 </div>
                 
@@ -799,26 +1046,124 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                 ) : (
                     <button 
                         onClick={handleGenerateSticker}
-                        className="w-full mb-4 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group"
+                        className="w-full mb-4 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group rounded-[20px]"
                     >
                         <StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" />
                         生成专属贴纸
                     </button>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <button
-                        onClick={onReset || onCancel}
-                        className="py-3 border border-neutral-700 text-neutral-400 hover:text-white hover:border-white transition-colors font-display text-sm"
+                        onClick={async () => {
+                          if (memoryDraftDirty) {
+                            await handleSaveMemoryDraft();
+                          }
+                          (onReset || onCancel)?.();
+                        }}
+                        className="py-3 border border-neutral-700 text-neutral-300 hover:text-white hover:border-white transition-colors font-display text-sm rounded-[20px]"
                     >
                         继续归档
                     </button>
                     <button
-                        onClick={() => analysisResult && onViewDetail(analysisResult)}
-                        className="py-3 bg-remuse-accent text-black font-bold hover:bg-white transition-colors font-display text-sm flex items-center justify-center gap-2"
+                        onClick={async () => {
+                          if (memoryDraftDirty) {
+                            await handleSaveMemoryDraft();
+                          }
+                          if (generatedSticker && onNavigateToStickerLibrary) {
+                            onNavigateToStickerLibrary();
+                            return;
+                          }
+                          if (analysisResult) {
+                            onViewDetail({ ...analysisResult, story: memoryDraft.trim() || analysisResult.story });
+                          }
+                        }}
+                        className="py-3 bg-remuse-accent text-black font-bold hover:bg-white transition-colors font-display text-sm flex items-center justify-center gap-2 rounded-[20px]"
                     >
-                        查看再生协议 <ArrowRight size={16} />
+                        {generatedSticker ? '查看贴纸' : '查看再生协议'} <ArrowRight size={16} />
                     </button>
+                </div>
+
+                {/* 前往所属展馆快捷入口 */}
+                {onNavigateToHall && analysisResult && (
+                    <button
+                        onClick={async () => {
+                          if (memoryDraftDirty) {
+                            await handleSaveMemoryDraft();
+                          }
+                          onNavigateToHall(analysisResult.hallId);
+                        }}
+                        className="w-full mt-3 py-2.5 bg-neutral-800/60 hover:bg-neutral-700 border border-neutral-700 hover:border-remuse-secondary text-neutral-300 hover:text-white transition-all font-display text-xs flex items-center justify-center gap-2 rounded-[18px] group"
+                    >
+                        <Box size={14} className="text-remuse-secondary" />
+                        前往「{getHallNameById(hallsSafe, analysisResult.hallId, analysisResult.category)}」展馆查看
+                        <ArrowRight size={14} className="text-neutral-600 group-hover:text-remuse-secondary transition-colors" />
+                    </button>
+                )}
+
+                </div>
+
+                <div
+                    className="rounded-[28px] border border-neutral-800 bg-neutral-950/70 p-5 md:p-6 min-w-0 flex flex-col overflow-hidden"
+                    style={resultPanelHeight ? { height: `${resultPanelHeight}px` } : undefined}
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                            <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">Memory Archive</p>
+                            <h4 className="mt-2 text-xl font-display text-white">归档后继续补充你的记忆与故事</h4>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleToggleMemoryCapture}
+                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-display transition-colors ${
+                              isRecordingMemoryDraft
+                                ? 'border-red-500/60 bg-red-500/10 text-red-200'
+                                : 'border-remuse-secondary/40 bg-remuse-secondary/10 text-remuse-secondary hover:border-remuse-secondary'
+                            }`}
+                        >
+                            {isRecordingMemoryDraft ? <Square size={14} /> : <Mic size={14} />}
+                            {isRecordingMemoryDraft ? '停止语音输入' : '继续语音补录'}
+                        </button>
+                    </div>
+
+                    <textarea
+                        value={memoryDraft}
+                        onChange={(event) => {
+                          setMemoryDraft(event.target.value);
+                          setMemorySaveState(null);
+                        }}
+                        placeholder="可以继续补充更完整的故事、人物、时间或地点。这里保存的是最终进入藏品档案的记忆文本。"
+                        className="w-full min-h-[220px] resize-y rounded-[24px] border border-neutral-800 bg-black/60 px-5 py-4 text-sm leading-7 text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-remuse-accent/60 lg:min-h-[140px] lg:flex-1 lg:resize-none"
+                    />
+
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
+                            识别结束后仍可继续编辑
+                        </span>
+                        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
+                            保存后会同步更新记忆向量索引
+                        </span>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm text-neutral-500">
+                            {memorySaveState || (memoryDraftDirty ? '你有尚未保存的记忆修改。' : '当前记忆内容已和藏品档案同步。')}
+                        </div>
+                        <button
+                            type="button"
+                            disabled={!memoryDraftDirty || isSavingMemoryDraft}
+                            onClick={handleSaveMemoryDraft}
+                            className="inline-flex items-center gap-2 rounded-full bg-remuse-accent px-4 py-2 text-sm font-display font-bold text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                        >
+                            {isSavingMemoryDraft ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            保存记忆到档案
+                        </button>
+                    </div>
+
+                    {memoryVoiceError && (
+                      <p className="mt-3 text-sm text-red-300">{memoryVoiceError}</p>
+                    )}
+                </div>
                 </div>
             </div>
         )}
@@ -831,9 +1176,10 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
               <div className="bg-remuse-panel border border-remuse-border w-full max-w-md max-h-[80vh] flex flex-col clip-corner shadow-2xl">
                   <div className="p-4 border-b border-remuse-border flex justify-between items-center bg-neutral-900">
                       <h3 className="text-white font-display font-bold flex items-center gap-2">
-                          <Box size={16} className="text-remuse-accent"/> TARGET DESTINATION
+                          <Box size={16} className="text-remuse-accent"/>
+                          {editingResultHall ? '修改所属展馆' : 'TARGET DESTINATION'}
                       </h3>
-                      <button onClick={() => setShowHallSelector(false)} className="text-neutral-500 hover:text-white">
+                      <button onClick={() => { setShowHallSelector(false); setEditingResultHall(false); }} className="text-neutral-500 hover:text-white">
                           <X size={20} />
                       </button>
                   </div>
@@ -841,18 +1187,47 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
                   <div className="overflow-y-auto p-2">
                       <div className="grid grid-cols-2 gap-2">
                           <button 
-                             onClick={() => { setSelectedHallId(null); setShowHallSelector(false); }}
-                             className={`p-4 text-left border font-mono text-xs transition-all ${!selectedHallId ? 'bg-remuse-accent text-black border-remuse-accent' : 'bg-transparent border-neutral-800 text-neutral-400 hover:border-neutral-600'}`}
+                             onClick={() => {
+                               if (editingResultHall && analysisResult) {
+                                 const nextHallId = aiDetectedCategory || analysisResult.hallId;
+                                 const updated = {
+                                   ...analysisResult,
+                                   hallId: nextHallId,
+                                   category: getHallNameById(hallsSafe, nextHallId, analysisResult.category),
+                                 };
+                                 setAnalysisResult(updated);
+                                 onUpdateItem?.(updated);
+                                 setEditingResultHall(false);
+                               } else {
+                                 setSelectedHallId(null);
+                               }
+                               setShowHallSelector(false);
+                             }}
+                             className={`p-4 text-left border font-mono text-xs transition-all ${!selectedHallId && !editingResultHall ? 'bg-remuse-accent text-black border-remuse-accent' : 'bg-transparent border-neutral-800 text-neutral-400 hover:border-neutral-600'}`}
                           >
                               <span className="block font-bold mb-1">AUTO DETECT</span>
                               <span className="opacity-60">AI 自动分类</span>
                           </button>
                           
-                          {halls.map(hall => (
+                          {hallsSafe.map(hall => (
                               <button 
                                   key={hall.id}
-                                  onClick={() => { setSelectedHallId(hall.id); setShowHallSelector(false); }}
-                                  className={`p-4 text-left border font-mono text-xs transition-all group relative overflow-hidden ${selectedHallId === hall.id ? 'bg-remuse-secondary text-black border-remuse-secondary' : 'bg-transparent border-neutral-800 text-neutral-400 hover:border-neutral-600'}`}
+                                  onClick={() => {
+                                    if (editingResultHall && analysisResult) {
+                                      const updated = {
+                                        ...analysisResult,
+                                        hallId: hall.id,
+                                        category: hall.name,
+                                      };
+                                      setAnalysisResult(updated);
+                                      onUpdateItem?.(updated);
+                                      setEditingResultHall(false);
+                                    } else {
+                                      setSelectedHallId(hall.id);
+                                    }
+                                    setShowHallSelector(false);
+                                  }}
+                                  className={`p-4 text-left border font-mono text-xs transition-all group relative overflow-hidden ${(editingResultHall ? analysisResult?.hallId === hall.id : selectedHallId === hall.id) ? 'bg-remuse-secondary text-black border-remuse-secondary' : 'bg-transparent border-neutral-800 text-neutral-400 hover:border-neutral-600'}`}
                               >
                                   <span className="block font-bold mb-1 truncate relative z-10">{hall.name}</span>
                                   <span className="opacity-60 relative z-10">ID: {hall.id.substring(0,4)}</span>
@@ -869,6 +1244,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls, onItemAdded, onStickerCreated,
         <div className="fixed inset-0 z-[100] animate-fade-in">
           <IdeaGenerator 
             item={previewDetailItem} 
+            halls={hallsSafe}
             onBack={() => setPreviewDetailItem(null)}
             onComplete={(id) => onCompleteItem?.(id)}
             onUpdateItem={(item) => onUpdateItem?.(item)}

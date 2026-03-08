@@ -1,10 +1,16 @@
 
-import React, { useMemo, useState } from 'react';
-import { CollectedItem, Tool } from '../types';
-import { Trophy, Sprout, Star, Hexagon, Zap, Award, Crown, Medal, Briefcase, Wrench, Scissors, PenTool, Ruler, Brush, X, Plus, Check, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CollectedItem, MemoryAssistantMatch, MemoryAssistantMessage, Tool, User } from '../types';
+import { Trophy, Sprout, Star, Hexagon, Zap, Award, Crown, Medal, Briefcase, Wrench, Scissors, PenTool, Ruler, Brush, X, Plus, Check, Trash2, LogOut, PackageOpen, Copy, MessageCircle, UserRound, Send, Mic, Square, Loader2, Sparkles, History } from 'lucide-react';
+import { askMemoryAssistant } from '../services/memoryService';
+import { isSpeechRecognitionSupported, SpeechCaptureSession, startSpeechCapture } from '../services/speechRecognition';
 
 interface CuratorOfficeProps {
   items: CollectedItem[];
+  user?: User | null;
+  onLogout?: () => Promise<void>;
+  onClearSamples?: () => Promise<void>;
+  onUpdateToolbox?: (tools: Tool[]) => Promise<void>;
 }
 
 // --- Visualizations ---
@@ -201,10 +207,154 @@ const ToolIcon: React.FC<{ type: string; size?: number; color?: string }> = ({ t
   }
 };
 
-const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
+function getInitialTools(toolbox?: Tool[]) {
+  if (Array.isArray(toolbox) && toolbox.length > 0) {
+    return toolbox;
+  }
+  return DEFAULT_TOOLS;
+}
+
+const CONTACT_WECHAT_ID = 'MTtin999';
+const AVATAR_GRADIENTS = [
+  ['#ccff00', '#00ffff'],
+  ['#f97316', '#ec4899'],
+  ['#60a5fa', '#22d3ee'],
+  ['#a78bfa', '#f472b6'],
+];
+
+const DEFAULT_MEMORY_PROMPTS = [
+  '帮我找和学生时代有关的藏品',
+  '有没有哪件物品让我想到家人',
+  '我收藏过哪些最有纪念意义的东西',
+];
+
+function createMemoryMessage(role: MemoryAssistantMessage['role'], content: string): MemoryAssistantMessage {
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    role,
+    content,
+  };
+}
+
+function getAvatarSeed(user?: User | null) {
+  return (user?.id || user?.nickname || user?.email || 'remuse').trim();
+}
+
+function getAvatarMonogram(user?: User | null) {
+  const raw = (user?.nickname || user?.email || user?.id || 'RM').trim();
+  if (!raw) {
+    return 'R';
+  }
+
+  return raw.slice(0, 1).toUpperCase();
+}
+
+function getAvatarGradient(user?: User | null) {
+  const seed = getAvatarSeed(user);
+  const hash = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0);
+  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
+}
+
+const ProfileAvatar: React.FC<{ user?: User | null }> = ({ user }) => {
+  const [hasImageError, setHasImageError] = useState(false);
+  const imageUrl = user?.avatarUrl?.trim() || '';
+  const [fromColor, toColor] = getAvatarGradient(user);
+  const monogram = getAvatarMonogram(user);
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !hasImageError) {
+    return (
+      <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full border-2 border-remuse-accent bg-neutral-900 shadow-[0_0_24px_rgba(204,255,0,0.16)] md:h-24 md:w-24">
+        <img
+          src={imageUrl}
+          alt={`${user?.nickname || 'Remuse'} avatar`}
+          className="h-full w-full object-cover"
+          onError={() => setHasImageError(true)}
+        />
+        <div className="absolute inset-0 bg-remuse-accent mix-blend-color opacity-20" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-remuse-accent text-white shadow-[0_0_24px_rgba(204,255,0,0.16)] md:h-24 md:w-24"
+      style={{ background: `linear-gradient(135deg, ${fromColor} 0%, ${toColor} 100%)` }}
+      aria-label={`${user?.nickname || 'Remuse'} avatar fallback`}
+    >
+      <div className="absolute inset-[3px] rounded-full bg-black/70" />
+      <div className="absolute inset-0 opacity-30" style={{ background: `radial-gradient(circle at top, ${fromColor}, transparent 55%)` }} />
+      <span className="relative z-10 font-display text-3xl font-black tracking-tight md:text-4xl">{monogram}</span>
+      <UserRound size={18} className="absolute bottom-3 right-3 z-10 text-remuse-accent/80" />
+    </div>
+  );
+};
+
+const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, onClearSamples, onUpdateToolbox }) => {
   const remusedCount = items.filter(i => i.status === 'remused').length;
   const [isToolkitOpen, setIsToolkitOpen] = useState(false);
-  const [myTools, setMyTools] = useState<Tool[]>(DEFAULT_TOOLS);
+  const [myTools, setMyTools] = useState<Tool[]>(() => getInitialTools(user?.toolbox));
+  const [clearingSamples, setClearingSamples] = useState(false);
+  const [savingTools, setSavingTools] = useState(false);
+  const [contactStatus, setContactStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
+  const showSampleClear = items.some((item) => item.isSample);
+  const storyItems = useMemo(
+    () => items.filter((item) => item.story?.trim()),
+    [items],
+  );
+  const recentMemoryItems = useMemo<MemoryAssistantMatch[]>(
+    () =>
+      storyItems.slice(0, 3).map((item, index) => ({
+        itemId: item.id,
+        itemName: item.name,
+        imageUrl: item.imageUrl,
+        hallName: item.category || item.hallId,
+        material: item.material || '未记录',
+        dateCollected: item.dateCollected,
+        storySnippet: item.story?.trim() || '',
+        tags: item.tags || [],
+        score: 100 - index,
+      })),
+    [storyItems],
+  );
+  const [memoryMessages, setMemoryMessages] = useState<MemoryAssistantMessage[]>([
+    createMemoryMessage(
+      'assistant',
+      '我是你的记忆馆长。你可以问我和旧物有关的人、时间、地点或情绪，我会从你的藏品故事里把相关线索找出来。',
+    ),
+  ]);
+  const [memoryQuery, setMemoryQuery] = useState('');
+  const [memoryMatches, setMemoryMatches] = useState<MemoryAssistantMatch[]>([]);
+  const [memorySuggestions, setMemorySuggestions] = useState<string[]>(DEFAULT_MEMORY_PROMPTS);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [memoryRetrievalSummary, setMemoryRetrievalSummary] = useState('还没有发起检索，先问我一个和旧物有关的问题。');
+  const [isAskingMemory, setIsAskingMemory] = useState(false);
+  const [isRecordingMemory, setIsRecordingMemory] = useState(false);
+  const memoryRecognitionRef = useRef<SpeechCaptureSession | null>(null);
+  const memoryDraftBaseRef = useRef('');
+
+  useEffect(() => {
+    setMyTools(getInitialTools(user?.toolbox));
+  }, [user?.toolbox]);
+
+  useEffect(() => {
+    if (contactStatus === 'idle') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setContactStatus('idle'), 2400);
+    return () => window.clearTimeout(timer);
+  }, [contactStatus]);
+
+  useEffect(() => {
+    return () => {
+      memoryRecognitionRef.current?.stop();
+      memoryRecognitionRef.current = null;
+    };
+  }, []);
   
   // Add Tool Modal State
   const [showAddToolModal, setShowAddToolModal] = useState(false);
@@ -224,7 +374,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
     return 'other';
   };
 
-  const handleAddTool = (e: React.FormEvent) => {
+  const handleAddTool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newToolName.trim()) return;
 
@@ -235,14 +385,121 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
         color: newToolColor
     };
 
-    setMyTools([...myTools, newTool]);
+    const updated = [...myTools, newTool];
+    setMyTools(updated);
+    setSavingTools(true);
+    try {
+      await onUpdateToolbox?.(updated);
+    } finally {
+      setSavingTools(false);
+    }
     setNewToolName('');
     setNewToolColor('#ccff00');
     setShowAddToolModal(false);
   };
 
-  const handleDeleteTool = (id: string) => {
-      setMyTools(prev => prev.filter(t => t.id !== id));
+  const handleDeleteTool = async (id: string) => {
+      const updated = myTools.filter(t => t.id !== id);
+      setMyTools(updated);
+      setSavingTools(true);
+      try {
+        await onUpdateToolbox?.(updated);
+      } finally {
+        setSavingTools(false);
+      }
+  };
+
+  const handleCopyWechat = async () => {
+    try {
+      await navigator.clipboard.writeText(CONTACT_WECHAT_ID);
+      setContactStatus('copied');
+      return;
+    } catch {
+      const input = document.createElement('input');
+      input.value = CONTACT_WECHAT_ID;
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(input);
+      setContactStatus(copied ? 'copied' : 'manual');
+    }
+  };
+
+  const handleAskMemory = async (seedQuery?: string) => {
+    const prompt = (seedQuery ?? memoryQuery).trim();
+    if (prompt.length < 2 || isAskingMemory || storyItems.length === 0) {
+      return;
+    }
+
+    const nextUserMessage = createMemoryMessage('user', prompt);
+    const nextHistory = [...memoryMessages, nextUserMessage];
+
+    setMemoryError(null);
+    setMemoryMessages(nextHistory);
+    setMemoryQuery('');
+    setIsAskingMemory(true);
+
+    try {
+      const response = await askMemoryAssistant(prompt, nextHistory);
+      setMemoryMessages((prev) => [...prev, createMemoryMessage('assistant', response.answer)]);
+      setMemoryMatches(response.matches);
+      setMemoryRetrievalSummary(response.retrievalSummary);
+      if (response.suggestions.length > 0) {
+        setMemorySuggestions(response.suggestions);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '记忆检索失败，请稍后再试';
+      setMemoryError(message);
+      setMemoryRetrievalSummary('这次没有成功完成检索，你可以稍后再试一次。');
+      setMemoryMessages((prev) => [
+        ...prev,
+        createMemoryMessage(
+          'assistant',
+          '我这次没能顺利调出你的记忆档案。你可以稍后重试，或者把问题问得更具体一点，比如加入时间、人物或地点。',
+        ),
+      ]);
+    } finally {
+      setIsAskingMemory(false);
+    }
+  };
+
+  const toggleMemoryVoiceInput = () => {
+    if (isRecordingMemory) {
+      memoryRecognitionRef.current?.stop();
+      memoryRecognitionRef.current = null;
+      setIsRecordingMemory(false);
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      setMemoryError('当前浏览器不支持语音输入，建议使用 Chrome 或 Edge。');
+      return;
+    }
+
+    memoryDraftBaseRef.current = memoryQuery.trim() ? `${memoryQuery.trim()} ` : '';
+    setMemoryError(null);
+    setIsRecordingMemory(true);
+
+    try {
+      memoryRecognitionRef.current = startSpeechCapture({
+        onTranscript: (transcript) => {
+          setMemoryQuery(`${memoryDraftBaseRef.current}${transcript}`.trim());
+        },
+        onError: (message) => {
+          setMemoryError(message);
+          setIsRecordingMemory(false);
+          memoryRecognitionRef.current = null;
+        },
+        onEnd: () => {
+          setIsRecordingMemory(false);
+          memoryRecognitionRef.current = null;
+        },
+      });
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : '语音输入启动失败');
+      setIsRecordingMemory(false);
+      memoryRecognitionRef.current = null;
+    }
   };
 
   // If toolkit is open, render the sub-page overlay
@@ -286,6 +543,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
                        <div key={tool.id} className="aspect-square bg-[#0a0a0a] border border-neutral-800 rounded shadow-inner flex flex-col items-center justify-center group relative hover:border-remuse-accent/50 transition-colors">
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteTool(tool.id); }}
+                            disabled={savingTools}
                             className="absolute top-1 right-1 p-1 text-neutral-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                              <Trash2 size={12} />
@@ -305,6 +563,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
                      {myTools.length < 16 && (
                         <button 
                             onClick={() => setShowAddToolModal(true)}
+                            disabled={savingTools}
                             className="aspect-square bg-[#0f0f0f] border border-dashed border-neutral-700 hover:border-remuse-accent rounded flex flex-col items-center justify-center group transition-colors"
                         >
                             <div className="w-10 h-10 rounded-full bg-neutral-800 group-hover:bg-remuse-accent group-hover:text-black flex items-center justify-center transition-colors mb-2">
@@ -377,12 +636,12 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
                     type="submit"
                     disabled={!newToolName}
                     className={`w-full py-3 mt-4 font-bold font-display flex items-center justify-center gap-2 transition-colors
-                      ${!newToolName 
+                      ${!newToolName || savingTools
                         ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
                         : 'bg-remuse-accent text-black hover:bg-white'}
                     `}
                   >
-                    <Check size={18} /> 确认入库
+                    <Check size={18} /> {savingTools ? '同步中...' : '确认入库'}
                   </button>
                 </form>
              </div>
@@ -395,20 +654,28 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
   return (
     <div className="h-full overflow-y-auto bg-remuse-dark pb-24">
       {/* Header */}
-      <div className="p-8 border-b border-remuse-border bg-remuse-panel">
-          <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-neutral-800 rounded-full border-2 border-remuse-accent overflow-hidden relative">
-                  <img src="https://i.pravatar.cc/150?u=remuse" alt="Avatar" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-remuse-accent mix-blend-color opacity-20"></div>
+      <div className="border-b border-remuse-border bg-remuse-panel px-5 py-6 md:p-8">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-4 md:gap-5">
+                  <ProfileAvatar user={user} />
+                  <div className="min-w-0 flex-1">
+                      <h1 className="text-3xl font-bold text-white font-display tracking-tight md:text-4xl">
+                          {user?.nickname || '馆长'} <span className="text-remuse-accent">::</span> {user?.isGuest ? 'GUEST' : 'ADMIN'}
+                      </h1>
+                      <p className="mt-2 text-xs leading-relaxed text-neutral-500 md:text-sm">
+                          {user?.email || `ID: ${user?.id?.slice(0, 8) || '89757'}`} // LEVEL {Math.floor(items.length / 5) + 1}
+                      </p>
+                  </div>
               </div>
-              <div>
-                  <h1 className="text-2xl font-bold text-white font-display tracking-tight">
-                      CURATOR OFFICE <span className="text-remuse-accent">::</span> ADMIN
-                  </h1>
-                  <p className="text-neutral-500 text-xs mt-1">
-                      ID: 89757 // LEVEL {Math.floor(items.length / 5) + 1}
-                  </p>
-              </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-lg border border-red-800/40 bg-red-900/30 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-900/50 md:self-center"
+                >
+                  <LogOut size={16} />
+                  <span>登出</span>
+                </button>
+              )}
           </div>
       </div>
 
@@ -489,6 +756,179 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
              </div>
           </section>
 
+          {false && (<section>
+              <div className="mb-6 flex items-center gap-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent to-neutral-700"></div>
+                  <h2 className="flex items-center gap-2 text-xl font-display text-white">
+                      <History className="text-remuse-accent" size={20} />
+                      MEMORY RAG
+                  </h2>
+                  <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+                  <div className="relative overflow-hidden rounded-xl border border-remuse-border bg-remuse-panel p-5 md:p-6">
+                      <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-remuse-accent/10 blur-3xl" />
+                      <div className="relative flex h-full flex-col gap-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                              <div className="max-w-3xl">
+                                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-remuse-accent/30 bg-remuse-accent/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-accent">
+                                      <Sparkles size={14} />
+                                      Memory Curator
+                                  </div>
+                                  <h3 className="text-2xl font-display font-bold text-white">把旧物记忆放进独立对话界面</h3>
+                                  <p className="mt-2 text-sm leading-7 text-neutral-300">
+                                      记忆检索已经独立成单独页面。现在支持新增对话、删除对话、历史记录保存，以及基于你自己藏品故事的记忆召回。
+                                  </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 px-4 py-3 md:w-[188px] md:flex-shrink-0">
+                                  <span className="block text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Story Archive</span>
+                                  <span className="mt-2 block text-2xl font-display font-bold text-remuse-secondary">{storyItems.length}</span>
+                                  <span className="text-xs text-neutral-500">件藏品带有故事记录</span>
+                              </div>
+                          </div>
+
+                          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                              <div className="flex flex-wrap gap-2">
+                                  <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-2 text-xs text-neutral-300">新增独立对话</span>
+                                  <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-2 text-xs text-neutral-300">删除历史会话</span>
+                                  <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-2 text-xs text-neutral-300">同账号浏览器本地保存</span>
+                                  <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-2 text-xs text-neutral-300">语音提问与记忆召回</span>
+                              </div>
+
+                              <button
+                                  type="button"
+                                  onClick={() => onOpenMemoryRag?.()}
+                                  disabled={!onOpenMemoryRag}
+                                  className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-remuse-accent px-5 py-3 text-sm font-display font-bold text-black transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                              >
+                                  <History size={16} />
+                                  打开记忆对话界面
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                      <div className="rounded-xl border border-remuse-border bg-remuse-panel p-5">
+                          <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Conversation Ready</p>
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                              <div className="rounded-2xl border border-remuse-accent/20 bg-black/20 p-4">
+                                  <p className="text-xs text-neutral-500">最近故事线索</p>
+                                  <p className="mt-2 text-2xl font-display font-bold text-remuse-accent">{recentMemoryItems.length}</p>
+                              </div>
+                              <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
+                                  <p className="text-xs text-neutral-500">可召回档案</p>
+                                  <p className="mt-2 text-2xl font-display font-bold text-white">{storyItems.length}</p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="rounded-xl border border-remuse-border bg-remuse-panel p-5">
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                              <h4 className="text-lg font-display font-bold text-white">最近录入的故事</h4>
+                              <span className="rounded-full border border-remuse-border bg-black/20 px-3 py-1 text-[11px] font-mono text-neutral-400">
+                                  {recentMemoryItems.length} recent
+                              </span>
+                          </div>
+
+                          <div className="space-y-3">
+                              {recentMemoryItems.slice(0, 2).map((match) => (
+                                  <div key={match.itemId} className="overflow-hidden rounded-2xl border border-remuse-border bg-black/20">
+                                      <div className="flex min-w-0 gap-3 p-3">
+                                          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
+                                              <img src={match.imageUrl} alt={match.itemName} className="h-full w-full object-cover" />
+                                          </div>
+                                          <div className="min-w-0 flex-1">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                  <h5 className="truncate font-display text-sm font-bold text-white">{match.itemName}</h5>
+                                                  <span className="rounded-full border border-remuse-accent/20 bg-remuse-accent/10 px-2 py-0.5 text-[10px] font-mono text-remuse-accent">
+                                                      {match.hallName}
+                                                  </span>
+                                              </div>
+                                              <p className="mt-2 line-clamp-2 text-xs leading-6 text-neutral-400">{match.storySnippet}</p>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ))}
+
+                              {recentMemoryItems.length === 0 && (
+                                  <div className="rounded-2xl border border-dashed border-neutral-800 bg-black/20 px-4 py-8 text-center text-sm leading-7 text-neutral-500">
+                                      先在扫描归档或藏品编辑里写下一段故事，这里就会出现可用于回忆对话的线索。
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </section>)}
+
+          <section>
+              <div className="mb-6 flex items-center gap-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent to-neutral-700"></div>
+                  <h2 className="flex items-center gap-2 text-xl font-display text-white">
+                      <MessageCircle className="text-remuse-secondary" size={20} />
+                      CONTACT
+                  </h2>
+                  <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                  <div className="relative overflow-hidden rounded-xl border border-remuse-border bg-remuse-panel p-5 md:p-6">
+                      <div className="absolute right-0 top-0 h-28 w-28 rounded-full bg-remuse-secondary/10 blur-3xl" />
+                      <div className="relative flex flex-col gap-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                              <div className="max-w-xl">
+                                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-remuse-secondary/30 bg-remuse-secondary/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-secondary">
+                                      <MessageCircle size={14} />
+                                      Remuse Support
+                                  </div>
+                                  <h3 className="text-2xl font-display font-bold text-white">联系我们</h3>
+                                  <p className="mt-2 text-sm leading-7 text-neutral-300">
+                                      如果你遇到 Bug、想提需求、咨询合作，或者希望定制数字展陈与 AI 玩法，可以直接通过微信联系我。
+                                  </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-remuse-accent/25 bg-black/25 px-5 py-4">
+                                  <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-neutral-500">WeChat</span>
+                                  <p className="mt-2 font-mono text-2xl font-bold text-remuse-accent">{CONTACT_WECHAT_ID}</p>
+                              </div>
+                          </div>
+
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                              <button
+                                  onClick={handleCopyWechat}
+                                  className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-remuse-accent px-5 py-3 text-sm font-display font-bold text-black transition-transform hover:scale-[1.01]"
+                              >
+                                  {contactStatus === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+                                  {contactStatus === 'copied' ? '微信号已复制' : '复制微信号'}
+                              </button>
+                              <div className="rounded-xl border border-neutral-800 bg-black/20 px-4 py-3 text-xs leading-6 text-neutral-400">
+                                  添加时可备注：`Remuse` / `反馈` / `合作`
+                              </div>
+                          </div>
+
+                          {contactStatus !== 'idle' && (
+                              <p className={`text-xs ${contactStatus === 'copied' ? 'text-remuse-accent' : 'text-neutral-400'}`}>
+                                  {contactStatus === 'copied' ? '已复制到剪贴板，现在可以去微信搜索 MTtin999。' : '如果系统没有自动复制，请手动添加微信号 MTtin999。'}
+                              </p>
+                          )}
+                      </div>
+                  </div>
+
+                  <div className="rounded-xl border border-remuse-border bg-remuse-panel p-5 md:p-6">
+                      <p className="text-xs font-mono uppercase tracking-[0.28em] text-neutral-500">Support Scope</p>
+                      <ul className="mt-4 space-y-3 text-sm leading-7 text-neutral-300">
+                          <li>Bug 反馈与移动端体验问题</li>
+                          <li>新功能建议与产品共创</li>
+                          <li>拼豆图纸、贴纸工坊等模块定制</li>
+                          <li>展览项目、品牌合作与技术咨询</li>
+                      </ul>
+                  </div>
+              </div>
+          </section>
+
           {/* Achievement Grid */}
           <section>
               <div className="flex items-center gap-4 mb-8">
@@ -528,6 +968,31 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items }) => {
                   <span className="text-[10px] text-neutral-500 font-mono uppercase">Eco Points</span>
               </div>
           </div>
+
+          {/* 示例数据清除 */}
+          {showSampleClear && (
+            <div className="border border-dashed border-neutral-700 rounded-lg p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 text-neutral-400">
+                <PackageOpen size={18} className="text-remuse-secondary flex-shrink-0" />
+                <span className="text-xs">当前展馆中包含示例藏品，可一键清除后开始自己的收藏</span>
+              </div>
+              <button
+                onClick={async () => {
+                  if (clearingSamples) return;
+                  setClearingSamples(true);
+                  try {
+                    await onClearSamples?.();
+                  } finally {
+                    setClearingSamples(false);
+                  }
+                }}
+                disabled={clearingSamples}
+                className="flex-shrink-0 px-3 py-1.5 text-xs font-mono bg-red-900/40 text-red-300 border border-red-800/60 rounded hover:bg-red-900/70 transition-colors disabled:opacity-50"
+              >
+                {clearingSamples ? '清除中...' : '清除示例'}
+              </button>
+            </div>
+          )}
 
       </div>
     </div>

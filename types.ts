@@ -27,12 +27,15 @@ export interface ExhibitionHall {
   name: string;
   imageUrl: string;
   isCustom?: boolean;
+  systemHallId?: string;
+  isHidden?: boolean;
 }
 
 export interface CollectedItem {
   id: string;
   name: string;
-  category: string; // Changed from ItemCategory to string to support custom halls
+  hallId: string;
+  category: string;
   material: string;
   imageUrl: string;
   dateCollected: string;
@@ -40,6 +43,7 @@ export interface CollectedItem {
   tags: string[];
   ideas: RemuseIdea[];
   status: 'raw' | 'in-progress' | 'remused';
+  isSample?: boolean;
 }
 
 export interface Sticker {
@@ -71,4 +75,57 @@ export interface Tool {
   color: string;
 }
 
-export type ViewState = 'MUSEUM' | 'SCANNER' | 'ITEM_DETAIL' | 'PROFILE' | 'STICKER_LIBRARY' | 'INSPIRATION';
+export interface MemoryAssistantMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface MemoryAssistantMatch {
+  itemId: string;
+  itemName: string;
+  imageUrl: string;
+  hallName: string;
+  material: string;
+  dateCollected: string;
+  storySnippet: string;
+  tags: string[];
+  score: number;
+}
+
+export interface MemoryAssistantResponse {
+  answer: string;
+  matches: MemoryAssistantMatch[];
+  suggestions: string[];
+  retrievalSummary: string;
+  sourceCount: number;
+  usedFallback: boolean;
+}
+
+export interface MemoryConversationSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: MemoryAssistantMessage[];
+  matches: MemoryAssistantMatch[];
+  suggestions: string[];
+  retrievalSummary: string;
+  sourceCount: number;
+  usedFallback: boolean;
+}
+
+export type ViewState = 'MUSEUM' | 'SCANNER' | 'ITEM_DETAIL' | 'PROFILE' | 'STICKER_LIBRARY' | 'INSPIRATION' | 'MEMORY_RAG' | 'LOGIN';
+
+/** 用户模型 */
+export interface User {
+  id: string;
+  email: string | null;
+  nickname: string;
+  avatarUrl: string | null;
+  isGuest: boolean;
+  createdAt: string;
+  onboardingSeen: boolean;
+  sampleSeeded: boolean;
+  toolbox: Tool[];
+}

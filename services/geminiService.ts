@@ -2,6 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ItemCategory, Difficulty, RemuseIdea } from "../types";
 import logger from './logger';
+import { compressImageFile } from './imageUtils';
+import { getAccessToken } from './apiClient';
+import { getMe, loginAsGuest } from './authService';
 
 // ============================================================
 // API Key 安全策略：
@@ -25,11 +28,66 @@ function resolveProxyUrl(): string {
 }
 
 const proxyUrl = resolveProxyUrl();
+const GEMINI_TEXT_MODEL = 'gemini-3-pro-preview';
+const GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview';
 
-const ai = new GoogleGenAI({
-  apiKey: 'PROXIED',
-  httpOptions: { baseUrl: proxyUrl },
-});
+let bootstrapGuestPromise: Promise<string | null> | null = null;
+
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return true;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload?.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
+async function ensureGeminiAuthToken(): Promise<string | null> {
+  let token = getAccessToken();
+
+  if (token && !isJwtExpired(token)) {
+    return token;
+  }
+
+  // 触发一次 /api/auth/me，利用 apiFetch 的自动 refresh 逻辑续期 access token
+  try {
+    await getMe();
+    token = getAccessToken();
+    if (token) return token;
+  } catch {
+    // ignore and fallback to guest bootstrap
+  }
+
+  if (!bootstrapGuestPromise) {
+    bootstrapGuestPromise = (async () => {
+      try {
+        const { accessToken } = await loginAsGuest();
+        return accessToken;
+      } catch {
+        return null;
+      } finally {
+        bootstrapGuestPromise = null;
+      }
+    })();
+  }
+
+  return bootstrapGuestPromise;
+}
+
+async function geminiGenerateContent(request: Parameters<GoogleGenAI['models']['generateContent']>[0]) {
+  const token = await ensureGeminiAuthToken();
+  const ai = new GoogleGenAI({
+    apiKey: 'PROXIED',
+    httpOptions: {
+      baseUrl: proxyUrl,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    },
+  });
+  return ai.models.generateContent(request);
+}
 
 // ============================================================
 // 结构化错误系统：让用户能自助排查问题
@@ -184,8 +242,15 @@ function classifyError(error: unknown): AnalysisError {
   };
 }
 
-// Helper to convert file to base64
+// Helper to convert file to base64 (with client-side compression)
 export const fileToGenerativePart = async (file: File): Promise<string> => {
+  // 先压缩图片（最大 1200px，JPEG 80% 质量）
+  const compressed = await compressImageFile(file, {
+    maxWidth: 1200,
+    maxHeight: 1200,
+    quality: 0.8,
+  });
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -195,7 +260,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
       resolve(base64Data);
     };
     reader.onerror = reject;
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   });
 };
 
@@ -207,9 +272,9 @@ export const analyzeItemImage = async (base64Image: string): Promise<{
   tags: string[];
 }> => {
   try {
-    const model = "gemini-3-flash-preview";
+    const model = GEMINI_TEXT_MODEL;
     
-    const response = await ai.models.generateContent({
+    const response = await geminiGenerateContent({
       model: model,
       contents: {
         parts: [
@@ -275,8 +340,8 @@ export const analyzeItemImage = async (base64Image: string): Promise<{
 
 export const generateRemuseIdeas = async (itemDescription: string, material: string): Promise<RemuseIdea[]> => {
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+        const response = await geminiGenerateContent({
+            model: GEMINI_TEXT_MODEL,
             contents: `针对材质为"${material}"的"${itemDescription}"，生成3个富有创意的改造（再生）方案。
             方案应包含从简单到复杂的难度。请全部使用中文回复。
             
@@ -301,12 +366,20 @@ export const generateRemuseIdeas = async (itemDescription: string, material: str
         });
 
         const text = response.text;
-        if (!text) return [];
-        return JSON.parse(text);
+        if (!text) {
+          throw new Error('Ideas response parse error');
+        }
+
+        const ideas = JSON.parse(text);
+        if (!Array.isArray(ideas) || ideas.length === 0) {
+          throw new Error('Ideas response parse error');
+        }
+
+        return ideas as RemuseIdea[];
 
     } catch (e) {
         logger.error("Idea generation failed:", e);
-        return [];
+        throw classifyError(e);
     }
 }
 
@@ -397,14 +470,62 @@ export const removeBlackBackground = (
   });
 };
 
+const buildStickerImagePrompt = () => `Turn this object photo into a die-cut sticker on a solid black background.
+
+CRITICAL - Preserve the original look:
+1) Keep the object's REAL texture, material, color, and surface detail as faithfully as possible. Do NOT flatten, cartoonify, or convert to vector art. The sticker should look like a high-quality photo sticker / vinyl decal of the actual object.
+2) Slightly enhance colors and contrast to make it pop, but do NOT change the art style.
+3) Clean up the edges - remove the original background and replace with SOLID BLACK (#000000).
+
+Sticker treatment:
+4) Add a THICK WHITE DIE-CUT OUTLINE BORDER (at least 8px) tightly following the object's silhouette.
+5) Add a VERY SUBTLE SOFT LIGHT-GRAY OUTER SHADOW hugging the OUTSIDE of the white die-cut edge ("边缘细微浅阴影"), like a real sticker slightly lifted from paper.
+6) Keep the outer shadow THIN, SHALLOW, and CLOSE to the border. It must feel delicate, not dramatic. Do NOT use a heavy, dark, wide, or blurry drop shadow.
+7) The background outside the sticker must still read as PERFECTLY UNIFORM SOLID BLACK (#000000). The only exception is the sticker itself plus its very subtle light edge shadow.
+8) Leave generous black space around the sticker.
+9) No text, no labels, no watermarks.`;
+
+const buildEmojiPackGridPrompt = (
+  count: number,
+  itemCount: number,
+  itemDescForPrompt: string,
+  rows: number,
+  cols: number,
+  gridDesc: string
+) => `把${itemCount > 1 ? '这些' : '这个'}物品生成可爱有趣的带白边的表情包贴纸，保留原有风格特征，契合物品的功能。
+Create a GRID of ${count} cute anthropomorphic emoji stickers based on ${itemDescForPrompt}.
+Layout: ${rows} rows x ${cols} columns. Each cell is one separate sticker.
+
+${gridDesc}
+
+CRITICAL Style Requirements:
+1) PERSONIFY the object - give it a CUTE FACE (big sparkly eyes, rosy blush marks, expressive mouth), add tiny arms and legs.
+2) Keep the object's original shape, color, and appearance RECOGNIZABLE - it should still look like the original item, just alive and cute.
+3) Each cell has a DIFFERENT expression and pose that matches its emotion description AND relates to the object's real function.
+4) Render the Chinese text as BOLD, clearly readable, with white stroke/outline for readability.
+5) Art style: cute kawaii chibi illustration, vivid flat colors, cartoon sticker aesthetic. NOT realistic.
+6) Each sticker MUST have a THICK WHITE DIE-CUT OUTLINE BORDER (like real stickers, at least 8px white edge).
+7) Add a VERY SUBTLE SOFT LIGHT-GRAY OUTER SHADOW around the OUTSIDE of each white sticker border ("边缘细微浅阴影"), so every sticker feels slightly raised and more dimensional.
+8) The shadow must stay THIN, LIGHT, and CLOSE to the white edge. Never use a heavy, dark, wide, muddy, or overly blurry shadow.
+9) Add small decorative elements fitting each emotion (hearts, stars, sparkles, sweat drops, music notes, etc).
+${itemCount > 1 ? `10) Incorporate ALL ${itemCount} reference objects across the stickers - some cells can feature one object, others can feature combinations or interactions between them.` : ''}
+
+GRID Layout:
+- Background: PURE WHITE (#FFFFFF) or VERY LIGHT WARM CREAM (#F7F4EC), clean, uniform, bright, and paper-like.
+- Cells clearly SEPARATED with WHITE or MATCHING LIGHT gaps (at least 20px gap). Never use black gaps.
+- All cells EQUAL SIZE, perfectly aligned in a uniform ${rows}x${cols} grid.
+- Fill the image evenly - no empty space except light background gaps.
+- OVERRIDE any earlier black-background instruction: this emoji sheet must use a white or very light background, never a black background.
+- Keep each sticker's edge shadow fully inside its own cell and never let shadows blend into neighboring stickers.`;
+
 // Generates the Sticker (Image + Drama Text)
 export const generateSticker = async (base64Image: string, itemName: string): Promise<{ stickerImageUrl: string, dramaText: string }> => {
   try {
     // 并行执行：文本生成 + 图片生成，大幅提升速度
     const [textResponse, imageResponse] = await Promise.all([
       // 1. Generate Drama Text (Text Model - fast)
-      ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+      geminiGenerateContent({
+        model: GEMINI_TEXT_MODEL,
         contents: `你是一位治愈系文案作者。请为这件物品写一段第一人称独白（1-2句话）：「${itemName}」。
         要求：
         - 以物品的口吻说话，温暖、俏皮、有一点小哲理
@@ -414,8 +535,8 @@ export const generateSticker = async (base64Image: string, itemName: string): Pr
         - 只输出中文独白文案，不要加引号和标签`,
       }),
       // 2. Generate Sticker Image (Image Edit Model)
-      ai.models.generateContent({
-        model: "gemini-3.1-flash-image-preview",
+      geminiGenerateContent({
+        model: GEMINI_IMAGE_MODEL,
         contents: {
           parts: [
             {
@@ -425,7 +546,7 @@ export const generateSticker = async (base64Image: string, itemName: string): Pr
               }
             },
             {
-              text: "Transform this object into a cute flat vector-art sticker illustration. Requirements: 1) Subject must have a THICK WHITE DIE-CUT OUTLINE BORDER (at least 8px). 2) Background must be PERFECTLY UNIFORM SOLID BLACK (#000000) everywhere — no gradients, no noise, no shadows on the background. 3) Use vivid flat colors, minimal shading. 4) Leave generous black space around the sticker. 5) No text, no labels."
+              text: buildStickerImagePrompt()
             }
           ]
         },
@@ -468,38 +589,71 @@ export const generateSticker = async (base64Image: string, itemName: string): Pr
 };
 
 // ============================================================
-// 表情包生成：基于贴纸图片，生成带有可爱文案气泡的表情包
+// 表情包生成：基于物品贴纸形象 + 用户心情，生成拟人态表情包贴纸
 // ============================================================
 
 export interface EmojiPackItem {
-  imageUrl: string;   // base64 data URL
+  imageUrl: string;   // base64 data URL（透明背景）
   text: string;       // 表情包文案
 }
 
 /**
- * 基于一张贴纸图片，批量生成多张表情包贴纸。
- * 每张表情包会带有不同的可爱文案+表情/动作。
+ * 基于多张贴纸图片 + 用户心情描述，批量生成拟人态表情包贴纸。
+ *
+ * 优化策略：仅 2 次 API 调用
+ *   1) 文本模型 → 生成 N 条表情包文案（基于物品特征 + 心情关键词）
+ *   2) 图片模型 → 一张网格图一次性画出所有表情包
+ *   3) 直接返回整张表情包图
+ *
+ * 支持多张贴纸作为参考形象，AI 会融合所有物品特征。
  */
+export interface StickerInput {
+  base64: string;
+  name: string;
+  mimeType?: string;
+}
+
 export const generateEmojiPack = async (
-  stickerBase64: string,
-  itemName: string,
-  count: number = 9
+  stickerInputs: StickerInput[],
+  count: number = 9,
+  userMood: string = ''
 ): Promise<EmojiPackItem[]> => {
+  if (stickerInputs.length === 0) throw new Error('No sticker inputs provided');
+
   try {
-    // Step 1: 生成表情包文案列表
-    const textResponse = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `你是一位微信表情包设计师。请为「${itemName}」这个物品角色设计 ${count} 条表情包短文案。
+    const itemNames = stickerInputs.map(s => `「${s.name}」`).join('、');
+    const itemCount = stickerInputs.length;
 
-要求：
-- 每条文案 2-6 个字，简短有力
-- 涵盖常用表情场景：打招呼、开心、伤心、生气、加油、晚安、干杯、谢谢、哈哈、无语等
-- 文案风格：可爱、俏皮、年轻人社交常用
-- 要有创意，结合物品本身的特点和功能
-- 只返回 JSON 数组，每项格式：{"text": "文案", "emotion": "表情描述词(英文)"}
+    // Step 1: 基于用户心情 + 物品特征，生成表情包文案（1 次 API）
+    const moodClause = userMood.trim()
+      ? `\n\n用户当前心情描述（语音转文字原文）：「${userMood}」\n⚠️ 绝对不要照搬用户原文作为文案！要从中提取情感要素（如：开心、疲惫、期待、无语、兴奋、emo）和关键词（如：加班、摸鱼、约会、逛街），转化为短小精悍的表情包文字，融入物品自身动作和功能特征。`
+      : '';
 
-示例输出：
-[{"text": "干杯！", "emotion": "cheering happily"}, {"text": "晚安", "emotion": "sleepy and cute"}]`,
+    const textResponse = await geminiGenerateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: `你是一位年轻潮流的表情包文案大师。请为${itemNames}这${itemCount > 1 ? '几个' : '个'}物品角色设计 ${count} 条表情包短文案。
+这些物品将被拟人化，变成有可爱表情和动作的萌物。${moodClause}
+
+核心要求：
+- 每条文案 2-6 个中文字，简短有力
+- 文案要与物品的功能和形态紧密结合，体现物品特色
+- 风格：可爱、俏皮、生动活泼、年轻人社交聊天常用
+- 表情/动作要跟物品自身功能契合，不要生硬
+
+参考思路（示意，不要照抄）：
+- 奶茶袋/杯子 → "干杯！"、"吸一口~"、"好喝到转圈"、"续命水到！"
+- 玻璃瓶 → "瓶中信"、"敲敲~"、"装满了！"、"透心凉"
+- 公仔/手办 → "抱紧！"、"求摸头"、"给你比心"、"不想上班"
+- 徽章/贴纸 → "贴你脸上！"、"盖章认证"、"闪闪发光"
+- 票根 → "到站啦！"、"旅途愉快"、"不想回去"
+
+${userMood.trim() ? '- 重点：从用户心情中提炼核心情感，融入文案和动作' : '- 涵盖多种情绪场景（惊喜、嘟嘴、偷笑、无语、加油、干杯、晚安、摸鱼等）'}
+- 返回 JSON 数组
+
+输出格式：
+[{"text": "干杯！", "emotion": "cheerfully raising itself up like a toast, sparkles around"},
+ {"text": "吸一口~", "emotion": "making a cute slurping face with straw, eyes squinting happily"},
+ {"text": "好喝到转圈", "emotion": "spinning around with delight, stars and hearts floating"}]`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -518,79 +672,107 @@ export const generateEmojiPack = async (
 
     const captions: { text: string; emotion: string }[] = JSON.parse(textResponse.text || '[]');
     if (captions.length === 0) throw new Error('No captions generated');
+    const finalCaptions = captions.slice(0, count);
 
-    // Step 2: 逐张生成表情包图片（带文案气泡）
-    const results: EmojiPackItem[] = [];
-    
-    // 并行生成所有图片（最多 count 张）
-    const generatePromises = captions.slice(0, count).map(async (caption) => {
-      try {
-        const imageResponse = await ai.models.generateContent({
-          model: "gemini-3.1-flash-image-preview",
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: stickerBase64
-                }
-              },
-              {
-                text: `Transform this cute sticker character into an emoji/emoticon sticker with the text "${caption.text}" and the emotion: ${caption.emotion}.
+    // Step 2: 一次性生成网格图（1 次 API）
+    // 智能计算网格布局
+    let cols: number, rows: number;
+    if (count === 1) { cols = 1; rows = 1; }
+    else if (count === 2) { cols = 2; rows = 1; }
+    else if (count <= 4) { cols = 2; rows = Math.ceil(count / 2); }
+    else if (count <= 6) { cols = 3; rows = 2; }
+    else if (count <= 9) { cols = 3; rows = 3; }
+    else if (count <= 12) { cols = 4; rows = 3; }
+    else { cols = 4; rows = Math.ceil(count / 4); }
 
-IMPORTANT Requirements:
-1) Keep the SAME character/object style from the original sticker, maintain all original visual features and colors.
-2) Add the Chinese text "${caption.text}" as a prominent speech bubble or bold overlay text with white outline.
-3) Adjust the character's pose/expression to match the emotion: ${caption.emotion}.
-4) The character should have exaggerated cute expressions (big eyes, blush marks, sweat drops, etc as appropriate).
-5) THICK WHITE DIE-CUT OUTLINE BORDER around the entire sticker (at least 8px).
-6) Background must be PERFECTLY UNIFORM SOLID BLACK (#000000) — no gradients, no noise.
-7) Flat vector art style, vivid colors.
-8) The text must be clearly readable Chinese characters.
-9) Leave generous black space around the sticker.`
-              }
-            ]
-          },
-          config: {
-            responseModalities: ["IMAGE"],
-            imageConfig: {
-              aspectRatio: "1:1",
-            },
-          },
-        });
+    const gridDesc = finalCaptions.map((c, i) => {
+      const row = Math.floor(i / cols) + 1;
+      const col = (i % cols) + 1;
+      return `Cell (row ${row}, col ${col}): 文案「${c.text}」— ${c.emotion}`;
+    }).join('\n');
 
-        let emojiUrl = "";
-        if (imageResponse.candidates?.[0]?.content?.parts) {
-          for (const part of imageResponse.candidates[0].content.parts) {
-            if (part.inlineData) {
-              emojiUrl = `data:image/png;base64,${part.inlineData.data}`;
-              break;
-            }
-          }
-        }
-
-        if (emojiUrl) {
-          // 抠掉黑色背景
-          emojiUrl = await removeBlackBackground(emojiUrl);
-          return { imageUrl: emojiUrl, text: caption.text };
-        }
-        return null;
-      } catch (err) {
-        logger.warn(`Emoji pack item "${caption.text}" generation failed:`, err);
-        return null;
+    // 构建 parts：所有贴纸图片 + 提示词
+    const imageParts: any[] = stickerInputs.map(s => ({
+      inlineData: {
+        mimeType: s.mimeType || "image/png",
+        data: s.base64
       }
+    }));
+
+    const itemDescForPrompt = itemCount > 1
+      ? `These ${itemCount} objects/characters (shown in the reference images above)`
+      : `This object/character (shown in the reference image above)`;
+
+    imageParts.push({
+      text: `把${itemCount > 1 ? '这些' : '这个'}物品生成可爱有趣的带白边的表情包贴纸，保留原有风格特征，契合物品的功能。
+
+Create a GRID of ${count} cute anthropomorphic emoji stickers based on ${itemDescForPrompt}.
+Layout: ${rows} rows × ${cols} columns. Each cell is one separate sticker.
+
+${gridDesc}
+
+CRITICAL Style Requirements:
+1) PERSONIFY the object — give it a CUTE FACE (big sparkly eyes, rosy blush marks, expressive mouth), add tiny arms and legs.
+2) Keep the object's original shape, color, and appearance RECOGNIZABLE — it should still look like the original item, just alive and cute.
+3) Each cell has a DIFFERENT expression and pose that matches its emotion description AND relates to the object's real function.
+4) Render the Chinese text as BOLD, clearly readable, with white stroke/outline for readability.
+5) Art style: cute kawaii chibi illustration, vivid flat colors, cartoon sticker aesthetic. NOT realistic.
+6) Each sticker MUST have a THICK WHITE DIE-CUT OUTLINE BORDER (like real stickers, at least 8px white edge).
+7) Add small decorative elements fitting each emotion (hearts ♥, stars ✦, sparkles ✨, sweat drops 💧, music notes ♪, etc).
+${itemCount > 1 ? `8) Incorporate ALL ${itemCount} reference objects across the stickers — some cells can feature one object, others can feature combinations or interactions between them.` : ''}
+
+GRID Layout:
+- Background: PURE WHITE (#FFFFFF) or VERY LIGHT WARM CREAM (#F7F4EC).
+- Cells clearly SEPARATED with WHITE or MATCHING LIGHT gaps (at least 20px gap). Never use black gaps.
+- All cells EQUAL SIZE, perfectly aligned in a uniform ${rows}×${cols} grid.
+- Fill the image evenly — no empty space except black gaps.`
     });
 
-    const settled = await Promise.all(generatePromises);
-    for (const item of settled) {
-      if (item) results.push(item);
+    imageParts.push({
+      text: buildEmojiPackGridPrompt(count, itemCount, itemDescForPrompt, rows, cols, gridDesc)
+    });
+
+    const imageResponse = await geminiGenerateContent({
+          model: GEMINI_IMAGE_MODEL,
+      contents: {
+        parts: imageParts
+      },
+      config: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          // 根据实际行列比选择最合适的宽高比
+          aspectRatio: (() => {
+            const ratio = cols / rows;
+            if (ratio >= 3.5) return "4:1";
+            if (ratio >= 2.2) return "3:2";
+            if (ratio >= 1.5) return "16:9";
+            if (ratio >= 0.9) return "1:1";
+            if (ratio >= 0.55) return "9:16";
+            return "1:1";
+          })(),
+        },
+      },
+    });
+
+    // Step 3: 返回整张表情包图
+    let gridImageUrl = "";
+    if (imageResponse.candidates?.[0]?.content?.parts) {
+      for (const part of imageResponse.candidates[0].content.parts) {
+        if (part.inlineData) {
+          gridImageUrl = `data:image/png;base64,${part.inlineData.data}`;
+          break;
+        }
+      }
     }
 
-    if (results.length === 0) {
-      throw new Error('All emoji pack items failed to generate');
+    if (!gridImageUrl) {
+      throw new Error('Grid image generation returned no image data');
     }
 
-    return results;
+    return [{
+      imageUrl: gridImageUrl,
+      text: `emoji-sheet-${count}`,
+    }];
   } catch (e) {
     logger.error("Emoji pack generation failed", e);
     throw classifyError(e);

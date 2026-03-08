@@ -2,9 +2,22 @@
 // 路由: /api/gemini/*
 // 功能: 将客户端请求转发到 Gemini API，同时注入真实 API Key
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+type ApiRequest = {
+  body?: unknown;
+  headers: Record<string, string | string[] | undefined>;
+  method?: string;
+  url?: string;
+};
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+type ApiResponse = {
+  end: () => ApiResponse;
+  json: (body: unknown) => ApiResponse;
+  send: (body: unknown) => ApiResponse;
+  setHeader: (name: string, value: string) => void;
+  status: (code: number) => ApiResponse;
+};
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const geminiBaseUrl = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
 

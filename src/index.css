@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================
+   Re-Museum Custom Styles
+   ================================================ */
+
+html {
+  /* dvh fallback: 旧浏览器用 100vh，支持 dvh 的用实时高度 */
+  height: 100%;
+  height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: #0f0f0f;
+  color: #e5e5e5;
+  overflow: hidden;   /* 防止 scale 动画超出视口触发滚动条 */
+  height: 100%;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+/* 让 React 根节点继承高度，避免 Safari 白边 */
+#root {
+  height: 100%;
+}
+
+/* Tailwind h-dvh 在旧浏览器的降级补丁 */
+.h-dvh {
+  height: 100vh;   /* fallback */
+  height: 100dvh;  /* overrides if supported */
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Clip-path utilities */
+.clip-corner {
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 20px),
+    calc(100% - 20px) 100%,
+    0 100%
+  );
+}
+.clip-corner-top {
+  clip-path: polygon(
+    20px 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 20px
+  );
+}
+.clip-house {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 100%, 0% 100%, 0% 25%);
+}
+
+/* Thin border workaround for clip-path using drop-shadow */
+.house-border {
+  filter: drop-shadow(0px 0px 1px rgba(255, 255, 255, 0.5));
+}
+
+/* Safe area insets for notch / home-indicator devices */
+.safe-area-pt { padding-top: env(safe-area-inset-top); }
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.remuse-studio {
+  min-height: 0;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .remuse-studio .font-display {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: -0.015em;
+  }
+
+  .remuse-studio .font-mono {
+    font-family: "JetBrains Mono", "SFMono-Regular", "Noto Sans SC", monospace;
+  }
+
+  .remuse-studio > .border-b {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.875rem;
+  }
+
+  .remuse-studio > .border-b > div:first-child {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .remuse-studio > .border-b > div:first-child > button:first-child,
+  .remuse-studio > .border-b > button:first-child {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+
+  .remuse-studio > .border-b h2 {
+    min-width: 0;
+    font-size: 1.25rem;
+    line-height: 1.2;
+    flex-wrap: wrap;
+  }
+
+  .remuse-studio > .border-b > div:last-child {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .remuse-studio > .border-b > button:last-child,
+  .remuse-studio > .border-b > div:last-child > button {
+    min-height: 46px;
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .remuse-studio > .border-b > div:last-child > button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}

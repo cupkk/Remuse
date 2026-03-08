@@ -1,46 +1,109 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Re-Museum
 
-# Run and deploy your AI Studio app
+Re-Museum is a full-stack digital regeneration museum app:
 
-This contains everything you need to run your app locally.
+- Users upload photos of old items
+- AI analyzes the item and generates remuse ideas
+- The app creates stickers and stores everything in personal halls
 
-View your app in AI Studio: https://ai.studio/apps/drive/11vA6h21x7QNWdt52Z9PyQ7M0vQgciLRp
+## Stack
 
-## Run Locally
+- Frontend: Vite + React 19 + TypeScript + Tailwind
+- Backend: Express 5 + TypeScript
+- Database: SQLite
+- AI: Gemini via backend proxy at `/api/gemini`
 
-**Prerequisites:**  Node.js
+## Local development
 
+### Requirements
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Node.js 20+
 
-## Bind Custom Domain + HTTPS (Nginx)
-
-If your app is already running on server port `3000`, you can bind `remuse.top` and enable HTTPS with one command.
-
-### 1) DNS (domain console)
-
-- Add `A` record: `@` -> your server public IP
-- Add `A` record: `www` -> your server public IP
-
-### 2) Open ports
-
-- Open inbound `80` and `443` in cloud security group / firewall
-
-### 3) Run script on your Linux server
+### Install
 
 ```bash
-bash deploy-domain-ssl.sh remuse.top your-email@example.com 3000
+npm install
 ```
 
-After success:
+### Environment
 
-- https://remuse.top
-- https://www.remuse.top (will redirect to HTTPS)
+Copy `.env.example` to `.env` and set at least:
 
-If you need a manual config, see [deploy/nginx-domain-template.conf](deploy/nginx-domain-template.conf).
+```bash
+GEMINI_API_KEY=your_real_key
+JWT_SECRET=a_random_secret_with_at_least_16_characters
+```
+
+Optional values:
+
+```bash
+PORT=3000
+BACKEND_PORT=3000
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+DB_PATH=./data/remuse.db
+UPLOADS_DIR=./uploads
+```
+
+### Start
+
+```bash
+npm run dev
+```
+
+This starts:
+
+- Vite dev server at `http://127.0.0.1:5173`
+- Express API server at `http://127.0.0.1:3000`
+
+In development, Vite proxies these paths to the backend:
+
+- `/api/auth`
+- `/api/items`
+- `/api/stickers`
+- `/api/halls`
+- `/api/gemini`
+- `/uploads`
+
+You can also start them separately:
+
+```bash
+npm run dev:client
+npm run dev:server
+```
+
+## Production build
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+Start the production server:
+
+```bash
+npm run server
+```
+
+Or use PM2:
+
+```bash
+pm2 start ecosystem.config.cjs
+```
+
+## Alibaba Cloud deployment notes
+
+For an Alibaba Cloud ECS deployment, the usual setup is:
+
+1. Run the app on `PORT=3000`
+2. Put Nginx in front of it on `80/443`
+3. Proxy all requests to `http://127.0.0.1:3000`
+4. Keep `uploads/` and `data/` on persistent disk
+
+The Express server already serves:
+
+- built frontend files from `dist/`
+- uploaded files from `uploads/`
+- all `/api/*` routes
+
+So Nginx only needs reverse proxying and TLS termination.

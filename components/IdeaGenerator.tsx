@@ -1,16 +1,20 @@
 
-import React, { useState } from 'react';
-import { CollectedItem, Difficulty, RemuseIdea, ItemCategory, Sticker } from '../types';
-import { ArrowLeft, Hammer, Clock, CheckCircle2, Share2, Hexagon, Zap, Pencil, Trash2, Save, XCircle, Sticker as StickerIcon, Loader2, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CollectedItem, Difficulty, RemuseIdea, ExhibitionHall, Sticker } from '../types';
+import { ArrowLeft, Hammer, Clock, CheckCircle2, Share2, Hexagon, Zap, Pencil, Trash2, Save, XCircle, Sticker as StickerIcon, Loader2, Sparkles, Mic, Square } from 'lucide-react';
 import { generateSticker } from '../services/geminiService';
+import { imageUrlToBase64 } from '../services/imageUtils';
+import { getHallNameById } from '../services/halls';
+import { isSpeechRecognitionSupported, SpeechCaptureSession, startSpeechCapture } from '../services/speechRecognition';
 
 interface IdeaGeneratorProps {
   item: CollectedItem;
+  halls?: ExhibitionHall[];
   onBack: () => void;
   onComplete: (itemId: string) => void;
   onUpdateItem?: (updatedItem: CollectedItem) => void;
   onDeleteItem?: (itemId: string) => void;
-  onStickerCreated?: (sticker: Sticker) => void;
+  onStickerCreated?: (sticker: Sticker) => Promise<void> | void;
   hasExistingSticker?: boolean;
   onGenerateStickerRequest?: (item: CollectedItem) => void;
   isGeneratingStickerGlobal?: boolean;
@@ -34,9 +38,12 @@ const DifficultyRating: React.FC<{ level: Difficulty }> = ({ level }) => {
   );
 };
 
-const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated, hasExistingSticker: initialHasSticker, onGenerateStickerRequest, isGeneratingStickerGlobal }) => {
+const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, halls = [], onBack, onComplete, onUpdateItem, onDeleteItem, onStickerCreated, hasExistingSticker: initialHasSticker, onGenerateStickerRequest, isGeneratingStickerGlobal }) => {
   const [selectedIdea, setSelectedIdea] = useState<RemuseIdea | null>(item.ideas?.[0] || null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const safeTags = Array.isArray(item.tags) ? item.tags : [];
+  const safeIdeas = Array.isArray(item.ideas) ? item.ideas : [];
+  const safeHalls = Array.isArray(halls) ? halls : [];
 
   // If we have a global generator prop, use that instead of our local state
   // We still keep the local one as fallback in case `onGenerateStickerRequest` isn't provided (e.g., from old usage).
@@ -53,14 +60,25 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
-  const [editCategory, setEditCategory] = useState(item.category);
+  const [editHallId, setEditHallId] = useState(item.hallId);
   const [editStory, setEditStory] = useState(item.story || '');
+  const [storyVoiceError, setStoryVoiceError] = useState<string | null>(null);
+  const [isRecordingStory, setIsRecordingStory] = useState(false);
+  const storyRecognitionRef = useRef<SpeechCaptureSession | null>(null);
+  const storyDraftBaseRef = useRef('');
 
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Is this item already completed (either from props or just now)?
   const isCompleted = item.status === 'remused';
+
+  useEffect(() => {
+    return () => {
+      storyRecognitionRef.current?.stop();
+      storyRecognitionRef.current = null;
+    };
+  }, []);
 
   const handleGenerateSticker = async () => {
     if (isGeneratingSticker) return;
@@ -73,7 +91,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
     if (!onStickerCreated) return;
     setIsGeneratingSticker(true);
     try {
-      const base64 = item.imageUrl.split(',')[1];
+      const base64 = await imageUrlToBase64(item.imageUrl);
       const { stickerImageUrl, dramaText } = await generateSticker(base64, item.name);
       
       const newSticker: Sticker = {
@@ -85,7 +103,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
           dateCreated: new Date().toISOString()
       };
       
-      onStickerCreated(newSticker);
+      await onStickerCreated(newSticker);
       setLocalHasSticker(true);
       setShowStickerSuccess(true);
       setTimeout(() => setShowStickerSuccess(false), 3000);
@@ -109,26 +127,70 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
     const updated: CollectedItem = {
       ...item,
       name: editName.trim() || item.name,
-      category: editCategory,
+      hallId: editHallId,
+      category: getHallNameById(safeHalls, editHallId, item.category),
       story: editStory.trim() || undefined,
     };
     onUpdateItem(updated);
     setIsEditing(false);
+    setStoryVoiceError(null);
+    setIsRecordingStory(false);
   };
 
   const handleCancelEdit = () => {
+    storyRecognitionRef.current?.stop();
+    storyRecognitionRef.current = null;
     setEditName(item.name);
-    setEditCategory(item.category);
+    setEditHallId(item.hallId);
     setEditStory(item.story || '');
+    setStoryVoiceError(null);
+    setIsRecordingStory(false);
     setIsEditing(false);
+  };
+
+  const toggleStoryVoiceInput = () => {
+    if (isRecordingStory) {
+      storyRecognitionRef.current?.stop();
+      storyRecognitionRef.current = null;
+      setIsRecordingStory(false);
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      setStoryVoiceError('当前浏览器不支持语音输入，建议使用 Chrome 或 Edge。');
+      return;
+    }
+
+    storyDraftBaseRef.current = editStory.trim() ? `${editStory.trim()} ` : '';
+    setStoryVoiceError(null);
+    setIsRecordingStory(true);
+
+    try {
+      storyRecognitionRef.current = startSpeechCapture({
+        onTranscript: (transcript) => {
+          setEditStory(`${storyDraftBaseRef.current}${transcript}`.trim());
+        },
+        onError: (message) => {
+          setStoryVoiceError(message);
+          setIsRecordingStory(false);
+          storyRecognitionRef.current = null;
+        },
+        onEnd: () => {
+          setIsRecordingStory(false);
+          storyRecognitionRef.current = null;
+        },
+      });
+    } catch (error) {
+      setStoryVoiceError(error instanceof Error ? error.message : '语音输入启动失败');
+      setIsRecordingStory(false);
+      storyRecognitionRef.current = null;
+    }
   };
 
   const handleDeleteConfirm = () => {
     if (!onDeleteItem) return;
     onDeleteItem(item.id);
   };
-
-  const allCategories = Object.values(ItemCategory) as string[];
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-remuse-dark relative">
@@ -166,33 +228,33 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
       )}
 
       {/* Left Panel: Image & Core Info */}
-      <div className="w-full lg:w-1/3 bg-remuse-panel border-r border-remuse-border flex flex-col relative">
+      <div className="w-full lg:w-1/3 bg-remuse-panel border-b border-remuse-border lg:border-b-0 lg:border-r flex flex-col relative">
         <button 
           onClick={onBack}
-          className="absolute top-4 left-4 z-20 bg-black/50 p-2 rounded-full hover:bg-white/10 transition text-white"
+          className="absolute left-3 top-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-sm transition hover:bg-white/10 md:left-4 md:top-4"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={22} />
         </button>
         
         {/* Edit/Delete buttons */}
         {(onUpdateItem || onDeleteItem) && !isEditing && (
-          <div className="absolute top-4 right-4 z-20 flex gap-2">
+          <div className="absolute right-3 top-3 z-20 flex gap-2 md:right-4 md:top-4">
             {onUpdateItem && (
               <button
                 onClick={() => setIsEditing(true)}
                 aria-label="编辑物品信息"
-                className="bg-black/50 p-2 rounded-full hover:bg-remuse-accent/20 transition text-neutral-300 hover:text-remuse-accent"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-neutral-300 backdrop-blur-sm transition hover:bg-remuse-accent/20 hover:text-remuse-accent"
               >
-                <Pencil size={16} />
+                <Pencil size={18} />
               </button>
             )}
             {onDeleteItem && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 aria-label="删除物品"
-                className="bg-black/50 p-2 rounded-full hover:bg-red-500/20 transition text-neutral-300 hover:text-red-400"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-neutral-300 backdrop-blur-sm transition hover:bg-red-500/20 hover:text-red-400"
               >
-                <Trash2 size={16} />
+                <Trash2 size={18} />
               </button>
             )}
           </div>
@@ -225,14 +287,14 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
           </div>
         )}
         
-        <div className="h-[40vh] lg:h-2/3 shrink-0 relative">
+        <div className="relative h-[31dvh] min-h-[220px] max-h-[340px] shrink-0 sm:h-[34dvh] sm:max-h-[380px] lg:h-2/3">
           <img 
             src={item.imageUrl} 
             alt={item.name} 
             className="w-full h-full object-cover transition-all duration-700"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-remuse-panel"></div>
-          <div className="absolute bottom-6 left-6 right-6">
+          <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6">
             <div className="inline-block px-2 py-1 bg-remuse-accent text-black font-bold font-mono text-xs mb-2">
               ID: {item.id.split('-')[0].toUpperCase()}
             </div>
@@ -240,6 +302,20 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
             {/* Editable or static display */}
             {isEditing ? (
               <div className="space-y-3 bg-black/60 p-4 rounded-lg backdrop-blur-sm">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={toggleStoryVoiceInput}
+                    className={`inline-flex min-h-[34px] items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+                      isRecordingStory
+                        ? 'border-red-500/60 bg-red-500/10 text-red-300'
+                        : 'border-neutral-700 bg-black/20 text-neutral-300 hover:border-remuse-secondary hover:text-white'
+                    }`}
+                  >
+                    {isRecordingStory ? <Square size={12} /> : <Mic size={12} />}
+                    {isRecordingStory ? '停止录音' : '语音补充'}
+                  </button>
+                </div>
                 <div>
                   <label className="block text-[10px] text-neutral-400 font-mono mb-1">名称</label>
                   <input
@@ -253,12 +329,12 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                 <div>
                   <label className="block text-[10px] text-neutral-400 font-mono mb-1">分类</label>
                   <select
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
+                    value={editHallId}
+                    onChange={(e) => setEditHallId(e.target.value)}
                     className="w-full bg-neutral-900 border border-neutral-700 text-white px-3 py-2 text-sm font-display focus:border-remuse-accent focus:outline-none transition-colors appearance-none"
                   >
-                    {allCategories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {safeHalls.map((hall) => (
+                      <option key={hall.id} value={hall.id}>{hall.name}</option>
                     ))}
                   </select>
                 </div>
@@ -272,6 +348,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                     placeholder="这件物品的故事..."
                   />
                 </div>
+                {storyVoiceError && <p className="text-xs text-red-300">{storyVoiceError}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveEdit}
@@ -289,8 +366,8 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
               </div>
             ) : (
               <>
-                <h1 className="text-3xl font-display font-bold text-white mb-2 leading-none">{item.name}</h1>
-                <p className="text-neutral-400 italic font-mono text-sm border-l-2 border-remuse-accent pl-3">
+                <h1 className="mb-2 text-2xl font-display font-bold leading-none text-white sm:text-3xl">{item.name}</h1>
+                <p className="border-l-2 border-remuse-accent pl-3 font-mono text-sm italic text-neutral-400">
                   {item.story}
                 </p>
               </>
@@ -298,7 +375,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
           </div>
         </div>
         
-        <div className="p-6 flex-1 overflow-y-auto">
+        <div className="p-5 md:p-6 lg:flex-1 lg:overflow-y-auto">
            <h3 className="font-mono text-neutral-500 text-xs mb-4">规格参数</h3>
            <div className="grid grid-cols-2 gap-4">
              <div className="p-3 bg-neutral-900 border border-neutral-800">
@@ -307,12 +384,12 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
              </div>
              <div className="p-3 bg-neutral-900 border border-neutral-800">
                <span className="block text-[10px] text-neutral-500 font-mono">分类</span>
-               <span className="text-white text-sm">{item.category}</span>
+               <span className="text-white text-sm">{getHallNameById(safeHalls, item.hallId, item.category)}</span>
              </div>
            </div>
            
            <div className="mt-6 flex flex-wrap gap-2">
-             {item.tags.map(tag => (
+             {safeTags.map(tag => (
                <span key={tag} className="text-[10px] px-2 py-1 border border-neutral-700 text-neutral-400 rounded-full">
                  #{tag}
                </span>
@@ -352,21 +429,21 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
       </div>
 
       {/* Right Panel: Regeneration Ideas */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="relative lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none"></div>
 
-        <div className="p-4 lg:p-10 overflow-y-auto flex-1 pb-32">
+        <div className="p-4 md:p-6 lg:p-10 lg:overflow-y-auto lg:flex-1 pb-32">
           <h2 className="text-2xl font-display text-white mb-6 flex items-center gap-2">
             <Hexagon className="text-remuse-secondary" size={24} /> 
             再生协议 (REGENERATION PROTOCOLS)
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {item.ideas.map((idea, idx) => (
+          <div className="mb-8 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0">
+            {safeIdeas.map((idea, idx) => (
               <button
                 key={idx}
                 onClick={() => setSelectedIdea(idea)}
-                className={`text-left p-4 border transition-all ${
+                className={`min-w-[15rem] snap-start rounded-2xl text-left p-4 border transition-all md:min-w-0 ${
                   selectedIdea === idea 
                   ? 'bg-neutral-800 border-remuse-secondary' 
                   : 'bg-transparent border-neutral-700 hover:border-neutral-500'
@@ -396,7 +473,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                      <Hammer size={14} /> 所需材料
                    </h4>
                    <ul className="space-y-2">
-                     {selectedIdea.materials.map((m, i) => (
+                     {(Array.isArray(selectedIdea.materials) ? selectedIdea.materials : []).map((m, i) => (
                        <li key={i} className="flex items-center gap-3 text-sm text-neutral-300">
                          <div className="w-1 h-1 bg-neutral-500"></div>
                          {m}
@@ -410,7 +487,7 @@ const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({ item, onBack, onComplete,
                      <Clock size={14} /> 执行步骤
                    </h4>
                    <div className="space-y-6 relative border-l border-neutral-800 ml-2">
-                     {selectedIdea.steps.map((step, i) => (
+                     {(Array.isArray(selectedIdea.steps) ? selectedIdea.steps : []).map((step, i) => (
                        <div key={i} className="pl-6 relative">
                          <div className="absolute -left-[5px] top-1 w-2.5 h-2.5 bg-neutral-800 border border-neutral-600 rounded-full flex items-center justify-center">
                            {/* dot */}
