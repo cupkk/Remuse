@@ -1,0 +1,19 @@
+<svg width="400" height="560" viewBox="0 0 400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="paper-bg" x1="48" y1="36" x2="356" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E1B96C"/>
+      <stop offset="0.55" stop-color="#A4732E"/>
+      <stop offset="1" stop-color="#6A4014"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="560" rx="18" fill="url(#paper-bg)"/>
+  <circle cx="324" cy="112" r="88" fill="white" fill-opacity=".12"/>
+  <circle cx="78" cy="404" r="114" fill="white" fill-opacity=".09"/>
+  <path d="M0 360H400V560H0V360Z" fill="#8C5A20" fill-opacity=".34"/>
+  <path d="M0 486H400V560H0V486Z" fill="#6E4318" fill-opacity=".46"/>
+  <text x="32" y="62" fill="white" fill-opacity=".92" font-size="24" font-family="Arial, sans-serif" letter-spacing="7">RE-MUSEUM</text>
+  <text x="32" y="138" fill="white" font-size="68" font-family="Arial, sans-serif" font-weight="700">Paper</text>
+  <text x="32" y="188" fill="white" fill-opacity=".9" font-size="28" font-family="Arial, sans-serif">纸张与叙事</text>
+  <rect x="32" y="270" width="116" height="6" rx="3" fill="white" fill-opacity=".86"/>
+  <rect x="32" y="300" width="152" height="6" rx="3" fill="white" fill-opacity=".42"/>
+</svg>

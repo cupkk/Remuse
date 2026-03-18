@@ -16,7 +16,7 @@ type EmbeddingTextType = 'query' | 'document';
 
 type MemoryIndexableItem = Pick<
   CollectedItem,
-  'id' | 'name' | 'hallId' | 'category' | 'material' | 'dateCollected' | 'story' | 'tags'
+  'id' | 'name' | 'hallId' | 'category' | 'material' | 'description' | 'dateCollected' | 'story' | 'tags'
 >;
 
 interface DashScopeEmbeddingResponse {
@@ -37,6 +37,7 @@ export function buildMemoryDocument(item: MemoryIndexableItem) {
     `item_name: ${item.name || ''}`,
     `hall_name: ${item.category || item.hallId || ''}`,
     `material: ${item.material || ''}`,
+    `description: ${(item.description || '').trim()}`,
     `tags: ${tags}`,
     `date_collected: ${item.dateCollected || ''}`,
     `memory_story: ${(item.story || '').trim()}`,

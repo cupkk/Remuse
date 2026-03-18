@@ -1,0 +1,7 @@
+{
+  "name": "Remuse: Digital Regeneration Museum",
+  "description": "A digital platform for upcycling physical collectibles, fusing archival aesthetics with creative regeneration.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

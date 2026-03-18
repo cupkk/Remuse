@@ -45,6 +45,57 @@ export function fetchImageAsset(imageUrl: string): Promise<Response> {
   return fetch(imageUrl, getImageFetchOptions(imageUrl));
 }
 
+async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
+  const objectUrl = typeof source === 'string' ? source : URL.createObjectURL(source);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to decode SVG image'));
+      img.src = objectUrl;
+    });
+
+    const width = Math.max(1, image.naturalWidth || image.width || 1200);
+    const height = Math.max(1, image.naturalHeight || image.height || 900);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas context is unavailable for SVG rasterization');
+    }
+
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return await new Promise<string>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to rasterize SVG image'));
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = () => reject(new Error('Failed to read rasterized SVG image'));
+          reader.readAsDataURL(blob);
+        },
+        'image/png',
+        0.92,
+      );
+    });
+  } finally {
+    if (typeof source !== 'string') {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+}
+
 /**
  * 将 File 压缩后返回压缩后的 File
  * @param file 原始图片 File
@@ -221,6 +272,10 @@ export async function imageUrlToBase64(imageUrl: string): Promise<string> {
 
   // 已经是 data URL，直接提取 base64 部分
   if (imageUrl.startsWith('data:')) {
+    if (imageUrl.startsWith('data:image/svg+xml')) {
+      return svgSourceToPngBase64(imageUrl);
+    }
+
     const parts = imageUrl.split(',');
     if (parts.length < 2) throw new Error('Invalid data URL');
     return parts[1];
@@ -230,6 +285,10 @@ export async function imageUrlToBase64(imageUrl: string): Promise<string> {
   const response = await fetchImageAsset(imageUrl);
   if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
   const blob = await response.blob();
+
+  if (blob.type === 'image/svg+xml') {
+    return svgSourceToPngBase64(blob);
+  }
 
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { ViewState } from '../types';
-import { Box, ScanLine, Trophy, Zap, Sticker, Compass, History } from 'lucide-react';
+import { Box, Compass, History, ScanLine, Shield, Sparkles, Trophy, Zap } from 'lucide-react';
 
 interface LayoutProps {
   currentView: ViewState;
   onChangeView: (view: ViewState) => void;
   children: React.ReactNode;
   ecoPoints: number;
+  showAdminEntry?: boolean;
 }
 
 interface NavItemProps {
@@ -35,7 +36,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, desktop
   </button>
 );
 
-const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ecoPoints }) => {
+const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ecoPoints, showAdminEntry = false }) => {
   const [displayPoints, setDisplayPoints] = useState(ecoPoints);
   const [isPointsAnimating, setIsPointsAnimating] = useState(false);
 
@@ -76,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
         <h1 className="font-display text-xl font-bold tracking-tight">REMUSE</h1>
         <div className="flex items-center gap-2">
           <span className="font-mono text-[10px] text-remuse-secondary">ONLINE</span>
-          <div className="h-2 w-2 rounded-full bg-remuse-secondary animate-pulse" />
+          <div className="h-2 w-2 animate-pulse rounded-full bg-remuse-secondary" />
         </div>
       </div>
 
@@ -95,10 +96,13 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
               active={currentView === 'MUSEUM' || currentView === 'ITEM_DETAIL'}
               onClick={() => onChangeView('MUSEUM')}
             />
-            <NavItem icon={<Sticker size={20} />} label="贴纸库" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
+            <NavItem icon={<Sparkles size={20} />} label="再生工坊" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
             <NavItem icon={<Compass size={20} />} label="灵感广场" active={currentView === 'INSPIRATION'} onClick={() => onChangeView('INSPIRATION')} />
             <NavItem icon={<Trophy size={20} />} label="馆长办公室" active={currentView === 'PROFILE'} onClick={() => onChangeView('PROFILE')} />
             <NavItem icon={<History size={20} />} label="记忆对话" active={currentView === 'MEMORY_RAG'} onClick={() => onChangeView('MEMORY_RAG')} />
+            {showAdminEntry ? (
+              <NavItem icon={<Shield size={20} />} label="管理后台" active={currentView === 'ADMIN'} onClick={() => onChangeView('ADMIN')} />
+            ) : null}
           </div>
 
           <div className="border-t border-remuse-border p-6">
@@ -125,7 +129,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
         className="safe-area-pb z-50 grid min-h-[4.75rem] grid-cols-5 items-end border-t border-remuse-border bg-remuse-panel/95 px-2 pt-2 backdrop-blur md:hidden"
       >
         <NavItem icon={<ScanLine size={20} />} label="扫描" active={currentView === 'SCANNER'} onClick={() => onChangeView('SCANNER')} />
-        <NavItem icon={<Sticker size={20} />} label="贴纸" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
+        <NavItem icon={<Sparkles size={20} />} label="工坊" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
 
         <div className="relative -top-6 flex items-center justify-center">
           <button

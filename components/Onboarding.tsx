@@ -26,9 +26,9 @@ const slides = [
   {
     id: 3,
     icon: <Recycle size={64} />,
-    title: "再生协议",
-    sub: "REMUSE IDEA",
-    desc: "获取针对性的改造方案，从简单装饰到复杂重构，让物品在现实中焕发新生。",
+    title: "改造指南",
+    sub: "TRANSFORMATION GUIDE",
+    desc: "从已经归档的藏品中自由选择 1 件或多件物品，生成更完整的综合改造方案与再生方向。",
     color: "text-white"
   },
   {

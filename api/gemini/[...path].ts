@@ -19,7 +19,7 @@ type ApiResponse = {
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  const geminiBaseUrl = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
+  const geminiBaseUrl = process.env.GEMINI_BASE_URL || 'https://cdn.12ai.org';
 
   if (!geminiApiKey) {
     return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });

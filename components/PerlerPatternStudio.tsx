@@ -13,14 +13,13 @@ import {
   PerlerPatternResult,
   perlerColorSystemOptions,
 } from '../services/perlerPattern';
+import { PERLER_PATTERN_CATEGORY } from '../shared/stickerCategories';
 
 interface PerlerPatternStudioProps {
   sourceStickers: Sticker[];
   onBack: () => void;
   onPatternSaved?: (patternSticker: Sticker) => Promise<void> | void;
 }
-
-const PERLER_PATTERN_CATEGORY = '__perler_pattern__';
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -80,13 +79,13 @@ const PerlerPatternStudio: React.FC<PerlerPatternStudioProps> = ({
   const [pattern, setPattern] = useState<PerlerPatternResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  const [columns, setColumns] = useState(32);
-  const [similarityThreshold, setSimilarityThreshold] = useState(14);
+  const [columns, setColumns] = useState(48);
+  const [similarityThreshold, setSimilarityThreshold] = useState(30);
   const [mode, setMode] = useState<PerlerPatternMode>('dominant');
   const [colorSystem, setColorSystem] = useState<PerlerColorSystem>('MARD');
   const [highlightColor, setHighlightColor] = useState<string | null>(null);
   const [legendSearch, setLegendSearch] = useState('');
-  const [previewCellSize, setPreviewCellSize] = useState(18);
+  const [previewCellSize, setPreviewCellSize] = useState(22);
   const [showCellCodes, setShowCellCodes] = useState(true);
   const [saveStatus, setSaveStatus] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -395,7 +394,7 @@ const PerlerPatternStudio: React.FC<PerlerPatternStudioProps> = ({
           <div>
             <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-3 block">图纸颗粒度</label>
             <div className="grid grid-cols-4 gap-2 mb-3">
-              {[24, 32, 40, 48].map((value) => (
+              {[32, 48, 64, 80].map((value) => (
                 <button
                   key={value}
                   onClick={() => setColumns(value)}
@@ -413,8 +412,8 @@ const PerlerPatternStudio: React.FC<PerlerPatternStudioProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="range"
-                min={16}
-                max={64}
+                min={24}
+                max={96}
                 step={2}
                 value={columns}
                 onChange={(event) => setColumns(parseInt(event.target.value, 10))}
@@ -496,8 +495,8 @@ const PerlerPatternStudio: React.FC<PerlerPatternStudioProps> = ({
             <div className="flex items-center gap-3">
               <input
                 type="range"
-                min={12}
-                max={28}
+                min={16}
+                max={36}
                 step={1}
                 value={previewCellSize}
                 onChange={(event) => setPreviewCellSize(parseInt(event.target.value, 10))}

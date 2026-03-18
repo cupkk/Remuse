@@ -1,0 +1,51 @@
+- generic [ref=e124]:
+  - navigation "主导航" [ref=e125]:
+    - generic [ref=e126]:
+      - heading "REMUSE" [level=1] [ref=e127]
+      - paragraph [ref=e128]: V 1.0.0 // ONLINE
+    - tablist "页面导航" [ref=e129]:
+      - tab "扫描仪" [selected] [ref=e130] [cursor=pointer]:
+        - img [ref=e132]
+        - generic [ref=e137]: 扫描仪
+      - tab "藏品馆" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: 藏品馆
+      - tab "贴纸库" [ref=e144] [cursor=pointer]:
+        - img [ref=e146]
+        - generic [ref=e150]: 贴纸库
+      - tab "灵感广场" [ref=e151] [cursor=pointer]:
+        - img [ref=e153]
+        - generic [ref=e156]: 灵感广场
+      - tab "馆长办公室" [ref=e157] [cursor=pointer]:
+        - img [ref=e159]
+        - generic [ref=e165]: 馆长办公室
+      - tab "记忆对话" [ref=e166] [cursor=pointer]:
+        - img [ref=e168]
+        - generic [ref=e172]: 记忆对话
+    - generic [ref=e174]:
+      - generic [ref=e175]: 环保积分
+      - generic [ref=e177]: "0"
+  - main "内容区域" [ref=e178]:
+    - generic [ref=e182]:
+      - button "关闭扫描仪" [ref=e183] [cursor=pointer]:
+        - img [ref=e184]
+      - generic [ref=e187]:
+        - generic [ref=e188]:
+          - heading "ARCHIVE ENTITY" [level=2] [ref=e189]
+          - paragraph [ref=e190]: 将实体物品数字化以进行再生。
+        - generic [ref=e191]:
+          - button "选择展馆类型" [ref=e193] [cursor=pointer]:
+            - generic [ref=e195]:
+              - img [ref=e196]
+              - generic [ref=e199]: 选择展馆类型
+          - generic [ref=e202]:
+            - img [ref=e204]
+            - generic [ref=e207]: 归档你的物品
+            - generic [ref=e208]: 支持 JPG, PNG · 相册可多选批量分析
+            - generic [ref=e209]:
+              - button "使用相机拍照" [ref=e210] [cursor=pointer]:
+                - img [ref=e211]
+                - text: 拍照
+              - button "从相册选择图片（支持多选）" [ref=e214] [cursor=pointer]:
+                - img [ref=e215]
+                - text: 相册

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>配图预览</title>
+<style>
+  body { background: #1a1a1a; color: #fff; font-family: sans-serif; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1200px; margin: 0 auto; }
+  .card { background: #2a2a2a; border-radius: 12px; overflow: hidden; }
+  .card img { width: 100%; height: 200px; object-fit: cover; }
+  .card .label { padding: 10px; text-align: center; }
+  .card .label .cat { font-size: 18px; font-weight: bold; color: #ccff00; }
+  .card .label .desc { font-size: 12px; color: #999; margin-top: 4px; }
+  h2 { color: #ccff00; text-align: center; margin: 30px 0 15px; }
+  .current { border: 2px solid #ff4444; }
+  .candidate { border: 2px solid #00ffff; }
+</style></head><body>
+<h1 style="text-align:center">Re-Museum 展厅配图对比</h1>
+<p style="text-align:center;color:#999">红框=当前图片 | 青框=候选替换图</p>
+
+<h2>📦 包装 PACKAGING</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1595079676614-889844277d33?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前</div><div class="desc">photo-1595079676614</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1513885535751-8b9238bd345a?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 牛皮纸礼物</div><div class="desc">photo-1513885535751</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1607082350899-7e105aa886ae?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 包装盒</div><div class="desc">photo-1607082350899</div></div></div>
+</div>
+
+<h2>🫙 容器 CONTAINER</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1610847035619-38c64273df1a?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前</div><div class="desc">photo-1610847035619</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 玻璃瓶/花瓶</div><div class="desc">photo-1565193566173</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1604079628040-94301bb21b91?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 陶瓷器皿</div><div class="desc">photo-1604079628040</div></div></div>
+</div>
+
+<h2>📄 纸质 PAPER</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前（火烧云❌）</div><div class="desc">photo-1509114397022</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 复古信件</div><div class="desc">photo-1456735190827</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1471107340929-a87cd0f5b5f3?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 旧书本</div><div class="desc">photo-1471107340929</div></div></div>
+</div>
+
+<h2>🔌 电子 ELECTRONIC</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前（冷硬电路板❌）</div><div class="desc">photo-1550751827</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 复古相机</div><div class="desc">photo-1526170375885</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 耳机美学</div><div class="desc">photo-1505740420928</div></div></div>
+</div>
+
+<h2>🧵 纺织 TEXTILE</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1520006403909-838d6b92c22e?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前</div><div class="desc">photo-1520006403909</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1558171813-4c088753af8f?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 面料卷(柔和)</div><div class="desc">photo-1558171813</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 毛线/编织</div><div class="desc">photo-1489987707025</div></div></div>
+</div>
+
+<h2>🎲 其他 OTHER</h2>
+<div class="grid">
+  <div class="card current"><img src="https://images.unsplash.com/photo-1552168324-d612d77725e3?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">当前（暗色相机❌）</div><div class="desc">photo-1552168324</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">A: 画笔/美术用品</div><div class="desc">photo-1513364776144</div></div></div>
+  <div class="card candidate"><img src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?auto=format&fit=crop&q=80&w=400"><div class="label"><div class="cat">B: 复古小物件</div><div class="desc">photo-1452587925148</div></div></div>
+</div>
+</body></html>

@@ -9,6 +9,7 @@ import {
   getStickersByUser,
 } from '../services/database.ts';
 import { deleteManagedUpload, ManagedUploadError, saveBase64Image, toClientAssetUrl } from '../services/storage.ts';
+import { recordProductUsageEvent } from '../services/usageQuota.ts';
 
 const router = Router();
 const FALLBACK_CATEGORY = '其他';
@@ -59,6 +60,14 @@ router.post('/', async (req: Request, res: Response) => {
       drama_text: dramaText || '',
       category: category || FALLBACK_CATEGORY,
       date_created: dateCreated || new Date().toISOString(),
+    });
+    recordProductUsageEvent({
+      userId: req.userId!,
+      eventType: 'sticker_generate',
+      details: {
+        originalItemId: safeOriginalItemId,
+        category: category || FALLBACK_CATEGORY,
+      },
     });
 
     res.json({

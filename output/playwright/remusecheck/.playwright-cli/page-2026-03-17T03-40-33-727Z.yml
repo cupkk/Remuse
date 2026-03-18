@@ -1,0 +1,67 @@
+- generic [ref=e124]:
+  - navigation "主导航" [ref=e125]:
+    - generic [ref=e126]:
+      - heading "REMUSE" [level=1] [ref=e127]
+      - paragraph [ref=e128]: V 1.0.0 // ONLINE
+    - tablist "页面导航" [ref=e129]:
+      - tab "扫描仪" [ref=e130] [cursor=pointer]:
+        - img [ref=e132]
+        - generic [ref=e137]: 扫描仪
+      - tab "藏品馆" [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: 藏品馆
+      - tab "贴纸库" [active] [selected] [ref=e144] [cursor=pointer]:
+        - img [ref=e146]
+        - generic [ref=e150]: 贴纸库
+      - tab "灵感广场" [ref=e151] [cursor=pointer]:
+        - img [ref=e153]
+        - generic [ref=e156]: 灵感广场
+      - tab "馆长办公室" [ref=e157] [cursor=pointer]:
+        - img [ref=e159]
+        - generic [ref=e165]: 馆长办公室
+      - tab "记忆对话" [ref=e166] [cursor=pointer]:
+        - img [ref=e168]
+        - generic [ref=e172]: 记忆对话
+    - generic [ref=e174]:
+      - generic [ref=e175]: 环保积分
+      - generic [ref=e177]: "0"
+  - main "内容区域" [ref=e178]:
+    - generic [ref=e406]:
+      - generic [ref=e407]:
+        - generic [ref=e408]:
+          - heading "STICKER LIBRARY" [level=1] [ref=e409]:
+            - img [ref=e410]
+            - text: STICKER LIBRARY
+          - paragraph [ref=e414]: 实体物品的数字分身与专属剧情。
+        - generic [ref=e415]:
+          - generic [ref=e416]:
+            - img [ref=e417]
+            - generic [ref=e420]: 0 STICKERS
+          - button "排版模式" [ref=e421] [cursor=pointer]:
+            - img [ref=e422]
+            - text: 排版模式
+      - generic [ref=e424]:
+        - button "贴纸库 (0)" [ref=e425] [cursor=pointer]:
+          - img [ref=e426]
+          - text: 贴纸库
+          - generic [ref=e430]: (0)
+        - button "表情包库 (0)" [ref=e431] [cursor=pointer]:
+          - img [ref=e432]
+          - text: 表情包库
+          - generic [ref=e435]: (0)
+        - button "拼豆库 (0)" [ref=e436] [cursor=pointer]:
+          - img [ref=e437]
+          - text: 拼豆库
+          - generic [ref=e440]: (0)
+      - generic [ref=e441]:
+        - button "ALL" [ref=e442] [cursor=pointer]
+        - button "奶茶周边" [ref=e443] [cursor=pointer]
+        - button "瓶瓶罐罐" [ref=e444] [cursor=pointer]
+        - button "手办玩偶" [ref=e445] [cursor=pointer]
+        - button "徽章冰箱贴" [ref=e446] [cursor=pointer]
+        - button "纪念票根" [ref=e447] [cursor=pointer]
+        - button "其他" [ref=e448] [cursor=pointer]
+      - generic [ref=e449]:
+        - img [ref=e450]
+        - paragraph [ref=e454]: 暂无贴纸
+        - paragraph [ref=e455]: 使用扫描仪生成你的第一个贴纸

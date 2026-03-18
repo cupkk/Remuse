@@ -1,0 +1,109 @@
+- generic [ref=e124]:
+  - navigation "主导航" [ref=e125]:
+    - generic [ref=e126]:
+      - heading "REMUSE" [level=1] [ref=e127]
+      - paragraph [ref=e128]: V 1.0.0 // ONLINE
+    - tablist "页面导航" [ref=e129]:
+      - tab "扫描仪" [ref=e130] [cursor=pointer]:
+        - img [ref=e132]
+        - generic [ref=e137]: 扫描仪
+      - tab "藏品馆" [active] [selected] [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: 藏品馆
+      - tab "贴纸库" [ref=e144] [cursor=pointer]:
+        - img [ref=e146]
+        - generic [ref=e150]: 贴纸库
+      - tab "灵感广场" [ref=e151] [cursor=pointer]:
+        - img [ref=e153]
+        - generic [ref=e156]: 灵感广场
+      - tab "馆长办公室" [ref=e157] [cursor=pointer]:
+        - img [ref=e159]
+        - generic [ref=e165]: 馆长办公室
+      - tab "记忆对话" [ref=e166] [cursor=pointer]:
+        - img [ref=e168]
+        - generic [ref=e172]: 记忆对话
+    - generic [ref=e174]:
+      - generic [ref=e175]: 环保积分
+      - generic [ref=e177]: "0"
+  - main "内容区域" [ref=e178]:
+    - generic [ref=e541]:
+      - generic [ref=e542]:
+        - 'heading ":: 馆长，日安 ::" [level=1] [ref=e543]'
+        - paragraph [ref=e544]: Select Exhibition Hall
+      - generic [ref=e545]:
+        - button "进入奶茶周边展厅，已收录 0 件藏品" [ref=e546] [cursor=pointer]:
+          - generic [ref=e547]:
+            - generic:
+              - 'button "修改展馆: 奶茶周边"':
+                - img
+              - 'button "删除展馆: 奶茶周边"':
+                - img
+            - generic [ref=e548]:
+              - img "奶茶周边" [ref=e550]
+              - generic [ref=e552]:
+                - heading "奶茶周边" [level=3] [ref=e553]
+                - generic [ref=e554]: No.000
+        - button "进入瓶瓶罐罐展厅，已收录 0 件藏品" [ref=e555] [cursor=pointer]:
+          - generic [ref=e556]:
+            - generic:
+              - 'button "修改展馆: 瓶瓶罐罐"':
+                - img
+              - 'button "删除展馆: 瓶瓶罐罐"':
+                - img
+            - generic [ref=e557]:
+              - img "瓶瓶罐罐" [ref=e559]
+              - generic [ref=e561]:
+                - heading "瓶瓶罐罐" [level=3] [ref=e562]
+                - generic [ref=e563]: No.000
+        - button "进入手办玩偶展厅，已收录 0 件藏品" [ref=e564] [cursor=pointer]:
+          - generic [ref=e565]:
+            - generic:
+              - 'button "修改展馆: 手办玩偶"':
+                - img
+              - 'button "删除展馆: 手办玩偶"':
+                - img
+            - generic [ref=e566]:
+              - img "手办玩偶" [ref=e568]
+              - generic [ref=e570]:
+                - heading "手办玩偶" [level=3] [ref=e571]
+                - generic [ref=e572]: No.000
+        - button "进入徽章冰箱贴展厅，已收录 0 件藏品" [ref=e573] [cursor=pointer]:
+          - generic [ref=e574]:
+            - generic:
+              - 'button "修改展馆: 徽章冰箱贴"':
+                - img
+              - 'button "删除展馆: 徽章冰箱贴"':
+                - img
+            - generic [ref=e575]:
+              - img "徽章冰箱贴" [ref=e577]
+              - generic [ref=e579]:
+                - heading "徽章冰箱贴" [level=3] [ref=e580]
+                - generic [ref=e581]: No.000
+        - button "进入纪念票根展厅，已收录 0 件藏品" [ref=e582] [cursor=pointer]:
+          - generic [ref=e583]:
+            - generic:
+              - 'button "修改展馆: 纪念票根"':
+                - img
+              - 'button "删除展馆: 纪念票根"':
+                - img
+            - generic [ref=e584]:
+              - img "纪念票根" [ref=e586]
+              - generic [ref=e588]:
+                - heading "纪念票根" [level=3] [ref=e589]
+                - generic [ref=e590]: No.000
+        - button "进入其他展厅，已收录 0 件藏品" [ref=e591] [cursor=pointer]:
+          - generic [ref=e592]:
+            - generic:
+              - 'button "修改展馆: 其他"':
+                - img
+              - 'button "删除展馆: 其他" [disabled]':
+                - img
+            - generic [ref=e593]:
+              - img "其他" [ref=e595]
+              - generic [ref=e597]:
+                - heading "其他" [level=3] [ref=e598]
+                - generic [ref=e599]: No.000
+        - button "创建新展馆" [ref=e600] [cursor=pointer]:
+          - generic [ref=e603]:
+            - img [ref=e605]
+            - generic [ref=e606]: 创建新展馆

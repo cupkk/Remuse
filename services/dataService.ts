@@ -1,10 +1,10 @@
 // ============================================================
-// Data Service — 前端数据持久化 API 封装
+// Data service: frontend persistence API wrappers.
 // ============================================================
 
 import { apiFetch } from './apiClient';
 import { imageUrlToBase64 } from './imageUtils';
-import { CollectedItem, Sticker, ExhibitionHall } from '../types';
+import { CollectedItem, ExhibitionHall, SavedTransformationGuide, Sticker, TransformationGuideSourceItem } from '../types';
 
 // ---- Items ----
 
@@ -18,21 +18,25 @@ export async function createItemOnServer(item: {
   hallId: string;
   category: string;
   material: string;
+  description?: string;
   imageBase64?: string;
   imageUrl?: string;
+  coverImageBase64?: string;
+  coverImageUrl?: string;
+  audioBase64?: string;
   story?: string;
   tags?: string[];
-  ideas?: any[];
   status?: string;
-  isSample?: boolean;
   dateCollected?: string;
 }): Promise<CollectedItem> {
   const imageBase64 = await resolveImageBase64(item.imageBase64, item.imageUrl);
+  const coverImageBase64 = await resolveImageBase64(item.coverImageBase64, item.coverImageUrl);
   const data = await apiFetch<{ item: CollectedItem }>('/api/items', {
     method: 'POST',
     body: JSON.stringify({
       ...item,
       imageBase64,
+      coverImageBase64,
     }),
   });
   return data.item;
@@ -45,21 +49,26 @@ export async function updateItemOnServer(
     hallId: string;
     category: string;
     material: string;
+    description: string;
     imageBase64: string;
     imageUrl: string;
+    coverImageBase64: string;
+    coverImageUrl: string;
+    audioBase64: string;
     story: string;
     tags: string[];
-    ideas: any[];
     status: string;
-    isSample: boolean;
+    clearAudio: boolean;
   }>,
 ): Promise<CollectedItem> {
   const imageBase64 = await resolveImageBase64(updates.imageBase64, updates.imageUrl);
+  const coverImageBase64 = await resolveImageBase64(updates.coverImageBase64, updates.coverImageUrl);
   const data = await apiFetch<{ item: CollectedItem }>(`/api/items/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
       ...updates,
       imageBase64,
+      coverImageBase64,
     }),
   });
   return data.item;
@@ -97,6 +106,37 @@ export async function createStickerOnServer(sticker: {
 
 export async function deleteStickerOnServer(id: string): Promise<void> {
   await apiFetch(`/api/stickers/${id}`, { method: 'DELETE' });
+}
+
+// ---- Transformation guides ----
+
+export async function fetchTransformationGuides(): Promise<SavedTransformationGuide[]> {
+  const data = await apiFetch<{ guides: SavedTransformationGuide[] }>('/api/transformation-guides');
+  return data.guides;
+}
+
+export async function createTransformationGuideOnServer(guide: {
+  title: string;
+  summary: string;
+  concept: string;
+  materials: string[];
+  steps: string[];
+  tips?: string[];
+  imageBase64?: string;
+  imageUrl?: string;
+  itemIds: string[];
+  sourceItems: TransformationGuideSourceItem[];
+  dateCreated?: string;
+}): Promise<SavedTransformationGuide> {
+  const imageBase64 = await resolveImageBase64(guide.imageBase64, guide.imageUrl);
+  const data = await apiFetch<{ guide: SavedTransformationGuide }>('/api/transformation-guides', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...guide,
+      imageBase64,
+    }),
+  });
+  return data.guide;
 }
 
 // ---- Halls ----

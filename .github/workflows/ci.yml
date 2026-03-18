@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      GEMINI_API_KEY: test-gemini-key
+      JWT_SECRET: this-is-a-long-test-secret-123456
+      DISABLE_LIVE_AI: "true"
+      EMAIL_DELIVERY_MODE: log
+      APP_BASE_URL: http://127.0.0.1:4173
+      ADMIN_EMAIL_ALLOWLIST: admin@example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:api
+      - run: npm run test:e2e

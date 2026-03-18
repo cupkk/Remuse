@@ -6,6 +6,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { normalizeEmailAddress } from './auth.ts';
 
 const APP_ROOT = process.env.APP_ROOT ? path.resolve(process.env.APP_ROOT) : process.cwd();
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(APP_ROOT, 'data', 'remuse.db'));
@@ -29,7 +30,7 @@ db.pragma('foreign_keys = ON');
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id          TEXT PRIMARY KEY,
-    email       TEXT UNIQUE,
+    email       TEXT UNIQUE COLLATE NOCASE,
     password_hash TEXT,
     nickname    TEXT NOT NULL DEFAULT '游客',
     avatar_url  TEXT,
@@ -47,7 +48,10 @@ db.exec(`
     hall_id        TEXT NOT NULL DEFAULT '其他',
     category       TEXT NOT NULL DEFAULT '其他',
     material       TEXT NOT NULL DEFAULT '',
+    description    TEXT NOT NULL DEFAULT '',
     image_path     TEXT NOT NULL DEFAULT '',
+    cover_image_path TEXT NOT NULL DEFAULT '',
+    audio_path     TEXT NOT NULL DEFAULT '',
     story          TEXT,
     tags_json      TEXT NOT NULL DEFAULT '[]',
     ideas_json     TEXT NOT NULL DEFAULT '[]',
@@ -72,6 +76,26 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_items_user   ON collected_items(user_id);
   CREATE INDEX IF NOT EXISTS idx_stickers_user ON stickers(user_id);
+
+  CREATE TABLE IF NOT EXISTS transformation_guides (
+    id               TEXT PRIMARY KEY,
+    user_id          TEXT NOT NULL,
+    title            TEXT NOT NULL DEFAULT '',
+    summary          TEXT NOT NULL DEFAULT '',
+    concept          TEXT NOT NULL DEFAULT '',
+    materials_json   TEXT NOT NULL DEFAULT '[]',
+    steps_json       TEXT NOT NULL DEFAULT '[]',
+    tips_json        TEXT NOT NULL DEFAULT '[]',
+    item_ids_json    TEXT NOT NULL DEFAULT '[]',
+    source_items_json TEXT NOT NULL DEFAULT '[]',
+    image_path       TEXT NOT NULL DEFAULT '',
+    date_created     TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_transformation_guides_user
+  ON transformation_guides(user_id, date_created DESC);
 
   CREATE TABLE IF NOT EXISTS exhibition_halls (
     id          TEXT PRIMARY KEY,
@@ -115,6 +139,9 @@ ensureColumn('users', 'sample_seeded', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('users', 'toolbox_json', `TEXT NOT NULL DEFAULT '[]'`);
 ensureColumn('collected_items', 'hall_id', `TEXT NOT NULL DEFAULT '其他'`);
 ensureColumn('collected_items', 'is_sample', `INTEGER NOT NULL DEFAULT 0`);
+ensureColumn('collected_items', 'cover_image_path', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('collected_items', 'description', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('collected_items', 'audio_path', `TEXT NOT NULL DEFAULT ''`);
 ensureColumn('exhibition_halls', 'system_hall_id', `TEXT`);
 ensureColumn('exhibition_halls', 'is_hidden', `INTEGER NOT NULL DEFAULT 0`);
 db.exec(`
@@ -128,6 +155,7 @@ db.exec(`
   ON exhibition_halls(user_id, system_hall_id)
   WHERE system_hall_id IS NOT NULL
 `);
+normalizeStoredUserEmails();
 
 // ============================================================
 // Types
@@ -140,6 +168,8 @@ interface UserRow {
   nickname: string;
   avatar_url: string | null;
   is_guest: number;
+  email_verified: number;
+  email_verified_at: string | null;
   onboarding_seen: number;
   sample_seeded: number;
   toolbox_json: string;
@@ -153,7 +183,10 @@ interface ItemRow {
   hall_id: string;
   category: string;
   material: string;
+  description: string;
   image_path: string;
+  cover_image_path: string;
+  audio_path: string;
   story: string | null;
   tags_json: string;
   ideas_json: string;
@@ -171,6 +204,22 @@ interface StickerRow {
   drama_text: string;
   category: string;
   date_created: string;
+}
+
+interface TransformationGuideRow {
+  id: string;
+  user_id: string;
+  title: string;
+  summary: string;
+  concept: string;
+  materials_json: string;
+  steps_json: string;
+  tips_json: string;
+  item_ids_json: string;
+  source_items_json: string;
+  image_path: string;
+  date_created: string;
+  created_at: string;
 }
 
 interface HallRow {
@@ -214,13 +263,21 @@ const stmts = {
     VALUES (@id, @email, @password_hash, @nickname, @is_guest)
   `),
   getUserById: db.prepare<[string]>(`SELECT * FROM users WHERE id = ?`),
-  getUserByEmail: db.prepare<[string]>(`SELECT * FROM users WHERE email = ?`),
+  getUserByEmail: db.prepare<[string]>(`SELECT * FROM users WHERE email = ? COLLATE NOCASE LIMIT 1`),
   updateUser: db.prepare<{
     id: string; email: string | null; password_hash: string | null;
     nickname: string; is_guest: number;
   }>(`
     UPDATE users SET email = @email, password_hash = @password_hash,
            nickname = @nickname, is_guest = @is_guest
+    WHERE id = @id
+  `),
+  updateUserPassword: db.prepare<{
+    id: string;
+    password_hash: string;
+  }>(`
+    UPDATE users
+    SET password_hash = @password_hash
     WHERE id = @id
   `),
   updateUserPreferences: db.prepare<{
@@ -238,21 +295,21 @@ const stmts = {
 
   // Items
   insertItem: db.prepare<{
-    id: string; user_id: string; name: string; hall_id: string; category: string; material: string;
-    image_path: string; story: string | null; tags_json: string; ideas_json: string;
+    id: string; user_id: string; name: string; hall_id: string; category: string; material: string; description: string;
+    image_path: string; cover_image_path: string; audio_path: string; story: string | null; tags_json: string; ideas_json: string;
     status: string; is_sample: number; date_collected: string;
   }>(`
-    INSERT INTO collected_items (id, user_id, name, hall_id, category, material, image_path, story, tags_json, ideas_json, status, is_sample, date_collected)
-    VALUES (@id, @user_id, @name, @hall_id, @category, @material, @image_path, @story, @tags_json, @ideas_json, @status, @is_sample, @date_collected)
+    INSERT INTO collected_items (id, user_id, name, hall_id, category, material, description, image_path, cover_image_path, audio_path, story, tags_json, ideas_json, status, is_sample, date_collected)
+    VALUES (@id, @user_id, @name, @hall_id, @category, @material, @description, @image_path, @cover_image_path, @audio_path, @story, @tags_json, @ideas_json, @status, @is_sample, @date_collected)
   `),
   getItemsByUser: db.prepare<[string]>(`SELECT * FROM collected_items WHERE user_id = ? ORDER BY created_at DESC`),
   getItemById: db.prepare<[string, string]>(`SELECT * FROM collected_items WHERE id = ? AND user_id = ?`),
   updateItem: db.prepare<{
-    id: string; user_id: string; name: string; hall_id: string; category: string; material: string;
-    image_path: string; story: string | null; tags_json: string; ideas_json: string; status: string; is_sample: number;
+    id: string; user_id: string; name: string; hall_id: string; category: string; material: string; description: string;
+    image_path: string; cover_image_path: string; audio_path: string; story: string | null; tags_json: string; ideas_json: string; status: string; is_sample: number;
   }>(`
     UPDATE collected_items
-    SET name = @name, hall_id = @hall_id, category = @category, material = @material, image_path = @image_path,
+    SET name = @name, hall_id = @hall_id, category = @category, material = @material, description = @description, image_path = @image_path, cover_image_path = @cover_image_path, audio_path = @audio_path,
         story = @story, tags_json = @tags_json, ideas_json = @ideas_json, status = @status, is_sample = @is_sample
     WHERE id = @id AND user_id = @user_id
   `),
@@ -319,6 +376,66 @@ const stmts = {
   getStickerById: db.prepare<[string, string]>(`SELECT * FROM stickers WHERE id = ? AND user_id = ?`),
   deleteSticker: db.prepare<[string, string]>(`DELETE FROM stickers WHERE id = ? AND user_id = ?`),
 
+  // Transformation guides
+  insertTransformationGuide: db.prepare<{
+    id: string;
+    user_id: string;
+    title: string;
+    summary: string;
+    concept: string;
+    materials_json: string;
+    steps_json: string;
+    tips_json: string;
+    item_ids_json: string;
+    source_items_json: string;
+    image_path: string;
+    date_created: string;
+  }>(`
+    INSERT INTO transformation_guides (
+      id,
+      user_id,
+      title,
+      summary,
+      concept,
+      materials_json,
+      steps_json,
+      tips_json,
+      item_ids_json,
+      source_items_json,
+      image_path,
+      date_created
+    )
+    VALUES (
+      @id,
+      @user_id,
+      @title,
+      @summary,
+      @concept,
+      @materials_json,
+      @steps_json,
+      @tips_json,
+      @item_ids_json,
+      @source_items_json,
+      @image_path,
+      @date_created
+    )
+  `),
+  getTransformationGuidesByUser: db.prepare<[string]>(`
+    SELECT *
+    FROM transformation_guides
+    WHERE user_id = ?
+    ORDER BY date_created DESC, created_at DESC
+  `),
+  getTransformationGuideById: db.prepare<[string, string]>(`
+    SELECT *
+    FROM transformation_guides
+    WHERE id = ? AND user_id = ?
+  `),
+  deleteTransformationGuide: db.prepare<[string, string]>(`
+    DELETE FROM transformation_guides
+    WHERE id = ? AND user_id = ?
+  `),
+
   // Exhibition Halls
   insertHall: db.prepare<{
     id: string; user_id: string; name: string; image_path: string; system_hall_id: string | null; is_hidden: number;
@@ -353,6 +470,21 @@ const stmts = {
     SET revoked_at = datetime('now')
     WHERE id = ? AND revoked_at IS NULL
   `),
+  revokeRefreshTokensByUser: db.prepare<[string]>(`
+    UPDATE refresh_tokens
+    SET revoked_at = datetime('now')
+    WHERE user_id = ? AND revoked_at IS NULL
+  `),
+  revokeOtherRefreshTokensByUser: db.prepare<{
+    user_id: string;
+    current_token_id: string;
+  }>(`
+    UPDATE refresh_tokens
+    SET revoked_at = datetime('now')
+    WHERE user_id = @user_id
+      AND id != @current_token_id
+      AND revoked_at IS NULL
+  `),
 };
 
 // ============================================================
@@ -373,7 +505,8 @@ export function createUser({
   nickname?: string;
   is_guest?: number;
 }): UserRow {
-  stmts.insertUser.run({ id, email, password_hash, nickname, is_guest });
+  const normalizedEmail = email ? normalizeEmailAddress(email) : null;
+  stmts.insertUser.run({ id, email: normalizedEmail, password_hash, nickname, is_guest });
   return stmts.getUserById.get(id) as UserRow;
 }
 
@@ -382,22 +515,32 @@ export function getUserById(id: string): UserRow | undefined {
 }
 
 export function getUserByEmail(email: string): UserRow | undefined {
-  return stmts.getUserByEmail.get(email) as UserRow | undefined;
+  return stmts.getUserByEmail.get(normalizeEmailAddress(email)) as UserRow | undefined;
 }
 
 export function upgradeGuestUser(
   id: string,
   { email, password_hash, nickname }: { email: string; password_hash: string; nickname: string },
 ): UserRow {
-  stmts.updateUser.run({ id, email, password_hash, nickname, is_guest: 0 });
+  stmts.updateUser.run({
+    id,
+    email: normalizeEmailAddress(email),
+    password_hash,
+    nickname,
+    is_guest: 0,
+  });
   return stmts.getUserById.get(id) as UserRow;
+}
+
+export function updateUserPassword(id: string, password_hash: string): UserRow | undefined {
+  stmts.updateUserPassword.run({ id, password_hash });
+  return getUserById(id);
 }
 
 export function updateUserPreferences(
   id: string,
   updates: Partial<{
     onboardingSeen: boolean;
-    sampleSeeded: boolean;
     toolbox: unknown[];
   }>,
 ): UserRow | undefined {
@@ -408,7 +551,7 @@ export function updateUserPreferences(
   stmts.updateUserPreferences.run({
     id,
     onboarding_seen: (updates.onboardingSeen ?? !!current.onboarding_seen) ? 1 : 0,
-    sample_seeded: (updates.sampleSeeded ?? !!current.sample_seeded) ? 1 : 0,
+    sample_seeded: !!current.sample_seeded ? 1 : 0,
     toolbox_json: JSON.stringify(updates.toolbox ?? currentToolbox),
   });
 
@@ -423,12 +566,13 @@ export function createItem(item: {
   hall_id?: string;
   category?: string;
   material?: string;
+  description?: string;
   image_path?: string;
+  cover_image_path?: string;
+  audio_path?: string;
   story?: string | null;
   tags?: string[];
-  ideas?: unknown[];
   status?: string;
-  is_sample?: boolean;
   date_collected?: string;
 }) {
   stmts.insertItem.run({
@@ -438,12 +582,15 @@ export function createItem(item: {
     hall_id: item.hall_id || item.category || '其他',
     category: item.category || '其他',
     material: item.material || '',
+    description: item.description || '',
     image_path: item.image_path || '',
+    cover_image_path: item.cover_image_path || '',
+    audio_path: item.audio_path || '',
     story: item.story || null,
     tags_json: JSON.stringify(item.tags || []),
-    ideas_json: JSON.stringify(item.ideas || []),
+    ideas_json: '[]',
     status: item.status || 'raw',
-    is_sample: item.is_sample ? 1 : 0,
+    is_sample: 0,
     date_collected: item.date_collected || new Date().toISOString(),
   });
   const row = stmts.getItemById.get(item.id, item.user_id) as ItemRow | undefined;
@@ -467,12 +614,13 @@ export function updateItem(item: {
   hall_id?: string;
   category?: string;
   material?: string;
+  description?: string;
   image_path?: string;
+  cover_image_path?: string;
+  audio_path?: string;
   story?: string | null;
   tags?: string[];
-  ideas?: unknown[];
   status?: string;
-  is_sample?: boolean;
 }) {
   stmts.updateItem.run({
     id: item.id,
@@ -481,12 +629,15 @@ export function updateItem(item: {
     hall_id: item.hall_id || item.category || '其他',
     category: item.category || '其他',
     material: item.material || '',
+    description: item.description || '',
     image_path: item.image_path || '',
+    cover_image_path: item.cover_image_path || '',
+    audio_path: item.audio_path || '',
     story: item.story || null,
     tags_json: JSON.stringify(item.tags || []),
-    ideas_json: JSON.stringify(item.ideas || []),
+    ideas_json: '[]',
     status: item.status || 'raw',
-    is_sample: item.is_sample ? 1 : 0,
+    is_sample: 0,
   });
   const row = stmts.getItemById.get(item.id, item.user_id) as ItemRow | undefined;
   return row ? rowToItem(row) : null;
@@ -576,6 +727,54 @@ export function getStickerById(id: string, userId: string) {
 
 export function deleteSticker(id: string, userId: string) {
   return stmts.deleteSticker.run(id, userId);
+}
+
+// --- Transformation guides ---
+export function createTransformationGuide(guide: {
+  id: string;
+  user_id: string;
+  title: string;
+  summary: string;
+  concept: string;
+  materials?: string[];
+  steps?: string[];
+  tips?: string[];
+  itemIds?: string[];
+  sourceItems?: unknown[];
+  image_path?: string;
+  date_created?: string;
+}) {
+  stmts.insertTransformationGuide.run({
+    id: guide.id,
+    user_id: guide.user_id,
+    title: guide.title,
+    summary: guide.summary,
+    concept: guide.concept,
+    materials_json: JSON.stringify(guide.materials || []),
+    steps_json: JSON.stringify(guide.steps || []),
+    tips_json: JSON.stringify(guide.tips || []),
+    item_ids_json: JSON.stringify(guide.itemIds || []),
+    source_items_json: JSON.stringify(guide.sourceItems || []),
+    image_path: guide.image_path || '',
+    date_created: guide.date_created || new Date().toISOString(),
+  });
+
+  const row = stmts.getTransformationGuideById.get(guide.id, guide.user_id) as TransformationGuideRow | undefined;
+  return row ? rowToTransformationGuide(row) : null;
+}
+
+export function getTransformationGuidesByUser(userId: string) {
+  const rows = stmts.getTransformationGuidesByUser.all(userId) as TransformationGuideRow[];
+  return rows.map(rowToTransformationGuide);
+}
+
+export function getTransformationGuideById(id: string, userId: string) {
+  const row = stmts.getTransformationGuideById.get(id, userId) as TransformationGuideRow | undefined;
+  return row ? rowToTransformationGuide(row) : null;
+}
+
+export function deleteTransformationGuide(id: string, userId: string) {
+  return stmts.deleteTransformationGuide.run(id, userId);
 }
 
 // --- Exhibition Halls ---
@@ -687,6 +886,14 @@ export function revokeRefreshTokenSession(id: string) {
   return stmts.revokeRefreshToken.run(id);
 }
 
+export function revokeRefreshTokenSessionsForUser(userId: string, currentTokenId?: string) {
+  if (currentTokenId) {
+    return stmts.revokeOtherRefreshTokensByUser.run({ user_id: userId, current_token_id: currentTokenId });
+  }
+
+  return stmts.revokeRefreshTokensByUser.run(userId);
+}
+
 // ============================================================
 // Row → Frontend-friendly object 转换
 // ============================================================
@@ -699,14 +906,17 @@ function rowToItem(row: ItemRow) {
     hallId: row.hall_id || row.category,
     category: row.category,
     material: row.material,
+    description: row.description || '',
     imageUrl: row.image_path,
     image_path: row.image_path,
+    coverImageUrl: row.cover_image_path || '',
+    cover_image_path: row.cover_image_path || '',
+    audioUrl: row.audio_path || '',
+    audio_path: row.audio_path || '',
     dateCollected: row.date_collected,
     story: row.story || '',
     tags: safeJsonParse(row.tags_json, []),
-    ideas: safeJsonParse(row.ideas_json, []),
     status: row.status,
-    isSample: !!row.is_sample,
   };
 }
 
@@ -719,6 +929,24 @@ function rowToSticker(row: StickerRow) {
     image_path: row.image_path,
     dramaText: row.drama_text,
     category: row.category,
+    dateCreated: row.date_created,
+  };
+}
+
+function rowToTransformationGuide(row: TransformationGuideRow) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    summary: row.summary,
+    concept: row.concept,
+    materials: safeJsonParse(row.materials_json, []),
+    steps: safeJsonParse(row.steps_json, []),
+    tips: safeJsonParse(row.tips_json, []),
+    itemIds: safeJsonParse(row.item_ids_json, []),
+    sourceItems: safeJsonParse(row.source_items_json, []),
+    imageUrl: row.image_path,
+    image_path: row.image_path,
     dateCreated: row.date_created,
   };
 }
@@ -736,6 +964,37 @@ function rowToHall(row: HallRow) {
 
 function safeJsonParse<T>(str: string, fallback: T): T {
   try { return JSON.parse(str); } catch { return fallback; }
+}
+
+function normalizeStoredUserEmails() {
+  const duplicateRows = db.prepare(`
+    SELECT lower(trim(email)) AS normalized_email, COUNT(*) AS count
+    FROM users
+    WHERE email IS NOT NULL
+    GROUP BY lower(trim(email))
+    HAVING COUNT(*) > 1
+  `).all() as Array<{ normalized_email: string; count: number }>;
+
+  if (duplicateRows.length > 0) {
+    console.warn(
+      'Skipping case-insensitive email migration because duplicate emails already exist:',
+      duplicateRows.map((row) => `${row.normalized_email} (${row.count})`).join(', '),
+    );
+    return;
+  }
+
+  db.exec(`
+    UPDATE users
+    SET email = lower(trim(email))
+    WHERE email IS NOT NULL
+      AND email != lower(trim(email))
+  `);
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase
+    ON users(email COLLATE NOCASE)
+    WHERE email IS NOT NULL
+  `);
 }
 
 function ensureColumn(table: string, column: string, definition: string) {

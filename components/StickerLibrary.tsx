@@ -1,16 +1,32 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Sticker, ItemCategory } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { ItemCategory, SavedTransformationGuide, Sticker } from '../types';
 import { Sticker as StickerIcon, Download, Trash2, Box, Layers, Move, CheckCircle2, X, Grid, Shuffle, Save, BookImage, Scissors, Printer, Smile, Loader2, Plus, Mic, MicOff } from 'lucide-react';
 import { generateEmojiPack, EmojiPackItem, StickerInput } from '../services/geminiService';
 import { fetchImageAsset } from '../services/imageUtils';
 import PerlerPatternStudio from './PerlerPatternStudio';
 import logger from '../services/logger';
+import { EMOJI_PACK_CATEGORY, PERLER_PATTERN_CATEGORY } from '../shared/stickerCategories';
+
+export type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT' | 'EMOJI_PACK' | 'PERLER_PATTERN';
+
+type LibraryTab = 'STICKERS' | 'EMOJI_PACKS' | 'PERLER_PATTERNS' | 'TRANSFORMATION_GUIDES';
+type LibraryViewMode = 'LIBRARY' | 'CANVAS';
 
 interface StickerLibraryProps {
     stickers: Sticker[];
+    guides?: SavedTransformationGuide[];
     onDeleteSticker: (id: string) => void;
     onStickerCreated?: (sticker: Sticker) => Promise<void> | void;
+    initialViewMode?: LibraryViewMode;
+    initialCanvasMode?: CanvasMode;
+    initialSelectionIds?: string[];
+    initialLibraryTab?: LibraryTab;
+    headerTitle?: string;
+    headerDescription?: string;
+    showLayoutModeToggle?: boolean;
+    onOpenGuide?: (guide: SavedTransformationGuide) => void;
+    onExit?: () => void;
 }
 
 interface LayoutItem {
@@ -22,8 +38,6 @@ interface LayoutItem {
     scale: number;
     zIndex: number;
 }
-
-type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT' | 'EMOJI_PACK' | 'PERLER_PATTERN';
 
 // ==================== 小红书模板定义 ====================
 type XhsBackgroundStyle = 'forest' | 'paper' | 'editorial' | 'candy';
@@ -591,33 +605,6 @@ const saveBlobToDevice = async (blob: Blob, filename: string) => {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 };
 
-const saveCanvasToDevice = async (canvas: HTMLCanvasElement, filename: string) => {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) {
-        alert('图片导出失败，请重试');
-        return;
-    }
-    await saveBlobToDevice(blob, filename);
-};
-
-const saveImageUrlToDevice = async (imageUrl: string, filename: string) => {
-    try {
-        const response = await fetchImageAsset(imageUrl);
-        const blob = await response.blob();
-        await saveBlobToDevice(blob, filename);
-    } catch (error) {
-        logger.warn('Fetch image as blob failed, fallback to direct open:', error);
-        if (isMobileDevice()) {
-            window.open(imageUrl, '_blank');
-            return;
-        }
-        const link = document.createElement('a');
-        link.href = imageUrl;
-        link.download = filename;
-        link.click();
-    }
-};
-
 const isIOSDevice = () =>
     /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -825,16 +812,31 @@ const StickerCard: React.FC<{
     );
 };
 
-const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDeleteSticker, onStickerCreated }) => {
+const StickerLibrary: React.FC<StickerLibraryProps> = ({
+    stickers = [],
+    guides = [],
+    onDeleteSticker,
+    onStickerCreated,
+    initialViewMode = 'LIBRARY',
+    initialCanvasMode = 'COLLAGE',
+    initialSelectionIds = [],
+    initialLibraryTab = 'STICKERS',
+    headerTitle = 'STICKER LIBRARY',
+    headerDescription = '实体物品的数字分身与专属剧情。',
+    showLayoutModeToggle = true,
+    onOpenGuide,
+    onExit,
+}) => {
     const safeStickers = Array.isArray(stickers) ? stickers : [];
+    const safeGuides = Array.isArray(guides) ? guides : [];
     // View Mode: 'LIBRARY' (Grid) or 'CANVAS' (Layout Editor)
-    const [viewMode, setViewMode] = useState<'LIBRARY' | 'CANVAS'>('LIBRARY');
-    const [canvasMode, setCanvasMode] = useState<CanvasMode>('COLLAGE');
+    const [viewMode, setViewMode] = useState<LibraryViewMode>(initialViewMode);
+    const [canvasMode, setCanvasMode] = useState<CanvasMode>(initialCanvasMode);
     
     // Filter & Selection
     const [filter, setFilter] = useState('ALL');
     const [isSelectionMode, setIsSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(initialSelectionIds));
 
     // Canvas State
     const [layoutItems, setLayoutItems] = useState<LayoutItem[]>([]);
@@ -867,14 +869,12 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
     const recognitionRef = useRef<any>(null);
 
     // 表情包库 / 贴纸库 切换
-    const [libraryTab, setLibraryTab] = useState<'STICKERS' | 'EMOJI_PACKS' | 'PERLER_PATTERNS'>('STICKERS');
+    const [libraryTab, setLibraryTab] = useState<LibraryTab>(initialLibraryTab);
     const [saveFeedback, setSaveFeedback] = useState<{ title: string; message: string } | null>(null);
     const [savePreview, setSavePreview] = useState<{ imageUrl: string; title: string; message: string } | null>(null);
     const saveFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // 将贴纸按 category 分为普通贴纸和表情包
-    const EMOJI_PACK_CATEGORY = '__emoji_pack__';
-    const PERLER_PATTERN_CATEGORY = '__perler_pattern__';
     const regularStickers = safeStickers.filter(s => ![EMOJI_PACK_CATEGORY, PERLER_PATTERN_CATEGORY].includes(s.category));
     const emojiPacks = safeStickers.filter(s => s.category === EMOJI_PACK_CATEGORY);
     const perlerPatterns = safeStickers.filter(s => s.category === PERLER_PATTERN_CATEGORY);
@@ -887,6 +887,8 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
         ? { count: emojiPacks.length, label: 'EMOJI PACKS' }
         : libraryTab === 'PERLER_PATTERNS'
             ? { count: perlerPatterns.length, label: 'PERLER FILES' }
+            : libraryTab === 'TRANSFORMATION_GUIDES'
+                ? { count: safeGuides.length, label: 'GUIDES' }
             : { count: regularStickers.length, label: 'STICKERS' };
 
     useEffect(() => {
@@ -899,6 +901,15 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             }
         };
     }, [savePreview]);
+
+    const handleReturnFromCanvas = () => {
+        if (onExit) {
+            onExit();
+            return;
+        }
+
+        setViewMode('LIBRARY');
+    };
 
     const closeSavePreview = () => {
         if (savePreview?.imageUrl?.startsWith('blob:')) {
@@ -1008,7 +1019,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             newSet.delete(id);
         } else {
             if (newSet.size >= 9) {
-                alert("最多选择 9 张贴纸");
+                showSaveFeedback('最多选择 9 张', '一次最多选择 9 张贴纸。');
                 return;
             }
             newSet.add(id);
@@ -1896,7 +1907,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             <div className="remuse-studio h-full bg-remuse-dark text-white flex flex-col">
                 <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white">
+                        <button onClick={handleReturnFromCanvas} className="text-neutral-500 hover:text-white">
                             <X size={24} />
                         </button>
                         <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
@@ -1912,7 +1923,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto flex flex-col md:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">
+                <div className="flex-1 overflow-y-auto flex flex-col xl:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:pb-0">
                     <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#0f0f10]">
                         <div
                             ref={xhsCanvasRef}
@@ -2121,7 +2132,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
                     </div>
 
-                    <div className="w-full md:w-80 bg-remuse-panel border-t md:border-t-0 md:border-l border-neutral-800 p-4 md:p-5 space-y-5 md:overflow-y-auto">
+                    <div className="w-full xl:w-80 bg-remuse-panel border-t xl:border-t-0 xl:border-l border-neutral-800 p-4 md:p-5 space-y-5 xl:overflow-y-auto">
                         <div>
                             <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-3 block">选择风格</label>
                             <p className="mb-3 text-[11px] leading-relaxed text-neutral-500">全部固定为 3:4，直接适配小红书发图比例。</p>
@@ -2215,12 +2226,12 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             <div className="remuse-studio flex h-full flex-col bg-remuse-dark text-white">
                 <div className="flex items-center justify-between border-b border-neutral-800 bg-remuse-panel p-4">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 transition-colors hover:text-white"><X size={24} /></button>
+                        <button onClick={handleReturnFromCanvas} className="text-neutral-500 transition-colors hover:text-white"><X size={24} /></button>
                         <h2 className="flex items-center gap-2 text-xl font-bold font-display text-white"><BookImage size={20} className="text-pink-400" />小红书配图</h2>
                     </div>
                     <button onClick={handleExportXhsCard} className="flex items-center gap-2 rounded-full bg-gradient-to-r from-pink-500 to-orange-400 px-5 py-2 text-sm font-display font-bold text-white shadow-lg transition-transform hover:scale-105"><Download size={16} />保存配图</button>
                 </div>
-                <div className="flex flex-1 flex-col overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)] md:flex-row md:pb-0">
+                <div className="flex flex-1 flex-col overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:flex-row xl:pb-0">
                     <div className="flex flex-1 items-center justify-center bg-[#0f0f10] p-4 md:p-6">
                         <div
                             ref={xhsCanvasRef}
@@ -2268,7 +2279,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                             </div>
                         </div>
                     </div>
-                    <div className="w-full space-y-5 border-t border-neutral-800 bg-remuse-panel p-4 md:w-80 md:overflow-y-auto md:border-l md:border-t-0 md:p-5">
+                    <div className="w-full space-y-5 border-t border-neutral-800 bg-remuse-panel p-4 xl:w-80 xl:overflow-y-auto xl:border-l xl:border-t-0 md:p-5">
                         <div className="grid grid-cols-1 gap-3">
                             {XHS_TEMPLATES.map((tmpl) => (
                                 <button key={tmpl.id} onClick={() => setXhsTemplate(tmpl)} className={`rounded-2xl border p-3 text-left transition-all ${xhsTemplate.id === tmpl.id ? 'border-pink-400 bg-pink-400/10 shadow-[0_0_0_1px_rgba(244,114,182,0.2)]' : 'border-neutral-700 hover:border-neutral-500 hover:bg-white/[0.02]'}`}>
@@ -2418,13 +2429,13 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             <div className="remuse-studio flex h-full flex-col bg-remuse-dark text-white">
                 <div className="flex items-center justify-between border-b border-neutral-800 bg-remuse-panel p-4">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 transition-colors hover:text-white"><X size={24} /></button>
-                        <h2 className="flex items-center gap-2 text-xl font-bold font-display text-white"><Scissors size={20} className="text-remuse-secondary" />手账贴纸打印</h2>
+                        <button onClick={handleReturnFromCanvas} className="text-neutral-500 transition-colors hover:text-white"><X size={24} /></button>
+                        <h2 className="flex items-center gap-2 text-xl font-bold font-display text-white"><Scissors size={20} className="text-remuse-secondary" />手账拼贴工坊</h2>
                     </div>
                     <button onClick={handleExportPrint} className="flex items-center gap-2 rounded-full bg-remuse-secondary px-5 py-2 text-sm font-display font-bold text-black shadow-lg transition-transform hover:scale-105"><Printer size={16} />导出打印图</button>
                 </div>
 
-                <div className="flex flex-1 flex-col overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)] md:flex-row md:pb-0">
+                <div className="flex flex-1 flex-col overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:flex-row xl:pb-0">
                     <div className="flex flex-1 items-center justify-center bg-[#111] p-4 md:p-6">
                         <div
                             ref={printCanvasRef}
@@ -2461,7 +2472,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
                     </div>
 
-                    <div className="w-full space-y-5 border-t border-neutral-800 bg-remuse-panel p-4 md:w-80 md:overflow-y-auto md:border-l md:border-t-0 md:p-5">
+                    <div className="w-full space-y-5 border-t border-neutral-800 bg-remuse-panel p-4 xl:w-80 xl:overflow-y-auto xl:border-l xl:border-t-0 md:p-5">
                         <div className="grid grid-cols-1 gap-3">
                             {PRINT_TEMPLATES.map((tmpl) => (
                                 <button key={tmpl.id} onClick={() => setPrintTemplate(tmpl)} className={`rounded-2xl border p-3 text-left transition-all ${printTemplate.id === tmpl.id ? 'border-remuse-secondary bg-remuse-secondary/10 shadow-[0_0_0_1px_rgba(0,255,255,0.12)]' : 'border-neutral-700 hover:border-neutral-500 hover:bg-white/[0.02]'}`}>
@@ -2787,10 +2798,12 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
         };
         try {
             await onStickerCreated(newSticker);
-            alert('已存入表情包库 ✨');
+            showSaveFeedback('已存入表情包库', '这套表情包已经保存到你的贴纸库。');
+            return;
         } catch (error) {
             logger.error('Save emoji pack to library failed:', error);
-            alert('存入表情包库失败，请重试');
+            showSaveFeedback('保存失败', '存入表情包库失败，请稍后重试。');
+            return;
         }
     };
 
@@ -2808,7 +2821,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
         // 检查浏览器支持
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert('您的浏览器不支持语音输入，请尝试使用 Chrome 浏览器');
+            showSaveFeedback('语音不可用', '当前浏览器不支持语音输入，请尝试使用 Chrome。');
             return;
         }
 
@@ -2830,7 +2843,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             logger.warn('Speech recognition error:', event.error);
             setIsRecording(false);
             if (event.error === 'not-allowed') {
-                alert('请允许麦克风权限以使用语音输入');
+                showSaveFeedback('麦克风权限被拒绝', '请允许麦克风权限后再尝试语音输入。');
             }
         };
 
@@ -2936,7 +2949,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     {/* Header */}
                     <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white"><X size={24} /></button>
+                            <button onClick={handleReturnFromCanvas} className="text-neutral-500 hover:text-white"><X size={24} /></button>
                             <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
                                 <BookImage size={20} className="text-pink-400" />
                                 小红书配图
@@ -2950,7 +2963,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto flex flex-col md:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">
+                    <div className="flex-1 overflow-y-auto flex flex-col xl:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:pb-0">
                         {/* Preview */}
                         <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#111]">
                             <div 
@@ -3091,7 +3104,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
 
                         {/* Sidebar Controls */}
-                        <div className="w-full md:w-72 bg-remuse-panel border-t md:border-t-0 md:border-l border-neutral-800 p-4 md:p-5 space-y-5 md:overflow-y-auto">
+                        <div className="w-full xl:w-72 bg-remuse-panel border-t xl:border-t-0 xl:border-l border-neutral-800 p-4 md:p-5 space-y-5 xl:overflow-y-auto">
                             {/* Template Picker */}
                             <div>
                                 <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-3 block">选择风格</label>
@@ -3143,10 +3156,10 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     {/* Header */}
                     <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white"><X size={24} /></button>
+                            <button onClick={handleReturnFromCanvas} className="text-neutral-500 hover:text-white"><X size={24} /></button>
                             <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
                                 <Scissors size={20} className="text-remuse-secondary" />
-                                手账贴纸打印
+                                手账拼贴工坊
                             </h2>
                         </div>
                         <button 
@@ -3157,7 +3170,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto flex flex-col md:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">
+                    <div className="flex-1 overflow-y-auto flex flex-col xl:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:pb-0">
                         {/* Preview */}
                         <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#111]">
                             <div 
@@ -3205,7 +3218,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
 
                         {/* Sidebar */}
-                        <div className="w-full md:w-72 bg-remuse-panel border-t md:border-t-0 md:border-l border-neutral-800 p-4 md:p-5 space-y-5">
+                        <div className="w-full xl:w-72 bg-remuse-panel border-t xl:border-t-0 xl:border-l border-neutral-800 p-4 md:p-5 space-y-5">
                             <div>
                                 <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-2 block">预览缩放</label>
                                 <input 
@@ -3241,7 +3254,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             return (
                 <PerlerPatternStudio
                     sourceStickers={selectedStickers}
-                    onBack={() => setViewMode('LIBRARY')}
+                    onBack={handleReturnFromCanvas}
                     onPatternSaved={onStickerCreated}
                 />
             );
@@ -3254,7 +3267,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     {/* Header */}
                     <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between flex-shrink-0">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white"><X size={24} /></button>
+                            <button onClick={handleReturnFromCanvas} className="text-neutral-500 hover:text-white"><X size={24} /></button>
                             <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
                                 <Smile size={20} className="text-yellow-400" />
                                 表情包工坊
@@ -3290,7 +3303,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">
+                    <div className="flex-1 overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:pb-0">
                         {/* Main Area */}
                         <div className="flex-1 p-4 md:p-5 md:overflow-y-auto">
                             {/* Source Stickers Preview (ALL selected) */}
@@ -3369,7 +3382,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                         </div>
 
                         {/* Sidebar */}
-                        <div className="w-full md:w-72 flex-shrink-0 bg-remuse-panel border-t md:border-t-0 md:border-l border-neutral-800 p-4 md:p-5 space-y-5 md:overflow-y-auto">
+                        <div className="w-full xl:w-72 flex-shrink-0 bg-remuse-panel border-t xl:border-t-0 xl:border-l border-neutral-800 p-4 md:p-5 space-y-5 xl:overflow-y-auto">
                             {/* 心情输入区 */}
                             <div>
                                 <label className="text-xs font-display text-neutral-400 uppercase tracking-wider mb-2 block">💭 说说你的心情</label>
@@ -3451,7 +3464,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                 {/* Canvas Header */}
                 <div className="p-4 border-b border-neutral-800 bg-remuse-panel flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setViewMode('LIBRARY')} className="text-neutral-500 hover:text-white">
+                        <button onClick={handleReturnFromCanvas} className="text-neutral-500 hover:text-white">
                             <X size={24} />
                         </button>
                         <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
@@ -3486,14 +3499,14 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                 </div>
 
                 {/* Canvas Area */}
-                <div className="flex-1 overflow-y-auto md:overflow-hidden relative flex items-center justify-center p-4 md:p-8 pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-8 bg-[#111]">
+                <div className="flex-1 overflow-y-auto xl:overflow-hidden relative flex items-center justify-center p-4 md:p-8 pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:pb-8 bg-[#111]">
                     <div 
                         ref={canvasRef}
                         onMouseMove={handleMouseMove}
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}
                         className={`
-                            relative w-full max-w-3xl aspect-[4/3] max-h-[56vh] md:max-h-none bg-black shadow-2xl border border-neutral-800 overflow-hidden
+                            relative w-full max-w-3xl aspect-[4/3] max-h-[56vh] xl:max-h-none bg-black shadow-2xl border border-neutral-800 overflow-hidden
                             ${isCustomMode ? 'cursor-default' : ''}
                         `}
                         style={{ touchAction: isCustomMode ? 'none' : 'auto' }}
@@ -3547,26 +3560,38 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
     return (
         <div className="h-full bg-remuse-dark text-white p-6 md:p-10 overflow-y-auto pb-32">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-10 gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold font-display tracking-tight mb-2 flex items-center gap-3">
+                    <div className="flex items-center gap-3">
+                        {onExit ? (
+                            <button
+                                type="button"
+                                onClick={onExit}
+                                aria-label="返回再生工坊"
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-950 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white"
+                            >
+                                <X size={18} />
+                            </button>
+                        ) : null}
+                        <h1 className="text-4xl font-bold font-display tracking-tight flex items-center gap-3">
                         <StickerIcon size={36} className="text-remuse-accent" />
-                        STICKER LIBRARY
-                    </h1>
-                    <p className="text-neutral-500 text-sm">
-                        实体物品的数字分身与专属剧情。
+                        {headerTitle}
+                        </h1>
+                    </div>
+                    <p className="mt-2 text-neutral-500 text-sm">
+                        {headerDescription}
                     </p>
                 </div>
                 
                 {/* Action Area */}
-                <div className="flex flex-col md:flex-row items-end gap-3">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3">
                     <div className="flex items-center gap-2 px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-full">
                         <Box size={16} className="text-neutral-500" />
                         <span className="text-sm font-mono text-white">{libraryStats.count} {libraryStats.label}</span>
                     </div>
                     
                     {/* Toggle Selection Mode Button */}
-                    {libraryTab === 'STICKERS' && (
+                    {showLayoutModeToggle && libraryTab === 'STICKERS' && (
                         <button 
                             onClick={toggleSelectionMode}
                             className={`flex items-center gap-2 px-5 py-2 rounded-full font-display text-sm border transition-all
@@ -3583,7 +3608,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
             </div>
 
             {/* Library Tab Toggle: 贴纸库 / 表情包库 */}
-            <div className="flex gap-2 mb-6">
+            <div className="mb-6 flex flex-wrap gap-2">
                 <button
                     onClick={() => { setLibraryTab('STICKERS'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
@@ -3620,7 +3645,74 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     拼豆库
                     <span className="text-xs opacity-70">({perlerPatterns.length})</span>
                 </button>
+                <button
+                    onClick={() => { setLibraryTab('TRANSFORMATION_GUIDES'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
+                        ${libraryTab === 'TRANSFORMATION_GUIDES'
+                            ? 'bg-gradient-to-r from-remuse-accent to-remuse-secondary text-black border-remuse-accent'
+                            : 'bg-transparent text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}
+                    `}
+                >
+                    <BookImage size={16} />
+                    改造指南
+                    <span className="text-xs opacity-70">({safeGuides.length})</span>
+                </button>
             </div>
+
+            {libraryTab === 'TRANSFORMATION_GUIDES' && (
+                <>
+                    {safeGuides.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-neutral-800 rounded-lg">
+                            <div className="w-16 h-16 rounded-2xl bg-remuse-accent/10 border border-remuse-accent/20 flex items-center justify-center mb-4">
+                                <BookImage size={28} className="text-remuse-accent" />
+                            </div>
+                            <p className="text-neutral-400 font-display mb-2">暂无综合改造指南</p>
+                            <p className="text-xs text-neutral-600 text-center max-w-xs">
+                                从再生工坊选择 1 件或多件藏品生成综合改造指南，生成完成后会自动保存到这里。
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {safeGuides.map((guide) => (
+                                <button
+                                    key={guide.id}
+                                    type="button"
+                                    onClick={() => onOpenGuide?.(guide)}
+                                    className="group overflow-hidden rounded-[24px] border border-neutral-800 bg-neutral-900 text-left transition-all hover:border-remuse-accent/40 hover:-translate-y-0.5"
+                                >
+                                    <div className="aspect-[4/3] overflow-hidden bg-black/30">
+                                        {guide.imageUrl ? (
+                                            <img
+                                                src={guide.imageUrl}
+                                                alt={guide.title}
+                                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-neutral-500">
+                                                <BookImage size={28} />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-3 p-5">
+                                        <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-accent">
+                                            <BookImage size={13} />
+                                            Guide
+                                        </div>
+                                        <div>
+                                            <h3 className="font-display text-xl font-bold text-white">{guide.title}</h3>
+                                            <p className="mt-2 line-clamp-3 text-sm leading-7 text-neutral-400">{guide.summary}</p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-3 text-xs text-neutral-500">
+                                            <span>来源藏品 {guide.sourceItems.length}</span>
+                                            <span>{new Date(guide.dateCreated).toLocaleDateString('zh-CN')}</span>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
 
             {/* ===== 表情包库 Tab ===== */}
             {libraryTab === 'EMOJI_PACKS' && (
@@ -3630,7 +3722,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                             <div className="text-5xl mb-4">😄 😂 🥹</div>
                             <p className="text-neutral-400 font-display mb-2">暂无表情包</p>
                             <p className="text-xs text-neutral-600 text-center max-w-xs">
-                                选择贴纸 → 排版模式 → 表情包 → 生成后点击「存入表情包库」
+                                从再生工坊选择贴纸进入表情包工坊，生成后点击「存入表情包库」
                             </p>
                         </div>
                     ) : (
@@ -3694,7 +3786,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                             </div>
                             <p className="text-neutral-400 font-display mb-2">暂无拼豆图纸</p>
                             <p className="text-xs text-neutral-600 text-center max-w-xs">
-                                选择单张贴纸 → 排版模式 → 拼豆图纸 → 点击「存入拼豆库」
+                                从再生工坊选择单张贴纸进入拼豆图纸工坊，再点击「存入拼豆库」
                             </p>
                         </div>
                     ) : (
@@ -3787,7 +3879,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                     </div>
 
                     {/* Mode Cards */}
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                         {/* 小红书配图 */}
                         <button
                             onClick={() => enterCanvasMode('XIAOHONGSHU')}
@@ -3825,7 +3917,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({ stickers = [], onDelete
                                 <div className="w-11 h-11 rounded-xl mb-3 flex items-center justify-center text-white shadow-lg" style={{ background: 'linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%)', boxShadow: selectedIds.size > 0 ? '0 4px 20px rgba(34,211,238,0.35)' : 'none' }}>
                                     <Scissors size={20} />
                                 </div>
-                                <p className="font-display font-bold text-sm text-white mb-1">手账贴纸</p>
+                                <p className="font-display font-bold text-sm text-white mb-1">手账拼贴</p>
                                 <p className="text-[11px] text-neutral-500 leading-relaxed">A4排版+裁切线打印</p>
                             </div>
                         </button>

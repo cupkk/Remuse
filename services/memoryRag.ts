@@ -5,11 +5,12 @@ import type {
   MemoryAssistantMessage,
   MemoryAssistantResponse,
 } from '../types.js';
+import { APP_CONFIG } from './appConfig.ts';
 import { getItemsByUser } from './database.ts';
 import { searchMemoryVectors, syncUserMemoryEmbeddings } from './memoryEmbeddings.ts';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL;
+const GEMINI_API_KEY = APP_CONFIG.geminiApiKey;
+const GEMINI_BASE_URL = APP_CONFIG.geminiBaseUrl;
 const GEMINI_MEMORY_MODEL = process.env.GEMINI_MEMORY_MODEL || process.env.GEMINI_TEXT_MODEL || 'gemini-3-pro-preview';
 
 const GENERIC_QUERY_TOKENS = new Set([
@@ -120,6 +121,17 @@ export async function queryUserMemories({
     };
   }
 
+  if (APP_CONFIG.disableLiveAi || !GEMINI_API_KEY) {
+    return {
+      answer: buildFallbackAnswer(matches),
+      matches,
+      suggestions,
+      retrievalSummary: buildRetrievalSummary(sourceItems.length, matches.length, vectorHits.length > 0),
+      sourceCount: sourceItems.length,
+      usedFallback: true,
+    };
+  }
+
   try {
     const answer = await generateGroundedMemoryAnswer({
       query,
@@ -152,6 +164,7 @@ export async function queryUserMemories({
 function hasMemorySignal(item: CollectedItem) {
   return Boolean(
     item.name?.trim() ||
+      item.description?.trim() ||
       item.story?.trim() ||
       item.tags?.length ||
       item.material?.trim() ||
@@ -230,11 +243,12 @@ function retrieveLexicalMatches(items: CollectedItem[], query: string) {
 
 function scoreMemoryItem(item: CollectedItem, query: string, queryTokens: string[]) {
   const story = item.story?.trim() || '';
+  const description = item.description?.trim() || '';
   const tags = Array.isArray(item.tags) ? item.tags : [];
   const hallName = item.category?.trim() || item.hallId || '其他';
   const dateLabel = formatItemDate(item.dateCollected);
   const documentText = normalizeText(
-    [item.name, hallName, item.material, tags.join(' '), story, dateLabel].filter(Boolean).join(' '),
+    [item.name, hallName, item.material, description, tags.join(' '), story, dateLabel].filter(Boolean).join(' '),
   );
 
   const topFragment = pickTopStoryFragment(story, query, queryTokens);
@@ -243,6 +257,7 @@ function scoreMemoryItem(item: CollectedItem, query: string, queryTokens: string
   lexicalScore += scoreField(query, queryTokens, item.name, 4.4);
   lexicalScore += scoreField(query, queryTokens, hallName, 2.1);
   lexicalScore += scoreField(query, queryTokens, item.material, 1.7);
+  lexicalScore += scoreField(query, queryTokens, description, 2.4);
   lexicalScore += scoreField(query, queryTokens, tags.join(' '), 2.8);
   lexicalScore += scoreField(query, queryTokens, story, 3.6);
   lexicalScore += topFragment.score * 1.35;
@@ -435,6 +450,10 @@ async function generateGroundedMemoryAnswer({
   matches: MemoryAssistantMatch[];
   sourceCount: number;
 }) {
+  if (APP_CONFIG.disableLiveAi) {
+    throw new Error('Live AI is disabled for memory answer generation.');
+  }
+
   if (!GEMINI_API_KEY) {
     throw new Error('Missing GEMINI_API_KEY');
   }

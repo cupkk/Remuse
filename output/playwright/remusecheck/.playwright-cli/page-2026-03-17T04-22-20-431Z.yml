@@ -1,0 +1,4 @@
+- button "点击跳过启动动画" [ref=e3] [cursor=pointer]:
+  - generic [ref=e4]:
+    - img [ref=e5]
+    - generic [ref=e12]: 点击任意处跳过

@@ -24,19 +24,73 @@ const ScannerSkeleton: React.FC = () => (
 
 /** Museum / Gallery skeleton */
 const GallerySkeleton: React.FC = () => (
-  <div className="p-6 space-y-6">
-    <div className="flex items-center justify-between">
-      <Bone className="h-8 w-32" />
-      <Bone className="h-8 w-20" />
+  <div className="p-6 space-y-6 md:p-8">
+    <div className="rounded-[28px] border border-neutral-800 p-5 space-y-5">
+      <Bone className="h-5 w-36 rounded-full" />
+      <Bone className="h-10 w-40" />
+      <Bone className="h-4 w-56 rounded-full" />
     </div>
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+
+    <div className="rounded-[24px] border border-neutral-800 p-4 space-y-4">
+      <Bone className="h-5 w-28" />
+      <div className="flex gap-2 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Bone key={i} className="h-11 w-24 rounded-full shrink-0" />
+        ))}
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="space-y-2">
-          <Bone className="aspect-square w-full" />
-          <Bone className="h-4 w-3/4" />
-          <Bone className="h-3 w-1/2" />
+          <Bone className="aspect-[4/5] w-full rounded-[28px]" />
+          <Bone className="h-4 w-3/4 rounded-full" />
+          <Bone className="h-3 w-2/3 rounded-full" />
         </div>
       ))}
+    </div>
+
+    <div className="rounded-[24px] border border-neutral-800 p-4 space-y-4">
+      <Bone className="h-4 w-48 rounded-full" />
+      <div className="flex gap-2 overflow-hidden">
+        <Bone className="h-11 w-24 rounded-full shrink-0" />
+        <Bone className="h-11 w-11 rounded-full shrink-0" />
+        <Bone className="h-11 w-11 rounded-full shrink-0" />
+        <Bone className="h-11 w-11 rounded-full shrink-0" />
+        <Bone className="h-11 w-24 rounded-full shrink-0" />
+      </div>
+    </div>
+  </div>
+);
+
+const WorkshopSkeleton: React.FC = () => (
+  <div className="p-6 space-y-6 md:p-8">
+    <div className="rounded-[28px] border border-neutral-800 p-6 space-y-4">
+      <Bone className="h-5 w-40 rounded-full" />
+      <Bone className="h-10 w-56" />
+      <Bone className="h-4 w-80 rounded-full" />
+      <Bone className="h-4 w-72 rounded-full" />
+    </div>
+
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="rounded-[28px] border border-neutral-800 p-5 space-y-4">
+          <Bone className="h-5 w-28 rounded-full" />
+          <Bone className="h-9 w-40" />
+          <Bone className="h-4 w-full rounded-full" />
+          <Bone className="h-4 w-5/6 rounded-full" />
+          <Bone className="h-28 w-full rounded-[24px]" />
+        </div>
+      ))}
+    </div>
+
+    <div className="rounded-[24px] border border-neutral-800 p-5 space-y-4">
+      <Bone className="h-5 w-32" />
+      <Bone className="h-4 w-80 rounded-full" />
+      <div className="flex gap-3">
+        <Bone className="h-11 w-40 rounded-full" />
+        <Bone className="h-11 w-28 rounded-full" />
+      </div>
     </div>
   </div>
 );
@@ -86,9 +140,10 @@ const SkeletonScreen: React.FC<SkeletonScreenProps> = ({ view }) => {
     MUSEUM: <GallerySkeleton />,
     ITEM_DETAIL: <DetailSkeleton />,
     LOGIN: <CardListSkeleton />,
-    STICKER_LIBRARY: <CardListSkeleton />,
+    STICKER_LIBRARY: <WorkshopSkeleton />,
     INSPIRATION: <CardListSkeleton />,
     PROFILE: <CardListSkeleton />,
+    MEMORY_RAG: <CardListSkeleton />,
   };
 
   return (

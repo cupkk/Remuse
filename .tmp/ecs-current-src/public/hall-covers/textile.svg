@@ -1,0 +1,19 @@
+<svg width="400" height="560" viewBox="0 0 400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="textile-bg" x1="42" y1="24" x2="360" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E49BC2"/>
+      <stop offset="0.55" stop-color="#B05D8A"/>
+      <stop offset="1" stop-color="#6A1F47"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="560" rx="18" fill="url(#textile-bg)"/>
+  <circle cx="330" cy="116" r="90" fill="white" fill-opacity=".12"/>
+  <circle cx="72" cy="412" r="118" fill="white" fill-opacity=".09"/>
+  <path d="M0 362H400V560H0V362Z" fill="#913B66" fill-opacity=".34"/>
+  <path d="M0 486H400V560H0V486Z" fill="#6D2348" fill-opacity=".48"/>
+  <text x="32" y="62" fill="white" fill-opacity=".92" font-size="24" font-family="Arial, sans-serif" letter-spacing="7">RE-MUSEUM</text>
+  <text x="32" y="138" fill="white" font-size="68" font-family="Arial, sans-serif" font-weight="700">Textile</text>
+  <text x="32" y="188" fill="white" fill-opacity=".9" font-size="28" font-family="Arial, sans-serif">纤维与肌理</text>
+  <rect x="32" y="270" width="118" height="6" rx="3" fill="white" fill-opacity=".86"/>
+  <rect x="32" y="300" width="164" height="6" rx="3" fill="white" fill-opacity=".44"/>
+</svg>

@@ -1,0 +1,28 @@
+- generic [ref=e56]:
+  - button "SKIP" [ref=e57] [cursor=pointer]:
+    - text: SKIP
+    - img [ref=e58]
+  - generic [ref=e62]:
+    - generic [ref=e66]:
+      - img [ref=e68]
+      - generic [ref=e73]: ARCHIVE REALITY
+      - heading "实体归档" [level=2] [ref=e74]
+      - paragraph [ref=e75]: 将现实世界的废旧物品扫描上传，转化为永久保存的数字资产。每一个裂痕都是故事。
+    - generic [ref=e79]:
+      - img [ref=e81]
+      - generic [ref=e85]: DIGITAL TWIN
+      - heading "数字分身" [level=2] [ref=e86]
+      - paragraph [ref=e87]: AI 视觉引擎自动提取物品特征，生成独一无二的矢量贴纸与短剧脚本。
+    - generic [ref=e91]:
+      - img [ref=e93]
+      - generic [ref=e100]: REMUSE IDEA
+      - heading "再生协议" [level=2] [ref=e101]
+      - paragraph [ref=e102]: 获取针对性的改造方案，从简单装饰到复杂重构，让物品在现实中焕发新生。
+    - generic [ref=e106]:
+      - img [ref=e108]
+      - generic [ref=e110]: COLLECTION
+      - heading "馆长图鉴" [level=2] [ref=e111]
+      - paragraph [ref=e112]: 点亮你的收藏图鉴，赢取环保积分与成就徽章，成为再生博物馆的资深馆长。
+  - button "NEXT" [ref=e120] [cursor=pointer]:
+    - text: NEXT
+    - img [ref=e121]

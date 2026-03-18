@@ -1,0 +1,19 @@
+<svg width="400" height="560" viewBox="0 0 400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="electronic-bg" x1="48" y1="30" x2="356" y2="516" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CA6FF"/>
+      <stop offset="0.58" stop-color="#5466C4"/>
+      <stop offset="1" stop-color="#202A73"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="560" rx="18" fill="url(#electronic-bg)"/>
+  <circle cx="328" cy="116" r="88" fill="white" fill-opacity=".12"/>
+  <circle cx="74" cy="414" r="118" fill="white" fill-opacity=".09"/>
+  <path d="M0 360H400V560H0V360Z" fill="#364497" fill-opacity=".34"/>
+  <path d="M0 486H400V560H0V486Z" fill="#253073" fill-opacity=".48"/>
+  <text x="32" y="62" fill="white" fill-opacity=".92" font-size="24" font-family="Arial, sans-serif" letter-spacing="7">RE-MUSEUM</text>
+  <text x="32" y="138" fill="white" font-size="68" font-family="Arial, sans-serif" font-weight="700">Electronic</text>
+  <text x="32" y="188" fill="white" fill-opacity=".9" font-size="28" font-family="Arial, sans-serif">电子与再生</text>
+  <rect x="32" y="270" width="122" height="6" rx="3" fill="white" fill-opacity=".86"/>
+  <rect x="32" y="300" width="168" height="6" rx="3" fill="white" fill-opacity=".42"/>
+</svg>

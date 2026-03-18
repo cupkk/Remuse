@@ -2,12 +2,15 @@
 // Re-Museum 认证模块 — JWT + bcrypt
 // ============================================================
 
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
 const ACCESS_TOKEN_EXPIRES = '15m';
 const REFRESH_TOKEN_EXPIRES = '7d';
 export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+export const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const REFRESH_COOKIE_NAME = 'remuse_refresh';
 
 function getJwtSecret(): string {
@@ -16,6 +19,10 @@ function getJwtSecret(): string {
     throw new Error('JWT_SECRET is required and must be at least 16 characters long');
   }
   return secret;
+}
+
+export function normalizeEmailAddress(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 interface TokenPayload {
@@ -53,6 +60,22 @@ export function verifyToken(token: string): TokenPayload {
 
 export function getRefreshTokenExpiresAt(): string {
   return new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString();
+}
+
+export function getEmailVerificationExpiresAt(): string {
+  return new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS).toISOString();
+}
+
+export function getPasswordResetExpiresAt(): string {
+  return new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS).toISOString();
+}
+
+export function createOpaqueToken(size = 32): string {
+  return crypto.randomBytes(size).toString('base64url');
+}
+
+export function hashOpaqueToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 /**

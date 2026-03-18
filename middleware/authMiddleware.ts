@@ -80,7 +80,7 @@ function resolveAuthenticatedRequest(
     }
   }
 
-  return { ok: false, errorBody: { error: '未提供认证令牌' } };
+  return { ok: false, errorBody: { error: 'Authentication token is required.' } };
 }
 
 function getBearerToken(authorizationHeader: string | undefined): string | null {
@@ -97,22 +97,22 @@ function validateAccessToken(token: string) {
     const payload = verifyToken(token);
 
     if (payload.type !== 'access') {
-      return { ok: false as const, errorBody: { error: '令牌类型无效' } };
+      return { ok: false as const, errorBody: { error: 'Invalid token type.' } };
     }
 
     const user = getUserById(payload.sub);
     if (!user) {
-      return { ok: false as const, errorBody: { error: '用户不存在' } };
+      return { ok: false as const, errorBody: { error: 'User not found.' } };
     }
 
     return { ok: true as const, strategy: 'access-token' as const, user };
   } catch (err: unknown) {
     const error = err as { name?: string };
     if (error.name === 'TokenExpiredError') {
-      return { ok: false as const, errorBody: { error: 'token_expired', message: '令牌已过期' } };
+      return { ok: false as const, errorBody: { error: 'token_expired', message: 'Authentication token expired.' } };
     }
 
-    return { ok: false as const, errorBody: { error: '令牌验证失败' } };
+    return { ok: false as const, errorBody: { error: 'Token verification failed.' } };
   }
 }
 
@@ -135,7 +135,7 @@ function validateRefreshCookie(token: string) {
 
     const user = getUserById(payload.sub);
     if (!user) {
-      return { ok: false as const, errorBody: { error: '用户不存在' } };
+      return { ok: false as const, errorBody: { error: 'User not found.' } };
     }
 
     return { ok: true as const, strategy: 'refresh-cookie' as const, user };

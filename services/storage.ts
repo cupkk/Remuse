@@ -12,7 +12,19 @@ const MAX_IMAGE_DIMENSION = parseIntegerEnv(process.env.MAX_IMAGE_DIMENSION, 409
 const MAX_INPUT_PIXELS = parseIntegerEnv(process.env.MAX_INPUT_PIXELS, 4096 * 4096);
 const MAX_BASE64_LENGTH = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 4096;
 
-const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  'audio/webm',
+  'audio/webm;codecs=opus',
+  'audio/ogg',
+  'audio/ogg;codecs=opus',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/wave',
+  'audio/x-wav',
+]);
 
 export class ManagedUploadError extends Error {
   statusCode: number;
@@ -34,7 +46,7 @@ interface ManagedUploadInfo {
   userId: string;
 }
 
-interface ParsedIncomingImage {
+interface ParsedIncomingData {
   buffer: Buffer;
   mimeType: string | null;
 }
@@ -45,7 +57,7 @@ export async function saveBase64Image(
   userId: string,
   entityId: string,
 ): Promise<string> {
-  const parsed = parseIncomingImage(base64Data);
+  const parsed = parseIncomingData(base64Data);
   const normalized = await normalizeImage(parsed.buffer, parsed.mimeType);
 
   const userDir = path.join(UPLOADS_DIR, type, userId);
@@ -54,6 +66,29 @@ export async function saveBase64Image(
   const fileName = `${entityId}.webp`;
   const filePath = path.join(userDir, fileName);
   await fsPromises.writeFile(filePath, normalized.buffer);
+
+  return `/uploads/${type}/${userId}/${fileName}`;
+}
+
+export async function saveBase64Audio(
+  base64Data: string,
+  type: string,
+  userId: string,
+  entityId: string,
+): Promise<string> {
+  const parsed = parseIncomingData(base64Data);
+  const mimeType = normalizeAudioMimeType(parsed.mimeType);
+  if (!mimeType || !ALLOWED_AUDIO_MIME_TYPES.has(mimeType)) {
+    throw new ManagedUploadError('Unsupported audio format. Allowed: WEBM, OGG, M4A, MP3, WAV');
+  }
+
+  const extension = extensionFromMimeType(mimeType);
+  const userDir = path.join(UPLOADS_DIR, type, userId);
+  await fsPromises.mkdir(userDir, { recursive: true });
+
+  const fileName = `${entityId}.${extension}`;
+  const filePath = path.join(userDir, fileName);
+  await fsPromises.writeFile(filePath, parsed.buffer);
 
   return `/uploads/${type}/${userId}/${fileName}`;
 }
@@ -118,38 +153,38 @@ export function deleteManagedUpload(uploadPath: string): boolean {
   return true;
 }
 
-function parseIncomingImage(base64Data: string): ParsedIncomingImage {
+function parseIncomingData(base64Data: string): ParsedIncomingData {
   const trimmed = base64Data.trim();
   if (!trimmed) {
-    throw new ManagedUploadError('Image payload is empty');
+    throw new ManagedUploadError('Upload payload is empty');
   }
 
   let mimeType: string | null = null;
   let payload = trimmed;
 
-  const match = trimmed.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  const match = trimmed.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\s]+)$/);
   if (match) {
     mimeType = match[1].toLowerCase();
     payload = match[2];
   }
 
   if (payload.length > MAX_BASE64_LENGTH) {
-    throw new ManagedUploadError(`Image payload is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
+    throw new ManagedUploadError(`Upload payload is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
   }
 
   let buffer: Buffer;
   try {
     buffer = Buffer.from(payload, 'base64');
   } catch {
-    throw new ManagedUploadError('Image payload is not valid base64');
+    throw new ManagedUploadError('Upload payload is not valid base64');
   }
 
   if (!buffer.length) {
-    throw new ManagedUploadError('Image payload is empty after decoding');
+    throw new ManagedUploadError('Upload payload is empty after decoding');
   }
 
   if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new ManagedUploadError(`Decoded image is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
+    throw new ManagedUploadError(`Decoded upload is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
   }
 
   return { buffer, mimeType };
@@ -161,7 +196,7 @@ async function normalizeImage(buffer: Buffer, mimeType: string | null): Promise<
     .metadata();
 
   const detectedMimeType = resolveMimeType(mimeType, metadata.format);
-  if (!detectedMimeType || !ALLOWED_MIME_TYPES.has(detectedMimeType)) {
+  if (!detectedMimeType || !ALLOWED_IMAGE_MIME_TYPES.has(detectedMimeType)) {
     throw new ManagedUploadError('Unsupported image format. Allowed: JPEG, PNG, WEBP');
   }
 
@@ -193,7 +228,7 @@ async function normalizeImage(buffer: Buffer, mimeType: string | null): Promise<
 }
 
 function resolveMimeType(declaredMimeType: string | null, format: string | undefined): string | null {
-  if (declaredMimeType && ALLOWED_MIME_TYPES.has(declaredMimeType)) {
+  if (declaredMimeType && ALLOWED_IMAGE_MIME_TYPES.has(declaredMimeType)) {
     return declaredMimeType;
   }
 
@@ -206,6 +241,39 @@ function resolveMimeType(declaredMimeType: string | null, format: string | undef
       return 'image/webp';
     default:
       return null;
+  }
+}
+
+function normalizeAudioMimeType(mimeType: string | null) {
+  if (!mimeType) {
+    return null;
+  }
+
+  const normalized = mimeType.toLowerCase();
+  if (normalized.startsWith('audio/webm')) return 'audio/webm';
+  if (normalized.startsWith('audio/ogg')) return 'audio/ogg';
+  if (normalized === 'audio/x-m4a') return 'audio/x-m4a';
+  if (normalized === 'audio/mp4') return 'audio/mp4';
+  if (normalized === 'audio/mpeg') return 'audio/mpeg';
+  if (normalized === 'audio/wav' || normalized === 'audio/wave' || normalized === 'audio/x-wav') return 'audio/wav';
+  return normalized;
+}
+
+function extensionFromMimeType(mimeType: string) {
+  switch (mimeType) {
+    case 'audio/webm':
+      return 'webm';
+    case 'audio/ogg':
+      return 'ogg';
+    case 'audio/mp4':
+    case 'audio/x-m4a':
+      return 'm4a';
+    case 'audio/mpeg':
+      return 'mp3';
+    case 'audio/wav':
+      return 'wav';
+    default:
+      return 'bin';
   }
 }
 

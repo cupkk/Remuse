@@ -1,0 +1,19 @@
+<svg width="400" height="560" viewBox="0 0 400 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="packaging-bg" x1="42" y1="20" x2="360" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEEB66"/>
+      <stop offset="0.58" stop-color="#5E8D2E"/>
+      <stop offset="1" stop-color="#153A21"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="560" rx="18" fill="url(#packaging-bg)"/>
+  <circle cx="332" cy="112" r="92" fill="white" fill-opacity=".11"/>
+  <circle cx="52" cy="420" r="116" fill="white" fill-opacity=".09"/>
+  <path d="M0 360H400V560H0V360Z" fill="#29502A" fill-opacity=".32"/>
+  <path d="M0 486H400V560H0V486Z" fill="#1C341F" fill-opacity=".52"/>
+  <text x="32" y="62" fill="white" fill-opacity=".92" font-size="24" font-family="Arial, sans-serif" letter-spacing="7">RE-MUSEUM</text>
+  <text x="32" y="138" fill="white" font-size="68" font-family="Arial, sans-serif" font-weight="700">Packaging</text>
+  <text x="32" y="188" fill="white" fill-opacity=".9" font-size="28" font-family="Arial, sans-serif">材料与结构</text>
+  <rect x="32" y="270" width="116" height="6" rx="3" fill="white" fill-opacity=".86"/>
+  <rect x="32" y="300" width="164" height="6" rx="3" fill="white" fill-opacity=".44"/>
+</svg>

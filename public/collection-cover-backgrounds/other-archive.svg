@@ -1,0 +1,25 @@
+<svg width="900" height="1260" viewBox="0 0 900 1260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="100" y1="66" x2="798" y2="1188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171D23"/>
+      <stop offset="1" stop-color="#0D1217"/>
+    </linearGradient>
+    <pattern id="paperGrid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" stroke="#D8E3EB" stroke-opacity=".08"/>
+    </pattern>
+  </defs>
+
+  <rect width="900" height="1260" fill="#0B1014"/>
+  <rect width="900" height="1260" fill="url(#bg)"/>
+  <rect width="900" height="1260" fill="url(#paperGrid)" opacity=".4"/>
+
+  <rect x="108" y="104" width="684" height="1052" rx="48" fill="rgba(240,247,251,.06)" stroke="#F2F7FB" stroke-opacity=".28" stroke-width="4"/>
+  <rect x="130" y="126" width="640" height="1008" rx="38" fill="rgba(11,15,19,.78)" stroke="#DCE7EF" stroke-opacity=".16"/>
+  <rect x="146" y="144" width="608" height="814" rx="30" fill="rgba(255,255,255,.03)" stroke="#F0F7FB" stroke-opacity=".14"/>
+  <rect x="146" y="978" width="608" height="120" rx="28" fill="rgba(12,16,20,.64)"/>
+
+  <path d="M178 188H722" stroke="#D8E3EB" stroke-opacity=".12"/>
+  <path d="M178 930H722" stroke="#D8E3EB" stroke-opacity=".12"/>
+  <path d="M190 1032H724" stroke="#D8E3EB" stroke-opacity=".12"/>
+  <path d="M196 1060H428" stroke="#C0D7E6" stroke-opacity=".28" stroke-width="10" stroke-linecap="round"/>
+</svg>

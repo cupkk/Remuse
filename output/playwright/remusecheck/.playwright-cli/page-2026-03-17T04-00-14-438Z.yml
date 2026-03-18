@@ -1,0 +1,83 @@
+- generic [ref=e124]:
+  - navigation "主导航" [ref=e125]:
+    - generic [ref=e126]:
+      - heading "REMUSE" [level=1] [ref=e127]
+      - paragraph [ref=e128]: V 1.0.0 // ONLINE
+    - tablist "页面导航" [ref=e129]:
+      - tab "扫描仪" [ref=e130] [cursor=pointer]:
+        - img [ref=e132]
+        - generic [ref=e137]: 扫描仪
+      - tab "藏品馆" [active] [selected] [ref=e138] [cursor=pointer]:
+        - img [ref=e140]
+        - generic [ref=e143]: 藏品馆
+      - tab "贴纸库" [ref=e144] [cursor=pointer]:
+        - img [ref=e146]
+        - generic [ref=e150]: 贴纸库
+      - tab "灵感广场" [ref=e151] [cursor=pointer]:
+        - img [ref=e153]
+        - generic [ref=e156]: 灵感广场
+      - tab "馆长办公室" [ref=e157] [cursor=pointer]:
+        - img [ref=e159]
+        - generic [ref=e165]: 馆长办公室
+      - tab "记忆对话" [ref=e166] [cursor=pointer]:
+        - img [ref=e168]
+        - generic [ref=e172]: 记忆对话
+    - generic [ref=e174]:
+      - generic [ref=e175]: 环保积分
+      - generic [ref=e177]: "0"
+  - main "内容区域" [ref=e178]:
+    - generic [ref=e219]:
+      - generic [ref=e221]:
+        - generic [ref=e222]:
+          - generic [ref=e223]:
+            - img [ref=e224]
+            - text: Collection Grid
+          - generic [ref=e227]:
+            - heading "藏品馆" [level=1] [ref=e228]
+            - paragraph [ref=e229]: 进入页面即展示全部藏品，通过顶部标签快速筛选纸袋、瓶瓶罐罐、票根或其他类别， 不再需要先进入具体展馆。
+          - generic [ref=e230]:
+            - generic [ref=e231]: Current View
+            - generic [ref=e232]: 默认展示全部藏品
+        - generic [ref=e233]:
+          - generic [ref=e234]:
+            - paragraph [ref=e235]: 全部藏品
+            - paragraph [ref=e236]: "0"
+          - generic [ref=e237]:
+            - paragraph [ref=e238]: 已完成再生
+            - paragraph [ref=e239]: "0"
+          - generic [ref=e240]:
+            - paragraph [ref=e241]: 当前结果
+            - paragraph [ref=e242]: "0"
+          - generic [ref=e243]:
+            - paragraph [ref=e244]: 分类标签
+            - paragraph [ref=e245]: "0"
+      - generic [ref=e246]:
+        - generic [ref=e248]:
+          - heading "分类筛选" [level=2] [ref=e249]
+          - paragraph [ref=e250]: 选择一个标签后，只显示该类别的藏品；不选时默认查看全部。
+        - generic [ref=e252]:
+          - button "全部 0" [ref=e253] [cursor=pointer]:
+            - generic [ref=e254]: 全部
+            - generic [ref=e255]: "0"
+          - button "奶茶周边 0" [ref=e256] [cursor=pointer]:
+            - generic [ref=e257]: 奶茶周边
+            - generic [ref=e258]: "0"
+          - button "瓶瓶罐罐 0" [ref=e259] [cursor=pointer]:
+            - generic [ref=e260]: 瓶瓶罐罐
+            - generic [ref=e261]: "0"
+          - button "手办玩偶 0" [ref=e262] [cursor=pointer]:
+            - generic [ref=e263]: 手办玩偶
+            - generic [ref=e264]: "0"
+          - button "徽章冰箱贴 0" [ref=e265] [cursor=pointer]:
+            - generic [ref=e266]: 徽章冰箱贴
+            - generic [ref=e267]: "0"
+          - button "纪念票根 0" [ref=e268] [cursor=pointer]:
+            - generic [ref=e269]: 纪念票根
+            - generic [ref=e270]: "0"
+          - button "其他 0" [ref=e271] [cursor=pointer]:
+            - generic [ref=e272]: 其他
+            - generic [ref=e273]: "0"
+      - generic [ref=e274]:
+        - img [ref=e276]
+        - heading "还没有归档藏品" [level=2] [ref=e279]
+        - paragraph [ref=e280]: 先去扫描页归档第一件物品，新的藏品会直接出现在这里。

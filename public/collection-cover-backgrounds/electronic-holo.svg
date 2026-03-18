@@ -1,0 +1,32 @@
+<svg width="900" height="1260" viewBox="0 0 900 1260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="92" y1="48" x2="804" y2="1210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#061017"/>
+      <stop offset=".48" stop-color="#0E1C28"/>
+      <stop offset="1" stop-color="#0A1319"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="110" y1="110" x2="786" y2="1132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C3FF72"/>
+      <stop offset=".52" stop-color="#7EE8FF"/>
+      <stop offset="1" stop-color="#D5FFAE"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(252 186) rotate(32) scale(340 300)">
+      <stop stop-color="#A6FF5D" stop-opacity=".34"/>
+      <stop offset="1" stop-color="#A6FF5D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="900" height="1260" fill="#04090D"/>
+  <rect width="900" height="1260" fill="url(#bg)"/>
+  <rect width="900" height="1260" fill="url(#glowA)"/>
+
+  <rect x="104" y="104" width="692" height="1060" rx="60" fill="rgba(194,255,121,.06)" stroke="url(#frame)" stroke-width="6"/>
+  <rect x="126" y="126" width="648" height="1016" rx="48" fill="rgba(7,12,16,.78)" stroke="#E5FFD2" stroke-opacity=".24"/>
+  <rect x="140" y="142" width="620" height="816" rx="34" fill="rgba(255,255,255,.03)" stroke="#7EE8FF" stroke-opacity=".18"/>
+  <rect x="140" y="974" width="620" height="132" rx="34" fill="rgba(5,10,14,.74)" stroke="#9EE85B" stroke-opacity=".16"/>
+
+  <path d="M178 214L248 214L298 164" stroke="#7EE8FF" stroke-opacity=".24" stroke-width="3"/>
+  <path d="M720 220L650 220L604 164" stroke="#9EE85B" stroke-opacity=".24" stroke-width="3"/>
+  <path d="M168 1022H732" stroke="#DDFED3" stroke-opacity=".14"/>
+  <path d="M196 1052H428" stroke="#A6FF5D" stroke-opacity=".36" stroke-width="10" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,73 @@
+{
+  "name": "remuse:-digital-regeneration-museum",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n client,server -c magenta,cyan \"npm:dev:client\" \"npm:dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch server.ts",
+    "server": "node build/server/server.js",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.build.json",
+    "build": "npm run build:client && npm run build:server",
+    "preview": "vite preview",
+    "test:api": "node --import tsx tests/api/commercial-readiness.ts",
+    "test:perler": "node --import tsx tests/perler/perler-parity.ts",
+    "test:e2e": "playwright test",
+    "test": "npm run test:api && npm run test:perler",
+    "smoke:production": "node --import tsx scripts/production-online-smoke.ts",
+    "backup:data": "node scripts/backup-data.mjs",
+    "backup:job": "node scripts/run-backup-job.mjs",
+    "restore:data": "node scripts/restore-backup.mjs",
+    "validate:env": "node --import tsx scripts/validate-env.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.44.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "compression": "^1.7.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.0.1",
+    "express-rate-limit": "^8.3.0",
+    "http-proxy-middleware": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.563.0",
+    "multer": "^2.1.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.0",
+    "sharp": "^0.34.5",
+    "tsx": "^4.21.0",
+    "undici": "^7.24.0",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  },
+  "overrides": {
+    "glob": "^10.5.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.59.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@tailwindcss/line-clamp": "^0.4.4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.19.15",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

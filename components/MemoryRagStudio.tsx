@@ -1,8 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CollectedItem, MemoryAssistantMatch, MemoryAssistantMessage, MemoryConversationSession, User } from '../types';
-import { askMemoryAssistant } from '../services/memoryService';
-import { isSpeechRecognitionSupported, SpeechCaptureSession, startSpeechCapture } from '../services/speechRecognition';
-import { ArrowLeft, History, Loader2, MessageCircle, Mic, Plus, Search, Send, Sparkles, Square, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  History,
+  Loader2,
+  MessageCircle,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Trash2,
+  PencilLine,
+  Check,
+  X,
+} from 'lucide-react';
+import { CollectedItem, MemoryConversationSession, MemoryThreadSummary, User } from '../types';
+import {
+  createMemoryThread,
+  deleteMemoryThread,
+  getMemoryThread,
+  listMemoryThreads,
+  queryMemoryThread,
+  renameMemoryThread,
+} from '../services/memoryService';
+import ConfirmDialog from './ConfirmDialog';
 
 interface MemoryRagStudioProps {
   items: CollectedItem[];
@@ -10,283 +30,206 @@ interface MemoryRagStudioProps {
   onBack?: () => void;
 }
 
-const DEFAULT_MEMORY_PROMPTS = [
-  '帮我找和学生时代有关的藏品',
-  '有没有哪件物品让我想到家人',
-  '我收藏过哪些最有纪念意义的东西',
-];
-
-const INITIAL_RETRIEVAL_SUMMARY = '先发起一次检索，我会从你录入过故事的藏品里帮你召回相关记忆。';
-const GREETING = '我是你的记忆馆长。你可以和我聊旧物、人物、时间、地点或情绪，我会基于你自己的藏品故事帮你回忆过去。';
-
-function createMessage(role: MemoryAssistantMessage['role'], content: string): MemoryAssistantMessage {
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    role,
-    content,
-  };
-}
-
-function createSession(seedTitle = '新的回忆对话'): MemoryConversationSession {
-  const now = new Date().toISOString();
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    title: seedTitle,
-    createdAt: now,
-    updatedAt: now,
-    messages: [createMessage('assistant', GREETING)],
-    matches: [],
-    suggestions: DEFAULT_MEMORY_PROMPTS,
-    retrievalSummary: INITIAL_RETRIEVAL_SUMMARY,
-    sourceCount: 0,
-    usedFallback: false,
-  };
-}
-
-function sortSessions(sessions: MemoryConversationSession[]) {
-  return [...sessions].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-}
-
-function summarizeSession(session: MemoryConversationSession) {
-  const lastUserMessage = [...session.messages].reverse().find((message) => message.role === 'user');
-  return lastUserMessage?.content || session.messages[session.messages.length - 1]?.content || '还没有开始对话';
-}
-
-function getStorageKey(user?: User | null) {
-  return `remuse:memory-rag:${user?.id || 'guest'}`;
-}
-
 const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }) => {
-  const storyItems = useMemo(
-    () => items.filter((item) => item.story?.trim()),
-    [items],
-  );
-
-  const recentMemoryItems = useMemo<MemoryAssistantMatch[]>(
-    () =>
-      storyItems.slice(0, 6).map((item, index) => ({
-        itemId: item.id,
-        itemName: item.name,
-        imageUrl: item.imageUrl,
-        hallName: item.category || item.hallId,
-        material: item.material || '未记录',
-        dateCollected: item.dateCollected,
-        storySnippet: item.story?.trim() || '',
-        tags: item.tags || [],
-        score: 100 - index,
-      })),
-    [storyItems],
-  );
-
-  const storageKey = useMemo(() => getStorageKey(user), [user]);
-  const [sessions, setSessions] = useState<MemoryConversationSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState('');
+  const [threads, setThreads] = useState<MemoryThreadSummary[]>([]);
+  const [activeThread, setActiveThread] = useState<MemoryConversationSession | null>(null);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [mobilePanel, setMobilePanel] = useState<'chat' | 'history' | 'memories'>('chat');
-  const [isAsking, setIsAsking] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechCaptureSession | null>(null);
-  const draftBaseRef = useRef('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState<string | null>(null);
+  const [isDeletingThread, setIsDeletingThread] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  const storyItemCount = useMemo(() => items.filter((item) => item.story?.trim()).length, [items]);
+
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) {
-        const initialSession = createSession();
-        setSessions([initialSession]);
-        setActiveSessionId(initialSession.id);
-        return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const loadedThreads = await listMemoryThreads();
+        if (cancelled) {
+          return;
+        }
+
+        if (loadedThreads.length === 0) {
+          const created = await createMemoryThread();
+          if (cancelled) {
+            return;
+          }
+          setThreads([{ id: created.id, title: created.title, createdAt: created.createdAt, updatedAt: created.updatedAt, lastMessage: created.messages[created.messages.length - 1]?.content || '', sourceCount: created.sourceCount, usedFallback: created.usedFallback }]);
+          setActiveThread(created);
+          return;
+        }
+
+        setThreads(loadedThreads);
+        const firstThread = await getMemoryThread(loadedThreads[0].id);
+        if (!cancelled) {
+          setActiveThread(firstThread);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : '加载记忆线程失败。');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
+    })();
 
-      const parsed = JSON.parse(raw) as MemoryConversationSession[];
-      const normalized = Array.isArray(parsed) && parsed.length > 0 ? sortSessions(parsed) : [createSession()];
-      setSessions(normalized);
-      setActiveSessionId(normalized[0].id);
-    } catch {
-      const initialSession = createSession();
-      setSessions([initialSession]);
-      setActiveSessionId(initialSession.id);
-    }
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (!sessions.length) {
-      return;
-    }
-    localStorage.setItem(storageKey, JSON.stringify(sessions));
-  }, [sessions, storageKey]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [activeSessionId, sessions, isAsking]);
-
-  useEffect(() => {
     return () => {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
+      cancelled = true;
     };
   }, []);
 
-  const activeSession =
-    sessions.find((session) => session.id === activeSessionId) ||
-    sessions[0] ||
-    null;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [activeThread, isSubmitting]);
 
-  function updateSession(sessionId: string, updater: (session: MemoryConversationSession) => MemoryConversationSession) {
-    setSessions((prev) =>
-      sortSessions(
-        prev.map((session) => (session.id === sessionId ? updater(session) : session)),
-      ),
+  async function refreshThread(threadId: string) {
+    const [nextThreads, nextThread] = await Promise.all([
+      listMemoryThreads(),
+      getMemoryThread(threadId),
+    ]);
+    setThreads(nextThreads);
+    setActiveThread(nextThread);
+  }
+
+  function requestDeleteThread(threadId: string) {
+    setPendingDeleteThreadId(threadId);
+  }
+
+  async function confirmDeleteThread() {
+    if (!pendingDeleteThreadId) {
+      return;
+    }
+
+    setError(null);
+    setIsDeletingThread(true);
+    try {
+      const result = await deleteMemoryThread(pendingDeleteThreadId);
+      setThreads(result.threads);
+      setActiveThread(result.activeThread);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : '删除记忆会话失败。');
+    } finally {
+      setIsDeletingThread(false);
+      setPendingDeleteThreadId(null);
+    }
+  }
+
+  async function handleCreateThread() {
+    setError(null);
+    const thread = await createMemoryThread();
+    setThreads((prev) => [
+      {
+        id: thread.id,
+        title: thread.title,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        lastMessage: thread.messages[thread.messages.length - 1]?.content || '',
+        sourceCount: thread.sourceCount,
+        usedFallback: thread.usedFallback,
+      },
+      ...prev,
+    ]);
+    setActiveThread(thread);
+    setQuery('');
+  }
+
+  async function handleSelectThread(threadId: string) {
+    setError(null);
+    try {
+      const thread = await getMemoryThread(threadId);
+      setActiveThread(thread);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '加载会话失败。');
+    }
+  }
+
+  async function handleRenameThread() {
+    if (!renamingThreadId || !renameDraft.trim()) {
+      return;
+    }
+
+    try {
+      const updatedThread = await renameMemoryThread(renamingThreadId, renameDraft.trim());
+      setRenamingThreadId(null);
+      setRenameDraft('');
+      setThreads((prev) => prev.map((thread) => (
+        thread.id === updatedThread.id ? { ...thread, title: updatedThread.title, updatedAt: updatedThread.updatedAt } : thread
+      )));
+      if (activeThread?.id === updatedThread.id) {
+        setActiveThread(updatedThread);
+      }
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : '重命名失败。');
+    }
+  }
+
+  async function handleAsk() {
+    if (!activeThread || query.trim().length < 2 || isSubmitting) {
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+    const prompt = query.trim();
+    setQuery('');
+
+    try {
+      const updatedThread = await queryMemoryThread(activeThread.id, prompt);
+      setActiveThread(updatedThread);
+      setThreads(await listMemoryThreads());
+    } catch (queryError) {
+      setError(queryError instanceof Error ? queryError.message : '记忆查询失败。');
+      setQuery(prompt);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-remuse-dark">
+        <div className="inline-flex items-center gap-3 rounded-full border border-remuse-border bg-remuse-panel px-4 py-3 text-sm text-neutral-300">
+          <Loader2 size={16} className="animate-spin text-remuse-accent" />
+          正在同步记忆线程...
+        </div>
+      </div>
     );
   }
 
-  function handleCreateConversation() {
-    const next = createSession();
-    setSessions((prev) => sortSessions([next, ...prev]));
-    setActiveSessionId(next.id);
-    setQuery('');
-    setError(null);
-    setMobilePanel('chat');
-  }
-
-  function handleDeleteConversation(sessionId: string) {
-    if (!window.confirm('确认删除这段记忆对话吗？已保存的聊天记录会从当前浏览器移除。')) {
-      return;
-    }
-
-    setSessions((prev) => {
-      const remaining = prev.filter((session) => session.id !== sessionId);
-      if (remaining.length > 0) {
-        const nextSessions = sortSessions(remaining);
-        const nextActive = nextSessions[0];
-        setActiveSessionId(nextActive.id);
-        return nextSessions;
-      }
-
-      const fresh = createSession();
-      setActiveSessionId(fresh.id);
-      return [fresh];
-    });
-  }
-
-  async function handleAsk(seedQuery?: string) {
-    if (!activeSession) {
-      return;
-    }
-
-    const prompt = (seedQuery ?? query).trim();
-    if (prompt.length < 2 || isAsking || storyItems.length === 0) {
-      return;
-    }
-
-    const userMessage = createMessage('user', prompt);
-    const nextHistory = [...activeSession.messages, userMessage];
-    const now = new Date().toISOString();
-    const nextTitle =
-      activeSession.messages.length <= 1 && activeSession.title === '新的回忆对话'
-        ? prompt.slice(0, 18)
-        : activeSession.title;
-
-    setError(null);
-    setQuery('');
-    updateSession(activeSession.id, (session) => ({
-      ...session,
-      title: nextTitle,
-      messages: nextHistory,
-      updatedAt: now,
-    }));
-    setIsAsking(true);
-
-    try {
-      const response = await askMemoryAssistant(prompt, nextHistory);
-      const assistantMessage = createMessage('assistant', response.answer);
-      updateSession(activeSession.id, (session) => ({
-        ...session,
-        title: nextTitle,
-        messages: [...session.messages, assistantMessage],
-        matches: response.matches,
-        suggestions: response.suggestions.length > 0 ? response.suggestions : session.suggestions,
-        retrievalSummary: response.retrievalSummary,
-        sourceCount: response.sourceCount,
-        usedFallback: response.usedFallback,
-        updatedAt: new Date().toISOString(),
-      }));
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : '记忆检索失败，请稍后再试。';
-      setError(message);
-      updateSession(activeSession.id, (session) => ({
-        ...session,
-        messages: [
-          ...session.messages,
-          createMessage('assistant', '这次我没能顺利调出你的记忆档案。你可以换个更具体的问法，或者稍后再试一次。'),
-        ],
-        retrievalSummary: '这次没有成功完成检索，请稍后重试或把问题问得更具体一些。',
-        updatedAt: new Date().toISOString(),
-      }));
-    } finally {
-      setIsAsking(false);
-    }
-  }
-
-  function toggleVoiceInput() {
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-      setIsRecording(false);
-      return;
-    }
-
-    if (!isSpeechRecognitionSupported()) {
-      setError('当前浏览器不支持语音输入，建议使用 Chrome 或 Edge。');
-      return;
-    }
-
-    draftBaseRef.current = query.trim() ? `${query.trim()} ` : '';
-    setError(null);
-    setIsRecording(true);
-
-    try {
-      recognitionRef.current = startSpeechCapture({
-        onTranscript: (transcript) => {
-          setQuery(`${draftBaseRef.current}${transcript}`.trim());
-        },
-        onError: (message) => {
-          setError(message);
-          setIsRecording(false);
-          recognitionRef.current = null;
-        },
-        onEnd: () => {
-          setIsRecording(false);
-          recognitionRef.current = null;
-        },
-      });
-    } catch (voiceError) {
-      setError(voiceError instanceof Error ? voiceError.message : '语音输入启动失败');
-      setIsRecording(false);
-      recognitionRef.current = null;
-    }
-  }
-
-  const visibleMatches = activeSession?.matches.length ? activeSession.matches : recentMemoryItems;
-  const suggestionItems = activeSession?.suggestions.length ? activeSession.suggestions : DEFAULT_MEMORY_PROMPTS;
-
   return (
-    <div className="h-full overflow-hidden bg-remuse-dark">
-      <div className="mx-auto flex h-full w-full max-w-[1800px] flex-col gap-6 overflow-hidden p-4 md:p-6">
+    <div className="h-full overflow-y-auto bg-remuse-dark xl:overflow-hidden">
+      <ConfirmDialog
+        open={!!pendingDeleteThreadId}
+        title="删除记忆会话"
+        message="确认删除这个记忆会话吗？删除后无法恢复。"
+        confirmLabel="删除"
+        cancelLabel="取消"
+        busy={isDeletingThread}
+        onConfirm={() => void confirmDeleteThread()}
+        onCancel={() => {
+          if (!isDeletingThread) {
+            setPendingDeleteThreadId(null);
+          }
+        }}
+      />
+      <div className="mx-auto flex min-h-full w-full max-w-[1800px] flex-col gap-6 p-4 md:p-6 xl:h-full xl:overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-remuse-border pb-4">
           <div className="min-w-0">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-remuse-accent/30 bg-remuse-accent/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-accent">
               <Sparkles size={14} />
-              Memory Rag Studio
+              Memory RAG Studio
             </div>
-            <h2 className="text-2xl font-display font-bold text-white md:text-3xl">和你的旧物慢慢聊过去</h2>
-            <p className="mt-2 hidden max-w-3xl text-sm leading-7 text-neutral-400 md:block">
-              这里是独立的记忆对话界面。你可以新建回忆会话、保留历史聊天，并让 AI 基于你自己录入的旧物故事继续陪你回想过去。
-            </p>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-400 md:hidden">
-              手机端只保留一个主面板，把历史会话和召回结果改成切换查看，避免信息过挤。
+            <h2 className="text-2xl font-display font-bold text-white md:text-3xl">记忆工作室</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-neutral-400">
+              记忆对话现在按服务端线程保存，支持跨设备同步、重命名和删除。当前可检索的故事藏品数量为 {storyItemCount} 件。
             </p>
           </div>
 
@@ -298,161 +241,153 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-neutral-700 bg-black/20 px-4 py-2 text-sm text-neutral-300 transition-colors hover:border-remuse-secondary hover:text-white"
               >
                 <ArrowLeft size={16} />
-                返回馆长办公室
+                返回
               </button>
             )}
             <button
               type="button"
-              onClick={handleCreateConversation}
+              onClick={handleCreateThread}
               className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-remuse-accent px-4 py-2 text-sm font-display font-bold text-black transition-colors hover:bg-white"
+              data-testid="memory-create-thread"
             >
               <Plus size={16} />
-              新增对话
+              新建会话
             </button>
           </div>
         </div>
 
-        <div className="grid gap-3 xl:hidden">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-remuse-secondary/20 bg-remuse-panel px-3 py-3">
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-500">会话</p>
-              <p className="mt-2 text-xl font-display font-bold text-remuse-secondary">{sessions.length}</p>
-            </div>
-            <div className="rounded-2xl border border-remuse-accent/20 bg-remuse-panel px-3 py-3">
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-500">故事源</p>
-              <p className="mt-2 text-xl font-display font-bold text-remuse-accent">{storyItems.length}</p>
-            </div>
-            <div className="rounded-2xl border border-neutral-800 bg-remuse-panel px-3 py-3">
-              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-500">召回</p>
-              <p className="mt-2 text-xl font-display font-bold text-white">{visibleMatches.length}</p>
-            </div>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => setMobilePanel('chat')}
-              className={`inline-flex min-h-[42px] shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-                mobilePanel === 'chat'
-                  ? 'border-remuse-accent bg-remuse-accent text-black'
-                  : 'border-neutral-800 bg-remuse-panel text-neutral-300'
-              }`}
-            >
-              <MessageCircle size={15} />
-              当前对话
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobilePanel('history')}
-              className={`inline-flex min-h-[42px] shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-                mobilePanel === 'history'
-                  ? 'border-remuse-accent bg-remuse-accent text-black'
-                  : 'border-neutral-800 bg-remuse-panel text-neutral-300'
-              }`}
-            >
-              <History size={15} />
-              历史会话
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobilePanel('memories')}
-              className={`inline-flex min-h-[42px] shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-                mobilePanel === 'memories'
-                  ? 'border-remuse-accent bg-remuse-accent text-black'
-                  : 'border-neutral-800 bg-remuse-panel text-neutral-300'
-              }`}
-            >
-              <Search size={15} />
-              召回结果
-            </button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_380px] xl:gap-6">
-          <aside className={`${mobilePanel === 'history' ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:flex`}>
+        <div className="flex flex-col gap-6 xl:min-h-0 xl:flex-1 xl:grid xl:grid-cols-[minmax(280px,300px)_minmax(0,1fr)_minmax(320px,390px)] xl:gap-6 xl:overflow-hidden">
+          <aside className="flex max-h-[420px] flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:min-h-0 xl:max-h-none">
             <div className="border-b border-remuse-border px-5 py-4">
               <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Conversation Archive</p>
-              <div className="mt-3 flex items-end justify-between gap-3">
+              <div className="mt-3 flex items-center justify-between">
                 <div>
-                  <p className="text-3xl font-display font-bold text-remuse-secondary">{sessions.length}</p>
-                  <p className="text-xs text-neutral-500">段历史对话</p>
+                  <p className="text-3xl font-display font-bold text-remuse-secondary">{threads.length}</p>
+                  <p className="text-xs text-neutral-500">服务端同步会话</p>
                 </div>
-                <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 px-3 py-2 text-right">
+                <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 px-3 py-2">
                   <p className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Story Sources</p>
-                  <p className="text-lg font-display font-bold text-white">{storyItems.length}</p>
+                  <p className="text-lg font-display font-bold text-white">{storyItemCount}</p>
                 </div>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               <div className="space-y-3">
-                {sessions.map((session) => {
-                  const active = session.id === activeSession?.id;
+                {threads.map((thread) => {
+                  const active = thread.id === activeThread?.id;
+                  const isRenaming = renamingThreadId === thread.id;
                   return (
-                    <button
-                      key={session.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveSessionId(session.id);
-                        setError(null);
-                        setMobilePanel('chat');
-                      }}
-                      className={`group w-full rounded-2xl border p-4 text-left transition-colors ${
+                    <div
+                      key={thread.id}
+                      className={`rounded-2xl border p-4 transition-colors ${
                         active
                           ? 'border-remuse-accent/40 bg-remuse-accent/10'
                           : 'border-neutral-800 bg-black/20 hover:border-remuse-secondary/40 hover:bg-black/35'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className={`truncate text-sm font-display font-bold ${active ? 'text-white' : 'text-neutral-200'}`}>
-                            {session.title}
-                          </p>
-                          <p className="mt-2 line-clamp-2 text-xs leading-6 text-neutral-500">{summarizeSession(session)}</p>
+                      {isRenaming ? (
+                        <div className="space-y-3">
+                          <input
+                            value={renameDraft}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-remuse-accent/40"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleRenameThread}
+                              className="inline-flex items-center gap-2 rounded-full bg-remuse-accent px-3 py-2 text-xs font-semibold text-black"
+                            >
+                              <Check size={14} />
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRenamingThreadId(null);
+                                setRenameDraft('');
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-neutral-300"
+                            >
+                              <X size={14} />
+                              取消
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleDeleteConversation(session.id);
-                          }}
-                          className="rounded-full border border-transparent p-2 text-neutral-500 transition-colors hover:border-red-500/30 hover:text-red-300"
-                          aria-label={`删除会话 ${session.title}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-[11px] font-mono text-neutral-500">
-                        <span>{session.messages.length} 条消息</span>
-                        <span>{new Date(session.updatedAt).toLocaleDateString('zh-CN')}</span>
-                      </div>
-                    </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void handleSelectThread(thread.id)}
+                            className="w-full text-left"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className={`truncate text-sm font-display font-bold ${active ? 'text-white' : 'text-neutral-200'}`}>
+                                  {thread.title}
+                                </p>
+                                <p className="mt-2 line-clamp-2 text-xs leading-6 text-neutral-500">{thread.lastMessage || '暂无消息'}</p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setRenamingThreadId(thread.id);
+                                    setRenameDraft(thread.title);
+                                  }}
+                                  className="rounded-full border border-transparent p-2 text-neutral-500 transition-colors hover:border-white/10 hover:text-white"
+                                >
+                                  <PencilLine size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    requestDeleteThread(thread.id);
+                                  }}
+                                  className="rounded-full border border-transparent p-2 text-neutral-500 transition-colors hover:border-red-500/30 hover:text-red-300"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between text-[11px] font-mono text-neutral-500">
+                              <span>{new Date(thread.updatedAt).toLocaleDateString('zh-CN')}</span>
+                              <span>{thread.sourceCount} sources</span>
+                            </div>
+                          </button>
+                        </>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             </div>
           </aside>
 
-          <section className={`${mobilePanel === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:flex`}>
+          <section className="flex min-h-[560px] flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:min-h-0 xl:h-full">
             <div className="border-b border-remuse-border px-5 py-4 md:px-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-remuse-accent">Active Conversation</p>
                   <h3 className="mt-2 truncate text-2xl font-display font-bold text-white">
-                    {activeSession?.title || '新的回忆对话'}
+                    {activeThread?.title || '记忆工作室'}
                   </h3>
                 </div>
                 <div className="rounded-full border border-remuse-border bg-black/20 px-3 py-1.5 text-[11px] font-mono text-neutral-400">
-                  {activeSession?.usedFallback ? 'fallback answer' : 'grounded answer'}
+                  {activeThread?.usedFallback ? 'fallback answer' : 'grounded answer'}
                 </div>
               </div>
             </div>
 
             <div className="flex h-full min-h-0 flex-col p-5 md:p-6">
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                {activeSession?.messages.map((message) => (
+                {activeThread?.messages.map((message) => (
                   <div key={message.id} className={`flex ${message.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
                     <div
+                      data-testid={`memory-message-${message.role}`}
                       className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-7 sm:max-w-[86%] ${
                         message.role === 'assistant'
                           ? 'border border-remuse-border bg-black/25 text-neutral-200'
@@ -464,11 +399,11 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                   </div>
                 ))}
 
-                {isAsking && (
+                {isSubmitting && (
                   <div className="flex justify-start">
                     <div className="inline-flex items-center gap-2 rounded-2xl border border-remuse-border bg-black/25 px-4 py-3 text-sm text-neutral-300">
                       <Loader2 size={16} className="animate-spin text-remuse-accent" />
-                      正在翻阅你的记忆档案...
+                      正在整理你的记忆线索...
                     </div>
                   </div>
                 )}
@@ -477,7 +412,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
 
               <div className="mt-5 rounded-[24px] border border-neutral-800 bg-black/30 p-4">
                 <label className="block text-xs font-mono uppercase tracking-[0.24em] text-neutral-500">
-                  输入一个与旧物有关的问题
+                  输入你想重新整理的记忆问题
                 </label>
                 <textarea
                   value={query}
@@ -490,101 +425,65 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                   }}
                   rows={3}
                   className="mt-3 w-full resize-none rounded-2xl border border-neutral-800 bg-black/40 px-4 py-4 text-sm leading-7 text-white outline-none transition-colors focus:border-remuse-accent"
-                  placeholder="例如：帮我找和毕业有关的藏品；有没有哪件东西让我想到妈妈；我最早收藏的那件旧物是什么？"
+                  placeholder="比如：这个旧物最像我哪段被忽略的记忆？"
+                  data-testid="memory-query-input"
                 />
 
-                <div className="mt-4 flex gap-2 overflow-x-auto pb-1 xl:flex-wrap">
-                  {suggestionItems.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => {
-                        void handleAsk(suggestion);
-                      }}
-                      className="shrink-0 rounded-full border border-neutral-800 bg-black/20 px-3 py-2 text-xs text-neutral-300 transition-colors hover:border-remuse-accent hover:text-white"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-                    <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-1.5">支持语音输入</span>
-                    <span className="hidden rounded-full border border-neutral-800 bg-black/20 px-3 py-1.5 sm:inline-flex">历史会话保存在当前账号浏览器中</span>
+                  <div className="flex items-center gap-2 text-xs text-neutral-500">
+                    <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-1.5">跨设备同步</span>
+                    <span className="rounded-full border border-neutral-800 bg-black/20 px-3 py-1.5">线程持久化</span>
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={toggleVoiceInput}
-                      className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-                        isRecording
-                          ? 'border-red-500/60 bg-red-500/10 text-red-300'
-                          : 'border-neutral-700 bg-black/20 text-neutral-300 hover:border-remuse-secondary hover:text-white'
-                      }`}
-                    >
-                      {isRecording ? <Square size={15} /> : <Mic size={15} />}
-                      {isRecording ? '停止语音' : '语音提问'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleAsk();
-                      }}
-                      disabled={isAsking || query.trim().length < 2 || storyItems.length === 0}
-                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-remuse-accent px-4 py-2 text-sm font-display font-bold text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
-                    >
-                      {isAsking ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                      开始回忆
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleAsk()}
+                    disabled={isSubmitting || query.trim().length < 2 || !activeThread}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-remuse-accent px-4 py-2 text-sm font-display font-bold text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                    data-testid="memory-send-query"
+                  >
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    发送问题
+                  </button>
                 </div>
 
                 {error && <p className="mt-3 text-xs text-red-300">{error}</p>}
-                {storyItems.length === 0 && (
-                  <p className="mt-3 text-xs leading-6 text-neutral-500">
-                    你现在还没有录入带故事的藏品。先在扫描归档或藏品编辑中写下几段回忆，这里才会有可检索的内容。
-                  </p>
-                )}
               </div>
             </div>
           </section>
 
-          <aside className={`${mobilePanel === 'memories' ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:flex`}>
+          <aside className="flex max-h-[560px] flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:min-h-0 xl:max-h-none">
             <div className="border-b border-remuse-border px-5 py-4 md:px-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Retrieved Memories</p>
                   <h3 className="mt-2 text-xl font-display font-bold text-white">
-                    {activeSession?.matches.length ? '当前召回结果' : '最近录入的故事'}
+                    {activeThread?.matches.length ? '本次检索结果' : '最近可检索的故事'}
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-neutral-500">
-                    {activeSession?.retrievalSummary || INITIAL_RETRIEVAL_SUMMARY}
+                    {activeThread?.retrievalSummary || '暂无检索结果。'}
                   </p>
                 </div>
                 <div className="rounded-full border border-remuse-border bg-black/20 px-3 py-1.5 text-[11px] font-mono text-neutral-400">
-                  {activeSession?.matches.length ? `${activeSession.matches.length} matches` : `${recentMemoryItems.length} recent`}
+                  {activeThread?.matches.length ? `${activeThread.matches.length} matches` : '0 matches'}
                 </div>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
-              <div className="mb-4 hidden grid-cols-2 gap-3 md:grid">
+              <div className="mb-4 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 p-4">
                   <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Story Archive</span>
-                  <p className="mt-2 text-2xl font-display font-bold text-remuse-secondary">{storyItems.length}</p>
-                  <p className="text-xs text-neutral-500">件藏品带有故事记录</p>
+                  <p className="mt-2 text-2xl font-display font-bold text-remuse-secondary">{storyItemCount}</p>
                 </div>
                 <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
                   <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Source Count</span>
-                  <p className="mt-2 text-2xl font-display font-bold text-white">{activeSession?.sourceCount || storyItems.length}</p>
-                  <p className="text-xs text-neutral-500">次会话可用记忆源</p>
+                  <p className="mt-2 text-2xl font-display font-bold text-white">{activeThread?.sourceCount || 0}</p>
                 </div>
               </div>
 
               <div className="space-y-3">
-                {visibleMatches.map((match) => (
+                {activeThread?.matches.map((match) => (
                   <div key={`${match.itemId}-${match.score}`} className="overflow-hidden rounded-2xl border border-remuse-border bg-black/20">
                     <div className="flex min-w-0 gap-3 p-3">
                       <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
@@ -603,21 +502,12 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                         <p className="mt-2 line-clamp-3 text-sm leading-6 text-neutral-300">{match.storySnippet}</p>
                       </div>
                     </div>
-                    {match.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 border-t border-remuse-border px-3 py-2">
-                        {match.tags.slice(0, 4).map((tag) => (
-                          <span key={tag} className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-neutral-400">
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ))}
 
-                {visibleMatches.length === 0 && (
+                {!activeThread?.matches.length && (
                   <div className="rounded-2xl border border-dashed border-neutral-800 bg-black/20 px-4 py-8 text-center text-sm leading-7 text-neutral-500">
-                    这里会显示和当前问题最相关的旧物记忆线索。
+                    输入一个更具体的问题后，系统会在你的故事馆藏中进行检索并展示对应的结果。
                   </div>
                 )}
               </div>

@@ -1,7 +1,9 @@
-
+﻿
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CollectedItem, MemoryAssistantMatch, MemoryAssistantMessage, Tool, User } from '../types';
-import { Trophy, Sprout, Star, Hexagon, Zap, Award, Crown, Medal, Briefcase, Wrench, Scissors, PenTool, Ruler, Brush, X, Plus, Check, Trash2, LogOut, PackageOpen, Copy, MessageCircle, UserRound, Send, Mic, Square, Loader2, Sparkles, History } from 'lucide-react';
+import { Trophy, Sprout, Star, Hexagon, Zap, Award, Crown, Medal, Briefcase, Wrench, Scissors, PenTool, Ruler, Brush, X, Plus, Check, Trash2, LogOut, PackageOpen, Copy, MessageCircle, UserRound, Send, Mic, Square, Loader2, Sparkles, History, ShieldCheck, MailWarning } from 'lucide-react';
+import AccountSecurityPanel from './AccountSecurityPanel';
+import AccountSettingsModal from './AccountSettingsModal';
 import { askMemoryAssistant } from '../services/memoryService';
 import { isSpeechRecognitionSupported, SpeechCaptureSession, startSpeechCapture } from '../services/speechRecognition';
 
@@ -9,8 +11,10 @@ interface CuratorOfficeProps {
   items: CollectedItem[];
   user?: User | null;
   onLogout?: () => Promise<void>;
-  onClearSamples?: () => Promise<void>;
   onUpdateToolbox?: (tools: Tool[]) => Promise<void>;
+  onUpgradeAccount?: () => void;
+  onOpenMemoryRag?: () => void;
+  onAccountDeleted?: () => Promise<void> | void;
 }
 
 // --- Visualizations ---
@@ -224,7 +228,7 @@ const AVATAR_GRADIENTS = [
 
 const DEFAULT_MEMORY_PROMPTS = [
   '帮我找和学生时代有关的藏品',
-  '有没有哪件物品让我想到家人',
+  '有没有哪件物品会让我想起家人',
   '我收藏过哪些最有纪念意义的东西',
 ];
 
@@ -293,14 +297,25 @@ const ProfileAvatar: React.FC<{ user?: User | null }> = ({ user }) => {
   );
 };
 
-const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, onClearSamples, onUpdateToolbox }) => {
+const CuratorOffice: React.FC<CuratorOfficeProps> = ({
+  items,
+  user,
+  onLogout,
+  onUpdateToolbox,
+  onUpgradeAccount,
+  onOpenMemoryRag,
+  onAccountDeleted,
+}) => {
   const remusedCount = items.filter(i => i.status === 'remused').length;
   const [isToolkitOpen, setIsToolkitOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [myTools, setMyTools] = useState<Tool[]>(() => getInitialTools(user?.toolbox));
-  const [clearingSamples, setClearingSamples] = useState(false);
   const [savingTools, setSavingTools] = useState(false);
   const [contactStatus, setContactStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
-  const showSampleClear = items.some((item) => item.isSample);
+  const showWorkspaceNotice = false;
+  const isWorkspaceNoticeBusy = false;
+  const handleWorkspaceNoticeAction = async () => undefined;
   const storyItems = useMemo(
     () => items.filter((item) => item.story?.trim()),
     [items],
@@ -323,7 +338,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
   const [memoryMessages, setMemoryMessages] = useState<MemoryAssistantMessage[]>([
     createMemoryMessage(
       'assistant',
-      '我是你的记忆馆长。你可以问我和旧物有关的人、时间、地点或情绪，我会从你的藏品故事里把相关线索找出来。',
+      '我是你的记忆馆员。把一件旧物、一段故事、一个关键词或一个时间点交给我，我会从你的馆藏和文字线索里帮你把记忆重新串起来。',
     ),
   ]);
   const [memoryQuery, setMemoryQuery] = useState('');
@@ -349,12 +364,40 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
     return () => window.clearTimeout(timer);
   }, [contactStatus]);
 
+  const handleDeleted = async () => {
+    setIsSecurityModalOpen(false);
+    setIsSettingsModalOpen(false);
+    await onAccountDeleted?.();
+  };
+
   useEffect(() => {
     return () => {
       memoryRecognitionRef.current?.stop();
       memoryRecognitionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSecurityModalOpen && !isSettingsModalOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSecurityModalOpen(false);
+        setIsSettingsModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSecurityModalOpen, isSettingsModalOpen]);
   
   // Add Tool Modal State
   const [showAddToolModal, setShowAddToolModal] = useState(false);
@@ -366,9 +409,9 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
     const n = name.trim().toLowerCase();
     if (n.includes('剪') || n.includes('scissors') || n.includes('cut')) return 'scissors';
     if (n.includes('胶带') || n.includes('tape')) return 'tape';
-    if (n.includes('胶') || n.includes('glue') || n.includes('粘')) return 'glue';
+    if (n.includes('胶') || n.includes('glue') || n.includes('笔')) return 'glue';
     if (n.includes('螺') || n.includes('driver') || n.includes('screw') || n.includes('wrench') || n.includes('扳')) return 'screwdriver';
-    if (n.includes('笔') || n.includes('刷') || n.includes('brush') || n.includes('paint')) return 'brush';
+    if (n.includes('刷') || n.includes('画') || n.includes('brush') || n.includes('paint')) return 'brush';
     if (n.includes('尺') || n.includes('ruler') || n.includes('量')) return 'ruler';
     if (n.includes('刀') || n.includes('knife')) return 'knife';
     return 'other';
@@ -602,7 +645,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
                 </button>
                 
                 <h2 className="text-xl font-bold text-white font-display mb-6 flex items-center gap-2">
-                    <Wrench size={20} className="text-remuse-accent" /> 获取新装备
+                    <Wrench size={20} className="text-remuse-accent" /> 添加新工具
                 </h2>
                 
                 <form onSubmit={handleAddTool} className="space-y-4">
@@ -660,27 +703,82 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
                   <ProfileAvatar user={user} />
                   <div className="min-w-0 flex-1">
                       <h1 className="text-3xl font-bold text-white font-display tracking-tight md:text-4xl">
-                          {user?.nickname || '馆长'} <span className="text-remuse-accent">::</span> {user?.isGuest ? 'GUEST' : 'ADMIN'}
+                          {user?.nickname || '馆长'} <span className="text-remuse-accent">::</span> {user?.isGuest ? 'GUEST' : 'CURATOR'}
                       </h1>
                       <p className="mt-2 text-xs leading-relaxed text-neutral-500 md:text-sm">
                           {user?.email || `ID: ${user?.id?.slice(0, 8) || '89757'}`} // LEVEL {Math.floor(items.length / 5) + 1}
                       </p>
                   </div>
               </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {!user?.isGuest && (
+                  <button
+                    onClick={() => setIsSettingsModalOpen(true)}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-neutral-200 transition-colors hover:border-white/20 hover:text-white"
+                    data-testid="open-account-settings"
+                  >
+                    <MessageCircle size={16} />
+                    <span>账户设置</span>
+                  </button>
+                )}
+                {!user?.isGuest && (
+                  <button
+                    onClick={() => setIsSecurityModalOpen(true)}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-remuse-accent/25 bg-remuse-accent/10 px-4 py-2.5 text-sm text-remuse-accent transition-colors hover:bg-remuse-accent/20"
+                    data-testid="open-account-security"
+                  >
+                    <ShieldCheck size={16} />
+                    <span>账号安全</span>
+                  </button>
+                )}
+              {user?.isGuest && onUpgradeAccount && (
+                <button
+                  onClick={onUpgradeAccount}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-lg border border-remuse-accent/30 bg-remuse-accent/10 px-4 py-2.5 text-sm text-remuse-accent transition-colors hover:bg-remuse-accent/20 md:self-center"
+                >
+                  <UserRound size={16} />
+                  <span>升级账号</span>
+                </button>
+              )}
               {onLogout && (
                 <button
                   onClick={onLogout}
                   className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-lg border border-red-800/40 bg-red-900/30 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-900/50 md:self-center"
+                  data-testid="curator-logout"
                 >
                   <LogOut size={16} />
-                  <span>登出</span>
+                  <span>退出登录</span>
                 </button>
               )}
+              </div>
           </div>
       </div>
 
       <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-12">
-          
+          {!user?.isGuest && !user?.emailVerified && (
+            <section className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-start gap-3">
+                  <MailWarning size={18} className="mt-0.5 text-amber-200" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-100">邮箱尚未验证</p>
+                    <p className="mt-1 text-xs leading-6 text-amber-50/85">
+                      建议尽快完成验证，后续找回密码和恢复账号会更稳妥。
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSecurityModalOpen(true)}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg border border-amber-100/20 bg-black/20 px-4 py-2 text-sm text-amber-50 transition-colors hover:bg-black/30"
+                >
+                  <ShieldCheck size={15} />
+                  <span>去处理</span>
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Visualizations Section */}
           <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left: Collection Jar */}
@@ -690,7 +788,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
                        <Hexagon size={16} className="text-neutral-500" />
                   </div>
                   <h3 className="text-lg font-display text-neutral-300 mb-6 flex items-center gap-2">
-                      <Star size={16} className="text-remuse-secondary"/> 馆藏星屑
+                      <Star size={16} className="text-remuse-secondary"/> 馆藏宝屿
                   </h3>
                   <JarVisualization count={items.length} />
                   <p className="text-center text-neutral-500 text-xs mt-4 font-mono">
@@ -874,7 +972,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
                   <div className="relative overflow-hidden rounded-xl border border-remuse-border bg-remuse-panel p-5 md:p-6">
                       <div className="absolute right-0 top-0 h-28 w-28 rounded-full bg-remuse-secondary/10 blur-3xl" />
                       <div className="relative flex flex-col gap-5">
@@ -940,7 +1038,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
               </div>
               
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {ACHIEVEMENTS.map(ach => (
                       <AchievementBadge 
                           key={ach.id} 
@@ -969,34 +1067,67 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({ items, user, onLogout, on
               </div>
           </div>
 
-          {/* 示例数据清除 */}
-          {showSampleClear && (
+          {/* 工作区提示 */}
+          {showWorkspaceNotice && (
             <div className="border border-dashed border-neutral-700 rounded-lg p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 text-neutral-400">
                 <PackageOpen size={18} className="text-remuse-secondary flex-shrink-0" />
-                <span className="text-xs">当前展馆中包含示例藏品，可一键清除后开始自己的收藏</span>
+                <span className="text-xs">工作区状态已经更新，如需同步请稍后重新进入当前页面。</span>
               </div>
               <button
                 onClick={async () => {
-                  if (clearingSamples) return;
-                  setClearingSamples(true);
-                  try {
-                    await onClearSamples?.();
-                  } finally {
-                    setClearingSamples(false);
-                  }
+                  if (isWorkspaceNoticeBusy) return;
+                  await handleWorkspaceNoticeAction();
                 }}
-                disabled={clearingSamples}
+                disabled={isWorkspaceNoticeBusy}
                 className="flex-shrink-0 px-3 py-1.5 text-xs font-mono bg-red-900/40 text-red-300 border border-red-800/60 rounded hover:bg-red-900/70 transition-colors disabled:opacity-50"
               >
-                {clearingSamples ? '清除中...' : '清除示例'}
+                {isWorkspaceNoticeBusy ? '处理中...' : '知道了'}
               </button>
             </div>
           )}
 
       </div>
+
+      {isSecurityModalOpen && !user?.isGuest && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="关闭账号安全弹窗"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setIsSecurityModalOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-4xl">
+            <AccountSecurityPanel user={user} onClose={() => setIsSecurityModalOpen(false)} onDeleted={handleDeleted} />
+          </div>
+        </div>
+      )}
+
+      {isSettingsModalOpen && !user?.isGuest && (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="关闭账户设置弹窗"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setIsSettingsModalOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-5xl">
+            <AccountSettingsModal
+              user={user}
+              supportContactLabel="微信"
+              supportContactValue={CONTACT_WECHAT_ID}
+              onClose={() => setIsSettingsModalOpen(false)}
+              onDeleted={handleDeleted}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default CuratorOffice;
+
+
+
+
