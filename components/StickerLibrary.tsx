@@ -1,23 +1,27 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ItemCategory, SavedTransformationGuide, Sticker } from '../types';
+import { CollectedItem, ItemCategory, SavedJournal, SavedTransformationGuide, SaveJournalInput, Sticker } from '../types';
 import { Sticker as StickerIcon, Download, Trash2, Box, Layers, Move, CheckCircle2, X, Grid, Shuffle, Save, BookImage, Scissors, Printer, Smile, Loader2, Plus, Mic, MicOff } from 'lucide-react';
 import { generateEmojiPack, EmojiPackItem, StickerInput } from '../services/geminiService';
 import { fetchImageAsset } from '../services/imageUtils';
-import PerlerPatternStudio from './PerlerPatternStudio';
 import logger from '../services/logger';
 import { EMOJI_PACK_CATEGORY, PERLER_PATTERN_CATEGORY } from '../shared/stickerCategories';
 
-export type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT' | 'EMOJI_PACK' | 'PERLER_PATTERN';
+export type CanvasMode = 'COLLAGE' | 'XIAOHONGSHU' | 'PRINT' | 'EMOJI_PACK';
 
-type LibraryTab = 'STICKERS' | 'EMOJI_PACKS' | 'PERLER_PATTERNS' | 'TRANSFORMATION_GUIDES';
+type LibraryTab = 'STICKERS' | 'EMOJI_PACKS' | 'PERLER_PATTERNS' | 'JOURNALS' | 'TRANSFORMATION_GUIDES';
 type LibraryViewMode = 'LIBRARY' | 'CANVAS';
 
 interface StickerLibraryProps {
     stickers: Sticker[];
+    sourceItems?: CollectedItem[];
+    journals?: SavedJournal[];
     guides?: SavedTransformationGuide[];
     onDeleteSticker: (id: string) => void;
     onStickerCreated?: (sticker: Sticker) => Promise<void> | void;
+    onSaveJournal?: (journal: SaveJournalInput) => Promise<SavedJournal> | void;
+    onDeleteJournal?: (id: string) => Promise<void> | void;
+    onOpenPerlerPattern?: (pattern: Sticker) => void;
     initialViewMode?: LibraryViewMode;
     initialCanvasMode?: CanvasMode;
     initialSelectionIds?: string[];
@@ -37,6 +41,26 @@ interface LayoutItem {
     rotation: number;
     scale: number;
     zIndex: number;
+}
+
+type JournalRestoreItem = SavedJournal['layoutItems'][number];
+
+type PrintInteractionMode = 'drag' | 'scale' | 'rotate';
+type PrintResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
+
+interface PrintInteractionState {
+    instanceId: string;
+    mode: PrintInteractionMode;
+    startClientX: number;
+    startClientY: number;
+    startX: number;
+    startY: number;
+    startScale: number;
+    startRotation: number;
+    centerX: number;
+    centerY: number;
+    startDistance: number;
+    startAngle: number;
 }
 
 // ==================== 小红书模板定义 ====================
@@ -237,18 +261,18 @@ const XHS_TEMPLATES: XhsTemplate[] = [
 
 const PRINT_TEMPLATES: PrintTemplate[] = [
     {
-        id: 'journal-notes',
+        id: 'calendar-journal',
         name: '手账拼贴',
         description: '纸感便签、胶带和留白，适合做日常手账页。',
-        bgColor: '#f8f2e8',
-        accentColor: '#b67352',
-        textColor: '#4e382b',
-        secondaryTextColor: '#8e7568',
-        panelColor: 'rgba(255,248,239,0.94)',
+        bgColor: '#fffaf2',
+        accentColor: '#111827',
+        textColor: '#0f172a',
+        secondaryTextColor: '#64748b',
+        panelColor: 'rgba(255,255,255,0.94)',
         style: 'journal',
-        headerTitle: 'REMUSE Journal Sheet',
-        headerSubtitle: 'memo / tape / collage / archive',
-        footerText: 'collect it like a diary page',
+        headerTitle: 'Monthly Journal',
+        headerSubtitle: 'calendar / stickers / print',
+        footerText: 'print and keep your month in one page',
     },
     {
         id: 'stamp-market',
@@ -294,79 +318,140 @@ const PRINT_TEMPLATES: PrintTemplate[] = [
     },
 ];
 
+const CALENDAR_WEEKDAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
+const CALENDAR_MONTH_SHORT_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const CALENDAR_MONTH_FULL_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
+const CALENDAR_BACKGROUND_SWATCHES = ['#fffdf7', '#f8f1e7', '#eef6ff', '#f7f0ff', '#eff7ea'] as const;
+
+type CalendarDayCell = {
+    key: string;
+    dayNumber: number;
+    inCurrentMonth: boolean;
+    isWeekend: boolean;
+};
+
+const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('读取图片文件失败'));
+        reader.readAsDataURL(file);
+    });
+
+const buildCalendarCells = (year: number, month: number): CalendarDayCell[] => {
+    const firstDay = new Date(year, month - 1, 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+    const firstWeekday = (firstDay.getDay() + 6) % 7;
+
+    return Array.from({ length: 42 }, (_, index) => {
+        const col = index % 7;
+        const dayOffset = index - firstWeekday + 1;
+        const inCurrentMonth = dayOffset > 0 && dayOffset <= daysInMonth;
+        const dayNumber = inCurrentMonth
+            ? dayOffset
+            : dayOffset <= 0
+                ? daysInPrevMonth + dayOffset
+                : dayOffset - daysInMonth;
+
+        return {
+            key: `${year}-${month}-${index}`,
+            dayNumber,
+            inCurrentMonth,
+            isWeekend: col >= 5,
+        };
+    });
+};
+
+const buildJournalTitle = (year: number, month: number, headerNote: string) => {
+    const trimmedNote = headerNote.trim().split('\n')[0]?.trim() || '';
+    return trimmedNote
+        ? `${year}年${month}月 · ${trimmedNote.slice(0, 24)}`
+        : `${year}年${month}月月历手账`;
+};
+
+const drawCoverImageToCanvas = (
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    width: number,
+    height: number,
+) => {
+    const scale = Math.max(width / image.width, height / image.height);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    const drawX = (width - drawWidth) / 2;
+    const drawY = (height - drawHeight) / 2;
+    ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+};
+
 const getXhsSlots = (template: XhsTemplate, count: number) =>
     template.slots.slice(0, Math.max(1, Math.min(count, template.slots.length)));
 
 const getPrintBaseWidth = (count: number) => {
-    if (count <= 1) return 34;
-    if (count === 2) return 28;
-    if (count <= 4) return 24;
-    if (count <= 6) return 20;
-    return 17;
+    if (count <= 1) return 20;
+    if (count === 2) return 17;
+    if (count <= 4) return 14;
+    if (count <= 6) return 12.5;
+    return 11;
 };
 
 const getPrintPattern = (count: number) => {
     switch (count) {
         case 1:
-            return [{ x: 50, y: 46, scale: 1.08 }];
+            return [{ x: 50, y: 14, scale: 1 }];
         case 2:
             return [
-                { x: 34, y: 46, scale: 1.02 },
-                { x: 66, y: 46, scale: 1.02 },
+                { x: 28, y: 15, scale: 0.94 },
+                { x: 74, y: 18, scale: 0.94 },
             ];
         case 3:
             return [
-                { x: 31, y: 32, scale: 0.94 },
-                { x: 69, y: 32, scale: 0.94 },
-                { x: 50, y: 62, scale: 1.08 },
+                { x: 26, y: 14, scale: 0.88 },
+                { x: 73, y: 17, scale: 0.88 },
+                { x: 18, y: 43, scale: 0.98 },
             ];
         case 4:
             return [
-                { x: 31, y: 31, scale: 0.9 },
-                { x: 69, y: 31, scale: 0.9 },
-                { x: 31, y: 68, scale: 0.9 },
-                { x: 69, y: 68, scale: 0.9 },
+                { x: 28, y: 14, scale: 0.88 },
+                { x: 73, y: 16, scale: 0.84 },
+                { x: 18, y: 44, scale: 0.94 },
+                { x: 64, y: 74, scale: 0.9 },
             ];
         case 5:
             return [
-                { x: 25, y: 28, scale: 0.82 },
-                { x: 50, y: 26, scale: 0.92 },
-                { x: 75, y: 28, scale: 0.82 },
-                { x: 35, y: 60, scale: 0.92 },
-                { x: 65, y: 60, scale: 0.92 },
+                { x: 20, y: 12, scale: 0.82 },
+                { x: 50, y: 10, scale: 0.86 },
+                { x: 80, y: 14, scale: 0.8 },
+                { x: 18, y: 43, scale: 0.88 },
+                { x: 71, y: 72, scale: 0.84 },
             ];
         case 6:
             return [
-                { x: 25, y: 28, scale: 0.8 },
-                { x: 50, y: 26, scale: 0.88 },
-                { x: 75, y: 28, scale: 0.8 },
-                { x: 25, y: 61, scale: 0.8 },
-                { x: 50, y: 61, scale: 0.88 },
-                { x: 75, y: 61, scale: 0.8 },
+                { x: 18, y: 12, scale: 0.8 },
+                { x: 50, y: 10, scale: 0.84 },
+                { x: 82, y: 14, scale: 0.78 },
+                { x: 18, y: 42, scale: 0.82 },
+                { x: 50, y: 64, scale: 0.9 },
+                { x: 82, y: 72, scale: 0.78 },
             ];
         default:
             return [
-                { x: 20, y: 24, scale: 0.72 },
-                { x: 40, y: 24, scale: 0.74 },
-                { x: 60, y: 24, scale: 0.74 },
-                { x: 80, y: 24, scale: 0.72 },
-                { x: 28, y: 52, scale: 0.78 },
-                { x: 50, y: 50, scale: 0.84 },
-                { x: 72, y: 52, scale: 0.78 },
-                { x: 35, y: 79, scale: 0.8 },
-                { x: 65, y: 79, scale: 0.8 },
+                { x: 16, y: 12, scale: 0.74 },
+                { x: 36, y: 10, scale: 0.76 },
+                { x: 58, y: 10, scale: 0.76 },
+                { x: 80, y: 13, scale: 0.72 },
+                { x: 16, y: 40, scale: 0.74 },
+                { x: 50, y: 54, scale: 0.82 },
+                { x: 80, y: 40, scale: 0.74 },
+                { x: 28, y: 78, scale: 0.78 },
+                { x: 72, y: 78, scale: 0.78 },
             ];
     }
 };
 
 const buildPrintLayoutItems = (stickers: Sticker[], template: PrintTemplate): LayoutItem[] => {
     const pattern = getPrintPattern(stickers.length);
-    const rotationByStyle: Record<PrintTemplateStyle, number[]> = {
-        journal: [-8, 6, -4, 8, -6, 5, -3, 4, -5],
-        stamp: [-3, 2, -1, 3, 0, -2, 1, -1, 2],
-        postcard: [-6, 5, -3, 6, -4, 4, -2, 3, -3],
-        card: [0, 0, -1, 1, 0, -1, 1, 0, 0],
-    };
+    const rotations = [-8, 5, -4, 7, -6, 4, -3, 6, -5];
 
     return stickers.map((sticker, index) => {
         const slot = pattern[index] ?? pattern[pattern.length - 1] ?? { x: 50, y: 50, scale: 1 };
@@ -375,7 +460,7 @@ const buildPrintLayoutItems = (stickers: Sticker[], template: PrintTemplate): La
             sticker,
             x: slot.x,
             y: slot.y,
-            rotation: rotationByStyle[template.style][index] ?? 0,
+            rotation: rotations[index] ?? 0,
             scale: slot.scale,
             zIndex: index + 1,
         };
@@ -419,46 +504,90 @@ const getPrintPageBackground = (template: PrintTemplate): React.CSSProperties =>
     }
 };
 
-const getPrintStickerFrameStyle = (template: PrintTemplate, active: boolean): React.CSSProperties => {
-    const activeGlow = active ? `0 0 0 2px ${template.accentColor}` : undefined;
-
-    switch (template.style) {
-        case 'journal':
-            return {
-                background: 'rgba(255,251,247,0.95)',
-                border: '1px solid rgba(191,152,128,0.32)',
-                borderRadius: '28px',
-                padding: '6%',
-                boxShadow: activeGlow ?? '0 18px 30px rgba(94, 63, 44, 0.12)',
-            };
-        case 'stamp':
-            return {
-                background: 'rgba(255,255,255,0.88)',
-                border: `2px dashed ${template.accentColor}66`,
-                borderRadius: '24px',
-                padding: '7%',
-                boxShadow: activeGlow ?? '0 14px 26px rgba(57, 69, 48, 0.10)',
-            };
-        case 'postcard':
-            return {
-                background: 'rgba(255,250,245,0.96)',
-                border: '1px solid rgba(215,170,142,0.45)',
-                borderRadius: '18px',
-                padding: '5%',
-                boxShadow: activeGlow ?? '0 18px 28px rgba(112, 76, 54, 0.12)',
-            };
-        case 'card':
-            return {
-                background: 'rgba(255,255,255,0.98)',
-                border: `1px solid ${template.accentColor}35`,
-                borderRadius: '20px',
-                padding: '5%',
-                boxShadow: activeGlow ?? '0 16px 26px rgba(32, 38, 45, 0.12)',
-            };
-    }
-};
+const getPrintStickerFrameStyle = (template: PrintTemplate, active: boolean): React.CSSProperties => ({
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '28px',
+    padding: 0,
+    filter: active
+        ? `drop-shadow(0 0 0 2px ${template.accentColor}) drop-shadow(0 18px 34px rgba(15,23,42,0.28))`
+        : 'drop-shadow(0 18px 34px rgba(15,23,42,0.22))',
+    transform: active ? 'scale(1.02)' : 'scale(1)',
+});
 
 const clampValue = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const PRINT_SCALE_FLOOR = 0.12;
+const PRINT_HANDLE_CONFIGS: Array<{ id: PrintResizeHandle; className: string }> = [
+    { id: 'nw', className: '-left-2 -top-2 cursor-nwse-resize' },
+    { id: 'ne', className: '-right-2 -top-2 cursor-nesw-resize' },
+    { id: 'sw', className: '-bottom-2 -left-2 cursor-nesw-resize' },
+    { id: 'se', className: '-bottom-2 -right-2 cursor-nwse-resize' },
+];
+
+const normalizeAngleDelta = (angle: number) => {
+    let next = angle;
+    while (next > 180) next -= 360;
+    while (next < -180) next += 360;
+    return next;
+};
+
+const clampPrintPosition = (x: number, y: number, _scale: number, _count: number) => {
+    return {
+        x: clampValue(x, 0, 100),
+        y: clampValue(y, 0, 100),
+    };
+};
+
+const syncPrintLayoutItems = (
+    prev: LayoutItem[],
+    stickers: Sticker[],
+    template: PrintTemplate,
+    overrides: Record<string, Partial<LayoutItem>> = {},
+): LayoutItem[] => {
+    const defaults = buildPrintLayoutItems(stickers, template);
+    const prevByStickerId = new Map(prev.map((item) => [item.sticker.id, item]));
+    let nextZ = Math.max(0, ...prev.map((item) => item.zIndex)) + 1;
+
+    return defaults.map((defaultItem) => {
+        const existing = prevByStickerId.get(defaultItem.sticker.id);
+        const override = overrides[defaultItem.sticker.id];
+
+        if (existing) {
+            const clamped = clampPrintPosition(
+                override?.x ?? existing.x,
+                override?.y ?? existing.y,
+                override?.scale ?? existing.scale,
+                defaults.length,
+            );
+
+            return {
+                ...existing,
+                instanceId: defaultItem.instanceId,
+                sticker: defaultItem.sticker,
+                x: clamped.x,
+                y: clamped.y,
+                scale: override?.scale ?? existing.scale,
+                rotation: override?.rotation ?? existing.rotation,
+                zIndex: override?.zIndex ?? existing.zIndex,
+            };
+        }
+
+        const clamped = clampPrintPosition(
+            override?.x ?? defaultItem.x,
+            override?.y ?? defaultItem.y,
+            override?.scale ?? defaultItem.scale,
+            defaults.length,
+        );
+
+        return {
+            ...defaultItem,
+            ...override,
+            x: clamped.x,
+            y: clamped.y,
+            zIndex: override?.zIndex ?? nextZ++,
+        };
+    });
+};
 
 const getXhsPreviewBackground = (template: XhsTemplate): React.CSSProperties => {
     switch (template.backgroundStyle) {
@@ -639,16 +768,16 @@ const persistBlobToDevice = async (blob: Blob, filename: string): Promise<SaveAc
             if (canShareWithFile) {
                 await navigator.share({
                     files: [file],
-                    title: 'Save image',
-                    text: isIOSDevice() ? 'Choose "Save Image" in the system sheet.' : 'Choose "Save to gallery" in the system sheet.',
+                    title: '保存图片',
+                    text: isIOSDevice() ? '请在系统面板中选择“存储图像”。' : '请在系统面板中选择“保存到相册”。',
                 });
 
                 return {
                     mode: 'share-sheet',
                     title: 'Opened system save sheet',
                     message: isIOSDevice()
-                        ? 'Choose "Save Image" in the system menu to store it in Photos.'
-                        : 'Choose "Save to gallery" in the system menu to store it in your album.',
+                        ? '请在系统菜单中选择“存储图像”，即可保存到照片。'
+                        : '请在系统菜单中选择“保存到相册”，即可保存到你的相册。',
                 };
             }
         } catch (error) {
@@ -667,7 +796,7 @@ const persistBlobToDevice = async (blob: Blob, filename: string): Promise<SaveAc
             title: 'Long press to save',
             message: isWeChatBrowser()
                 ? 'This browser cannot write directly to the album. Long press the image preview and choose save.'
-                : 'iPhone browsers usually need a long press. Long press the preview image and choose "Save to Photos".',
+                : 'iPhone 浏览器通常需要长按图片。请长按预览图，并选择“存储到照片”。',
             previewUrl: objectUrl,
         };
     }
@@ -687,10 +816,12 @@ const persistBlobToDevice = async (blob: Blob, filename: string): Promise<SaveAc
 const persistCanvasToDevice = async (canvas: HTMLCanvasElement, filename: string): Promise<SaveActionResult | null> => {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) {
-        throw new Error('Image export failed');
+        throw new Error('\u5bfc\u51fa\u56fe\u50cf\u5931\u8d25');
     }
     return persistBlobToDevice(blob, filename);
 };
+
+const canvasToPngDataUrl = (canvas: HTMLCanvasElement) => canvas.toDataURL('image/png');
 
 const persistImageUrlToDevice = async (imageUrl: string, filename: string): Promise<SaveActionResult | null> => {
     try {
@@ -764,7 +895,7 @@ const StickerCard: React.FC<{
                             await onSaveSticker?.(sticker);
                         }}
                         className="p-1.5 bg-neutral-800 text-white hover:text-remuse-accent rounded border border-neutral-700"
-                        title="Save to album"
+                        title="保存到相册"
                     >
                         <Download size={14} />
                     </button>
@@ -814,9 +945,14 @@ const StickerCard: React.FC<{
 
 const StickerLibrary: React.FC<StickerLibraryProps> = ({
     stickers = [],
+    sourceItems = [],
+    journals = [],
     guides = [],
     onDeleteSticker,
     onStickerCreated,
+    onSaveJournal,
+    onDeleteJournal,
+    onOpenPerlerPattern,
     initialViewMode = 'LIBRARY',
     initialCanvasMode = 'COLLAGE',
     initialSelectionIds = [],
@@ -828,6 +964,8 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
     onExit,
 }) => {
     const safeStickers = Array.isArray(stickers) ? stickers : [];
+    const safeSourceItems = Array.isArray(sourceItems) ? sourceItems : [];
+    const safeJournals = Array.isArray(journals) ? journals : [];
     const safeGuides = Array.isArray(guides) ? guides : [];
     // View Mode: 'LIBRARY' (Grid) or 'CANVAS' (Layout Editor)
     const [viewMode, setViewMode] = useState<LibraryViewMode>(initialViewMode);
@@ -854,9 +992,19 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
 
     // 手账打印 State
     const printCanvasRef = useRef<HTMLDivElement>(null);
+    const printBackgroundInputRef = useRef<HTMLInputElement>(null);
     const [printScale, setPrintScale] = useState<number>(1.0);
     const [printTemplate, setPrintTemplate] = useState<PrintTemplate>(PRINT_TEMPLATES[0]);
     const [selectedPrintItemId, setSelectedPrintItemId] = useState<string | null>(null);
+    const [printInteraction, setPrintInteraction] = useState<PrintInteractionState | null>(null);
+    const [printYear, setPrintYear] = useState<number>(new Date().getFullYear());
+    const [printMonth, setPrintMonth] = useState<number>(new Date().getMonth() + 1);
+    const [printBackgroundColor, setPrintBackgroundColor] = useState<string>('#fffdf7');
+    const [printBackgroundImage, setPrintBackgroundImage] = useState<string>('');
+    const [printBackgroundOverlay, setPrintBackgroundOverlay] = useState<number>(0.74);
+    const [printHeaderNote, setPrintHeaderNote] = useState<string>('');
+    const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
+    const [journalSnapshotStickers, setJournalSnapshotStickers] = useState<Sticker[]>([]);
 
     // 表情包生成 State
     const [emojiPackItems, setEmojiPackItems] = useState<EmojiPackItem[]>([]);
@@ -887,6 +1035,8 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         ? { count: emojiPacks.length, label: 'EMOJI PACKS' }
         : libraryTab === 'PERLER_PATTERNS'
             ? { count: perlerPatterns.length, label: 'PERLER FILES' }
+            : libraryTab === 'JOURNALS'
+                ? { count: safeJournals.length, label: 'JOURNALS' }
             : libraryTab === 'TRANSFORMATION_GUIDES'
                 ? { count: safeGuides.length, label: 'GUIDES' }
             : { count: regularStickers.length, label: 'STICKERS' };
@@ -903,7 +1053,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
     }, [savePreview]);
 
     const handleReturnFromCanvas = () => {
-        if (onExit) {
+        if (initialViewMode === 'CANVAS' && onExit) {
             onExit();
             return;
         }
@@ -916,6 +1066,26 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
             URL.revokeObjectURL(savePreview.imageUrl);
         }
         setSavePreview(null);
+    };
+
+    const handleOpenPerlerPatternCard = (pattern: Sticker) => {
+        if (pattern.metadata?.perlerPatternSnapshot) {
+            onOpenPerlerPattern?.(pattern);
+            return;
+        }
+
+        if (!pattern.originalItemId) {
+            showSaveFeedback('无法恢复拼豆工坊', '这张拼豆图纸缺少原始藏品记录，当前只能下载或删除。');
+            return;
+        }
+
+        const sourceItem = safeSourceItems.find((item) => item.id === pattern.originalItemId);
+        if (!sourceItem) {
+            showSaveFeedback('无法恢复拼豆工坊', '没有找到这张拼豆图纸对应的原始藏品，当前只能下载或删除。');
+            return;
+        }
+
+        onOpenPerlerPattern?.(pattern);
     };
 
     const showSaveFeedback = (title: string, message: string) => {
@@ -947,8 +1117,34 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
             handleSaveResult(result);
         } catch (error) {
             logger.error('Save action failed:', error);
-            showSaveFeedback('Save failed', 'Please try again in a moment.');
+            showSaveFeedback('保存失败', '请稍后再试。');
         }
+    };
+
+    const handlePrintBackgroundUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+
+        if (!file) {
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            showSaveFeedback('请选择图片文件', '这里只支持上传手账纸、照片或其他图片背景。');
+            return;
+        }
+
+        try {
+            const dataUrl = await readFileAsDataUrl(file);
+            setPrintBackgroundImage(dataUrl);
+        } catch (error) {
+            logger.error('Print background upload failed:', error);
+            showSaveFeedback('背景上传失败', '这张图片暂时无法读取，请换一张再试。');
+        }
+    };
+
+    const clearPrintBackground = () => {
+        setPrintBackgroundImage('');
     };
 
     const handleStickerCardSave = async (sticker: Sticker) => {
@@ -1150,65 +1346,297 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         });
     };
 
+    const getPrintWorkspaceStickers = () => {
+        const liveStickerMap = new Map(safeStickers.map((sticker) => [sticker.id, sticker]));
+        return Array.from(selectedIds)
+            .map((stickerId) => liveStickerMap.get(stickerId) || journalSnapshotStickers.find((sticker) => sticker.id === stickerId) || null)
+            .filter((sticker): sticker is Sticker => Boolean(sticker));
+    };
+
+    const restoreLayoutItemsFromJournal = (journal: SavedJournal) => {
+        const liveStickerMap = new Map(safeStickers.map((sticker) => [sticker.id, sticker]));
+        const restored = journal.layoutItems.map((item, index) => {
+            const sticker = liveStickerMap.get(item.stickerId) || item.sticker;
+            return {
+                instanceId: `print-${journal.templateId}-${sticker.id}-${Date.now()}-${index}`,
+                sticker,
+                x: item.x,
+                y: item.y,
+                rotation: item.rotation,
+                scale: item.scale,
+                zIndex: item.zIndex,
+            };
+        });
+
+        setActiveJournalId(journal.id);
+        setJournalSnapshotStickers(journal.layoutItems.map((item) => item.sticker));
+        setSelectedIds(new Set(journal.selectedStickerIds));
+        setCanvasMode('PRINT');
+        setViewMode('CANVAS');
+        setPrintTemplate(PRINT_TEMPLATES.find((template) => template.id === journal.templateId) || PRINT_TEMPLATES[0]);
+        setPrintYear(journal.year);
+        setPrintMonth(journal.month);
+        setPrintBackgroundColor(journal.backgroundColor || '#fffdf7');
+        setPrintBackgroundImage(journal.backgroundImageUrl || '');
+        setPrintBackgroundOverlay(journal.backgroundOverlay ?? 0.74);
+        setPrintHeaderNote(journal.headerNote || '');
+        setPrintScale(1);
+        setPrintInteraction(null);
+        setLayoutItems(restored);
+        setSelectedPrintItemId(restored[0]?.instanceId ?? null);
+    };
+
     useEffect(() => {
         if (viewMode !== 'CANVAS' || canvasMode !== 'PRINT') {
             return;
         }
 
-        const printStickers = safeStickers.filter((sticker) => selectedIds.has(sticker.id));
+        const printStickers = getPrintWorkspaceStickers();
         if (printStickers.length === 0) {
             setLayoutItems([]);
             setSelectedPrintItemId(null);
             return;
         }
 
-        setLayoutItems((prev) => {
-            const sameSelection =
-                prev.length === printStickers.length &&
-                prev.every((item) => printStickers.some((sticker) => sticker.id === item.sticker.id)) &&
-                prev.every((item) => item.instanceId.startsWith(`print-${printTemplate.id}-`));
-
-            return sameSelection ? prev : buildPrintLayoutItems(printStickers, printTemplate);
-        });
+        setLayoutItems((prev) => syncPrintLayoutItems(prev, printStickers, printTemplate));
 
         setSelectedPrintItemId((prev) => {
-            if (prev && printStickers.some((sticker) => `print-${printTemplate.id}-${sticker.id}` === prev || prev.includes(sticker.id))) {
-                return prev;
+            if (prev) {
+                const currentStickerId = printStickers.find((sticker) => prev.includes(sticker.id))?.id;
+
+                if (currentStickerId) {
+                    const nextIndex = printStickers.findIndex((sticker) => sticker.id === currentStickerId);
+                    if (nextIndex >= 0) {
+                        return `print-${printTemplate.id}-${currentStickerId}-${nextIndex}`;
+                    }
+                }
             }
             return `print-${printTemplate.id}-${printStickers[0].id}-0`;
         });
-    }, [canvasMode, printTemplate, safeStickers, selectedIds, viewMode]);
+    }, [canvasMode, journalSnapshotStickers, printTemplate, safeStickers, selectedIds, viewMode]);
 
-    const handlePrintPointerDown = (clientX: number, clientY: number, instanceId: string) => {
+    const beginPrintInteraction = (
+        clientX: number,
+        clientY: number,
+        item: LayoutItem,
+        mode: PrintInteractionMode,
+    ) => {
         if (!printCanvasRef.current) return;
-        setSelectedPrintItemId(instanceId);
-        setActiveDragId(instanceId);
+
+        const rect = printCanvasRef.current.getBoundingClientRect();
+        const centerX = rect.left + (item.x / 100) * rect.width;
+        const centerY = rect.top + (item.y / 100) * rect.height;
+
+        setSelectedPrintItemId(item.instanceId);
         setLayoutItems((prev) => {
-            const maxZ = Math.max(1, ...prev.map((item) => item.zIndex));
-            return prev.map((item) => (item.instanceId === instanceId ? { ...item, zIndex: maxZ + 1 } : item));
+            const maxZ = Math.max(1, ...prev.map((entry) => entry.zIndex));
+            return prev.map((entry) => (entry.instanceId === item.instanceId ? { ...entry, zIndex: maxZ + 1 } : entry));
+        });
+        setPrintInteraction({
+            instanceId: item.instanceId,
+            mode,
+            startClientX: clientX,
+            startClientY: clientY,
+            startX: item.x,
+            startY: item.y,
+            startScale: item.scale,
+            startRotation: item.rotation,
+            centerX,
+            centerY,
+            startDistance: Math.max(1, Math.hypot(clientX - centerX, clientY - centerY)),
+            startAngle: Math.atan2(clientY - centerY, clientX - centerX),
         });
     };
 
+    const handlePrintPointerDown = (clientX: number, clientY: number, instanceId: string) => {
+        const item = layoutItems.find((entry) => entry.instanceId === instanceId);
+        if (!item) return;
+        beginPrintInteraction(clientX, clientY, item, 'drag');
+    };
+
+    const handlePrintResizePointerDown = (
+        clientX: number,
+        clientY: number,
+        instanceId: string,
+    ) => {
+        const item = layoutItems.find((entry) => entry.instanceId === instanceId);
+        if (!item) return;
+        beginPrintInteraction(clientX, clientY, item, 'scale');
+    };
+
+    const handlePrintRotatePointerDown = (clientX: number, clientY: number, instanceId: string) => {
+        const item = layoutItems.find((entry) => entry.instanceId === instanceId);
+        if (!item) return;
+        beginPrintInteraction(clientX, clientY, item, 'rotate');
+    };
+
+    const stopPrintInteraction = () => {
+        setPrintInteraction(null);
+    };
+
+    const handlePrintCanvasPointerDown = (target: EventTarget | null) => {
+        if (target instanceof Element && target.closest('[data-print-sticker-shell="true"]')) {
+            return;
+        }
+        setSelectedPrintItemId(null);
+        stopPrintInteraction();
+    };
+
+    useEffect(() => {
+        if (viewMode !== 'CANVAS' || canvasMode !== 'PRINT' || !selectedPrintItemId) {
+            return;
+        }
+
+        const handleGlobalPointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest('[data-print-sticker-shell="true"]')) {
+                return;
+            }
+            setSelectedPrintItemId(null);
+            stopPrintInteraction();
+        };
+
+        document.addEventListener('pointerdown', handleGlobalPointerDown, true);
+        return () => {
+            document.removeEventListener('pointerdown', handleGlobalPointerDown, true);
+        };
+    }, [canvasMode, selectedPrintItemId, viewMode]);
+
+    const handleAddStickerToPrint = (stickerId: string, clientX?: number, clientY?: number) => {
+        const sticker = regularStickers.find((entry) => entry.id === stickerId);
+        if (!sticker || selectedIds.has(sticker.id)) {
+            return;
+        }
+
+        const currentSelectedStickers = getPrintWorkspaceStickers();
+        if (currentSelectedStickers.length >= 9) {
+            showSaveFeedback('最多选择 9 张', '月历手账当前最多同时排版 9 张贴纸。');
+            return;
+        }
+
+        const nextSelectedStickers = [...currentSelectedStickers, sticker];
+        const nextIndex = nextSelectedStickers.findIndex((entry) => entry.id === sticker.id);
+        const nextInstanceId = `print-${printTemplate.id}-${sticker.id}-${nextIndex}`;
+        const maxZ = Math.max(0, ...layoutItems.map((item) => item.zIndex)) + 1;
+        let overrides: Record<string, Partial<LayoutItem>> = {};
+
+        if (typeof clientX === 'number' && typeof clientY === 'number' && printCanvasRef.current) {
+            const rect = printCanvasRef.current.getBoundingClientRect();
+            const defaultNewItem = buildPrintLayoutItems(nextSelectedStickers, printTemplate).find((item) => item.sticker.id === sticker.id);
+
+            if (defaultNewItem) {
+                const xPercent = ((clientX - rect.left) / rect.width) * 100;
+                const yPercent = ((clientY - rect.top) / rect.height) * 100;
+                const clamped = clampPrintPosition(xPercent, yPercent, defaultNewItem.scale, nextSelectedStickers.length);
+
+                overrides = {
+                    [sticker.id]: {
+                        x: clamped.x,
+                        y: clamped.y,
+                        scale: defaultNewItem.scale,
+                        rotation: defaultNewItem.rotation,
+                        zIndex: maxZ,
+                    },
+                };
+            }
+        }
+
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.add(sticker.id);
+            return next;
+        });
+        setLayoutItems((prev) => syncPrintLayoutItems(prev, nextSelectedStickers, printTemplate, overrides));
+        setSelectedPrintItemId(nextInstanceId);
+    };
+
+    const handleRemoveStickerFromPrint = (stickerId: string) => {
+        if (!selectedIds.has(stickerId)) {
+            return;
+        }
+
+        const remainingStickers = getPrintWorkspaceStickers().filter((entry) => entry.id !== stickerId);
+        const nextSelectedId = remainingStickers[0]?.id ?? null;
+
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(stickerId);
+            return next;
+        });
+        setLayoutItems((prev) => syncPrintLayoutItems(prev.filter((item) => item.sticker.id !== stickerId), remainingStickers, printTemplate));
+        setSelectedPrintItemId(
+            nextSelectedId ? `print-${printTemplate.id}-${nextSelectedId}-${remainingStickers.findIndex((item) => item.id === nextSelectedId)}` : null,
+        );
+        stopPrintInteraction();
+    };
+
+    const handlePrintCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const stickerId = event.dataTransfer.getData('text/remuse-sticker-id');
+        if (!stickerId) {
+            return;
+        }
+        handleAddStickerToPrint(stickerId, event.clientX, event.clientY);
+    };
+
     const handlePrintPointerMove = (clientX: number, clientY: number) => {
-        if (!activeDragId || !printCanvasRef.current) return;
+        if (!printInteraction || !printCanvasRef.current) return;
 
         const rect = printCanvasRef.current.getBoundingClientRect();
-        const activeItem = layoutItems.find((item) => item.instanceId === activeDragId);
-        const baseWidth = getPrintBaseWidth(layoutItems.length);
-        const itemWidth = (activeItem?.scale ?? 1) * baseWidth;
-        const xMargin = Math.max(10, itemWidth / 2);
-        const yMargin = Math.max(12, itemWidth / 2);
-        const xPercent = ((clientX - rect.left) / rect.width) * 100;
-        const yPercent = ((clientY - rect.top) / rect.height) * 100;
 
         setLayoutItems((prev) =>
             prev.map((item) =>
-                item.instanceId === activeDragId
-                    ? {
-                          ...item,
-                          x: Math.max(xMargin, Math.min(100 - xMargin, xPercent)),
-                          y: Math.max(yMargin, Math.min(86, yPercent)),
-                      }
+                item.instanceId === printInteraction.instanceId
+                    ? (() => {
+                          if (printInteraction.mode === 'drag') {
+                              const deltaX = ((clientX - printInteraction.startClientX) / rect.width) * 100;
+                              const deltaY = ((clientY - printInteraction.startClientY) / rect.height) * 100;
+                              const nextPosition = clampPrintPosition(
+                                  printInteraction.startX + deltaX,
+                                  printInteraction.startY + deltaY,
+                                  item.scale,
+                                  prev.length,
+                              );
+
+                              return {
+                                  ...item,
+                                  x: nextPosition.x,
+                                  y: nextPosition.y,
+                              };
+                          }
+
+                          if (printInteraction.mode === 'scale') {
+                              const currentDistance = Math.max(
+                                  1,
+                                  Math.hypot(clientX - printInteraction.centerX, clientY - printInteraction.centerY),
+                              );
+                              const nextScale = Math.max(
+                                  PRINT_SCALE_FLOOR,
+                                  printInteraction.startScale * (currentDistance / printInteraction.startDistance),
+                              );
+                              const nextPosition = clampPrintPosition(item.x, item.y, nextScale, prev.length);
+
+                              return {
+                                  ...item,
+                                  scale: nextScale,
+                                  x: nextPosition.x,
+                                  y: nextPosition.y,
+                              };
+                          }
+
+                          const currentAngle = Math.atan2(
+                              clientY - printInteraction.centerY,
+                              clientX - printInteraction.centerX,
+                          );
+                          const deltaRotation = normalizeAngleDelta(
+                              ((currentAngle - printInteraction.startAngle) * 180) / Math.PI,
+                          );
+
+                          return {
+                              ...item,
+                              rotation: printInteraction.startRotation + deltaRotation,
+                          };
+                      })()
                     : item,
             ),
         );
@@ -1218,7 +1646,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         const nextLayout = buildPrintLayoutItems(stickersInPrint, printTemplate);
         setLayoutItems(nextLayout);
         setSelectedPrintItemId(nextLayout[0]?.instanceId ?? null);
-        setActiveDragId(null);
+        stopPrintInteraction();
     };
 
     const updatePrintLayoutItem = (instanceId: string, updater: (item: LayoutItem) => LayoutItem) => {
@@ -1282,6 +1710,10 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         const selectedStickers = safeStickers.filter(s => selectedIds.has(s.id));
         if (mode === 'COLLAGE') {
             generateRandomLayout(selectedStickers);
+        }
+        if (mode === 'PRINT') {
+            setActiveJournalId(null);
+            setJournalSnapshotStickers([]);
         }
         if (mode === 'EMOJI_PACK') {
             // Reset emoji pack state
@@ -2322,6 +2754,232 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         );
     };
 
+    const renderCalendarPrintCanvas = async () => {
+        const printStickers = getPrintWorkspaceStickers();
+        if (printStickers.length === 0) return null;
+
+        const exportItems =
+            layoutItems.length > 0 ? [...layoutItems] : buildPrintLayoutItems(printStickers, printTemplate);
+        const calendarCells = buildCalendarCells(printYear, printMonth);
+        const A4_W = 2480;
+        const A4_H = 3508;
+        const outerMargin = 110;
+        const headerTop = 150;
+        const weekdayY = 470;
+        const weekdayHeight = 92;
+        const gridTop = weekdayY + weekdayHeight + 26;
+        const gridBottom = A4_H - 180;
+        const gridGap = 16;
+        const gridWidth = A4_W - outerMargin * 2;
+        const gridHeight = gridBottom - gridTop;
+        const cellWidth = (gridWidth - gridGap * 6) / 7;
+        const cellHeight = (gridHeight - gridGap * 5) / 6;
+        const baseWidth = (A4_W * getPrintBaseWidth(exportItems.length)) / 100;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = A4_W;
+        canvas.height = A4_H;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const loadImage = (src: string) =>
+            new Promise<HTMLImageElement>((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+
+        const drawRoundRect = (x: number, y: number, width: number, height: number, radius: number) => {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        };
+
+        ctx.fillStyle = printBackgroundColor;
+        ctx.fillRect(0, 0, A4_W, A4_H);
+
+        if (printBackgroundImage) {
+            try {
+                const backgroundImage = await loadImage(printBackgroundImage);
+                drawCoverImageToCanvas(ctx, backgroundImage, A4_W, A4_H);
+                ctx.fillStyle = `rgba(255,255,255,${printBackgroundOverlay})`;
+                ctx.fillRect(0, 0, A4_W, A4_H);
+            } catch (error) {
+                logger.error('Calendar background draw failed:', error);
+            }
+        }
+
+        ctx.strokeStyle = 'rgba(15,23,42,0.18)';
+        ctx.lineWidth = 6;
+        drawRoundRect(outerMargin * 0.7, outerMargin * 0.7, A4_W - outerMargin * 1.4, A4_H - outerMargin * 1.4, 58);
+        ctx.stroke();
+
+        ctx.fillStyle = printTemplate.textColor;
+        ctx.textAlign = 'left';
+        ctx.font = '900 72px "Noto Sans SC", sans-serif';
+        ctx.fillText(`${printYear}`, 150, headerTop);
+        ctx.font = '900 150px "Noto Sans SC", sans-serif';
+        ctx.fillText(`${printMonth}`, 180, headerTop + 165);
+        ctx.font = '600 52px "Noto Sans SC", sans-serif';
+        ctx.fillText(CALENDAR_MONTH_SHORT_LABELS[printMonth - 1], 390, headerTop + 150);
+
+        ctx.textAlign = 'center';
+        ctx.font = '900 108px "Noto Sans SC", sans-serif';
+        ctx.fillText(CALENDAR_MONTH_FULL_LABELS[printMonth - 1], A4_W / 2, 320);
+
+        if (printHeaderNote.trim()) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = printTemplate.textColor;
+            ctx.font = '500 40px "Noto Sans SC", sans-serif';
+            const noteLines = printHeaderNote.trim().split('\n').slice(0, 4);
+            noteLines.forEach((line, index) => {
+                ctx.fillText(line, A4_W - 170, 160 + index * 54);
+            });
+        }
+
+        CALENDAR_WEEKDAY_LABELS.forEach((weekday, index) => {
+            const x = outerMargin + index * (cellWidth + gridGap);
+            const weekend = index >= 5;
+
+            ctx.fillStyle = weekend ? '#111827' : 'rgba(255,255,255,0.9)';
+            ctx.strokeStyle = weekend ? '#111827' : 'rgba(15,23,42,0.14)';
+            ctx.lineWidth = 3;
+            drawRoundRect(x, weekdayY, cellWidth, weekdayHeight, 18);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = weekend ? '#ffffff' : printTemplate.textColor;
+            ctx.textAlign = 'center';
+            ctx.font = '900 36px "Noto Sans SC", sans-serif';
+            ctx.fillText(weekday, x + cellWidth / 2, weekdayY + 58);
+        });
+
+        calendarCells.forEach((cell, index) => {
+            const column = index % 7;
+            const row = Math.floor(index / 7);
+            const x = outerMargin + column * (cellWidth + gridGap);
+            const y = gridTop + row * (cellHeight + gridGap);
+
+            ctx.fillStyle = cell.inCurrentMonth ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.46)';
+            ctx.strokeStyle = cell.inCurrentMonth ? 'rgba(15,23,42,0.14)' : 'rgba(100,116,139,0.16)';
+            ctx.lineWidth = 3;
+            drawRoundRect(x, y, cellWidth, cellHeight, 26);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = cell.inCurrentMonth ? printTemplate.textColor : printTemplate.secondaryTextColor;
+            ctx.textAlign = 'left';
+            ctx.font = '700 34px "Noto Sans SC", sans-serif';
+            ctx.fillText(String(cell.dayNumber), x + 26, y + 46);
+
+            ctx.fillStyle = 'rgba(148,163,184,0.28)';
+            ctx.fillRect(x + 24, y + cellHeight - 42, cellWidth - 48, 2);
+        });
+
+        for (const item of [...exportItems].sort((a, b) => a.zIndex - b.zIndex)) {
+            try {
+                const image = await loadImage(item.sticker.stickerImageUrl);
+                const drawWidth = baseWidth * item.scale;
+                const drawHeight = drawWidth * (image.height / image.width);
+                const centerX = (item.x / 100) * A4_W;
+                const centerY = (item.y / 100) * A4_H;
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate((item.rotation * Math.PI) / 180);
+                ctx.shadowColor = 'rgba(15,23,42,0.18)';
+                ctx.shadowBlur = 28;
+                ctx.shadowOffsetY = 16;
+                ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+                ctx.restore();
+            } catch (error) {
+                logger.error('Calendar sticker draw failed:', error);
+            }
+        }
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = printTemplate.secondaryTextColor;
+        ctx.font = '500 26px "Noto Sans SC", sans-serif';
+        ctx.fillText('remuse monthly journal', A4_W / 2, A4_H - 92);
+        return canvas;
+    };
+
+    const exportCalendarPrint = async () => {
+        const canvas = await renderCalendarPrintCanvas();
+        if (!canvas) return;
+        await runSaveAction(() => persistCanvasToDevice(canvas, `remuse-calendar-journal-${Date.now()}.png`));
+    };
+
+    const handleSaveJournalToLibrary = async () => {
+        if (!onSaveJournal) {
+            showSaveFeedback('暂不可保存', '当前页面还没有接入手账库保存能力。');
+            return;
+        }
+
+        const canvas = await renderCalendarPrintCanvas();
+        if (!canvas) {
+            showSaveFeedback('还没有内容', '先放入贴纸并完成排版，再存入手账库。');
+            return;
+        }
+
+        const stickerIds = layoutItems.map((item) => item.sticker.id);
+        const payload: SaveJournalInput = {
+            id: activeJournalId || undefined,
+            title: buildJournalTitle(printYear, printMonth, printHeaderNote),
+            previewImageBase64: canvasToPngDataUrl(canvas),
+            backgroundImageBase64: printBackgroundImage.startsWith('data:') ? printBackgroundImage : undefined,
+            backgroundImageUrl: printBackgroundImage && !printBackgroundImage.startsWith('data:') ? printBackgroundImage : '',
+            templateId: printTemplate.id,
+            year: printYear,
+            month: printMonth,
+            headerNote: printHeaderNote,
+            backgroundColor: printBackgroundColor,
+            backgroundOverlay: printBackgroundOverlay,
+            selectedStickerIds: stickerIds,
+            layoutItems: layoutItems.map((item) => ({
+                stickerId: item.sticker.id,
+                sticker: {
+                    ...item.sticker,
+                    originalItemId: item.sticker.originalItemId || '',
+                    dramaText: item.sticker.dramaText || '',
+                    category: item.sticker.category || '其他',
+                    dateCreated: item.sticker.dateCreated || '',
+                },
+                x: item.x,
+                y: item.y,
+                rotation: item.rotation,
+                scale: item.scale,
+                zIndex: item.zIndex,
+            })),
+            dateCreated: activeJournalId
+                ? safeJournals.find((journal) => journal.id === activeJournalId)?.dateCreated || new Date().toISOString()
+                : new Date().toISOString(),
+        };
+
+        try {
+            const saved = await onSaveJournal(payload);
+            if (saved) {
+                setActiveJournalId(saved.id);
+                setJournalSnapshotStickers(saved.layoutItems.map((item) => item.sticker));
+                setSelectedIds(new Set(saved.selectedStickerIds));
+            }
+            showSaveFeedback('已存入手账库', '这份月历手账已经保存到再生成果库，可随时继续编辑。');
+        } catch (error) {
+            logger.error('Save journal to library failed:', error);
+            showSaveFeedback('保存失败', '存入手账库失败，请稍后重试。');
+        }
+    };
+
     const handleExportPrintStyled = async () => {
         const selectedStickers = safeStickers.filter((sticker) => selectedIds.has(sticker.id));
         if (selectedStickers.length === 0) return;
@@ -2421,9 +3079,513 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         await runSaveAction(() => persistCanvasToDevice(canvas, `remuse-print-${printTemplate.id}-${Date.now()}.png`));
     };
 
+    const renderCalendarPrintStudio = (selectedStickers: Sticker[]) => {
+        const selectedPrintItem = layoutItems.find((item) => item.instanceId === selectedPrintItemId) ?? layoutItems[0] ?? null;
+        const previewBaseWidth = getPrintBaseWidth(layoutItems.length || selectedStickers.length || 1);
+        const calendarCells = buildCalendarCells(printYear, printMonth);
+        const yearOptions = Array.from({ length: 8 }, (_, index) => new Date().getFullYear() - 1 + index);
+        const availablePrintStickers = regularStickers.filter((sticker) => !selectedIds.has(sticker.id));
+
+        return (
+            <div className="remuse-studio flex h-full flex-col bg-remuse-dark text-white">
+                <div className="flex items-center justify-between border-b border-neutral-800 bg-remuse-panel p-4">
+                    <div className="flex items-center gap-4">
+                        <button onClick={handleReturnFromCanvas} className="text-neutral-500 transition-colors hover:text-white">
+                            <X size={24} />
+                        </button>
+                        <div>
+                            <h2 className="flex items-center gap-2 text-xl font-bold font-display text-white">
+                                <Scissors size={20} className="text-remuse-secondary" />
+                                月历手账
+                            </h2>
+                            <p className="mt-1 text-xs text-neutral-500">上传背景，自由拖拽贴纸，导出可打印的月历页。</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleSaveJournalToLibrary}
+                            disabled={layoutItems.length === 0}
+                            className="flex items-center gap-2 rounded-full border border-neutral-700 bg-transparent px-5 py-2 text-sm font-display font-bold text-white transition-colors hover:border-remuse-secondary hover:text-remuse-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            <Save size={16} />
+                            存入手账库
+                        </button>
+                        <button
+                            onClick={exportCalendarPrint}
+                            disabled={layoutItems.length === 0}
+                            className="flex items-center gap-2 rounded-full bg-remuse-secondary px-5 py-2 text-sm font-display font-bold text-black shadow-lg transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                        >
+                            <Printer size={16} />
+                            导出月历图
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex flex-1 flex-col overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)] xl:flex-row xl:pb-0">
+                    <div className="flex flex-1 items-center justify-center bg-[#111] p-4 md:p-6">
+                        <div
+                            ref={printCanvasRef}
+                            className="relative w-full max-w-[440px] overflow-hidden rounded-[26px] border border-white/10 bg-[#f8f5ee] shadow-2xl touch-none"
+                            style={{
+                                aspectRatio: '2480/3508',
+                                maxHeight: '78vh',
+                                transform: `scale(${printScale})`,
+                                transformOrigin: 'center center',
+                                transition: 'transform 0.3s',
+                                backgroundColor: printBackgroundColor,
+                            }}
+                            onMouseDown={(event) => handlePrintCanvasPointerDown(event.target)}
+                            onTouchStart={(event) => handlePrintCanvasPointerDown(event.target)}
+                            onDragOver={(event) => {
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDrop={handlePrintCanvasDrop}
+                            onMouseMove={(event) => handlePrintPointerMove(event.clientX, event.clientY)}
+                            onMouseUp={stopPrintInteraction}
+                            onMouseLeave={stopPrintInteraction}
+                            onTouchMove={(event) => {
+                                if (printInteraction && event.touches.length === 1) {
+                                    event.preventDefault();
+                                    handlePrintPointerMove(event.touches[0].clientX, event.touches[0].clientY);
+                                }
+                            }}
+                            onTouchEnd={stopPrintInteraction}
+                            onTouchCancel={stopPrintInteraction}
+                        >
+                            {printBackgroundImage && (
+                                <img src={printBackgroundImage} alt="Calendar background" className="absolute inset-0 h-full w-full object-cover" />
+                            )}
+                            <div
+                                className="absolute inset-0"
+                                style={{ background: printBackgroundImage ? `rgba(255,255,255,${printBackgroundOverlay})` : 'rgba(255,255,255,0.18)' }}
+                            />
+                            <div className="absolute inset-[3%] rounded-[32px] border border-neutral-900/15" />
+
+                            <div className="absolute left-[6.5%] top-[5.2%] z-[2]">
+                                <p className="text-[18px] font-black leading-none tracking-[0.04em]" style={{ color: printTemplate.textColor }}>
+                                    {printYear}
+                                </p>
+                                <div className="mt-[1.5%] flex items-end gap-[2%]">
+                                    <span className="text-[44px] font-black leading-none" style={{ color: printTemplate.textColor }}>
+                                        {printMonth}
+                                    </span>
+                                    <span className="pb-[5%] text-[15px] font-semibold" style={{ color: printTemplate.textColor }}>
+                                        {CALENDAR_MONTH_SHORT_LABELS[printMonth - 1]}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="absolute inset-x-[24%] top-[8.5%] z-[2] text-center">
+                                <h3 className="text-[28px] font-black leading-none tracking-[-0.04em]" style={{ color: printTemplate.textColor }}>
+                                    {CALENDAR_MONTH_FULL_LABELS[printMonth - 1]}
+                                </h3>
+                            </div>
+
+                            {printHeaderNote.trim() ? (
+                                <div className="absolute right-[7%] top-[5.5%] z-[2] max-w-[32%] text-right">
+                                    <p className="whitespace-pre-line text-[9.5px] font-medium leading-[1.55]" style={{ color: printTemplate.textColor }}>
+                                        {printHeaderNote.trim()}
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            <div className="absolute inset-x-[5%] top-[18%] bottom-[7%] z-[1] flex flex-col">
+                                <div className="mb-[1.5%] grid grid-cols-7 gap-[1.1%]">
+                                    {CALENDAR_WEEKDAY_LABELS.map((weekday, index) => {
+                                        const weekend = index >= 5;
+                                        return (
+                                            <div
+                                                key={weekday}
+                                                className="flex items-center justify-center rounded-[10px] border text-[9px] font-black tracking-[0.2em]"
+                                                style={{
+                                                    background: weekend ? '#111827' : 'rgba(255,255,255,0.82)',
+                                                    color: weekend ? '#ffffff' : printTemplate.textColor,
+                                                    borderColor: weekend ? '#111827' : 'rgba(15,23,42,0.18)',
+                                                }}
+                                            >
+                                                {weekday}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-[1.1%]">
+                                    {calendarCells.map((cell) => (
+                                        <div
+                                            key={cell.key}
+                                            className="relative overflow-hidden rounded-[14px] border"
+                                            style={{
+                                                background: cell.inCurrentMonth ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.42)',
+                                                borderColor: cell.inCurrentMonth ? 'rgba(15,23,42,0.16)' : 'rgba(100,116,139,0.18)',
+                                            }}
+                                        >
+                                            <span
+                                                className="absolute left-[8%] top-[8%] text-[9px] font-bold"
+                                                style={{ color: cell.inCurrentMonth ? printTemplate.textColor : printTemplate.secondaryTextColor }}
+                                            >
+                                                {cell.dayNumber}
+                                            </span>
+                                            <div className="absolute inset-x-[8%] bottom-[13%] h-px" style={{ background: 'rgba(148,163,184,0.28)' }} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {layoutItems
+                                .slice()
+                                .sort((a, b) => a.zIndex - b.zIndex)
+                                .map((item) => {
+                                    const isSelected = selectedPrintItemId === item.instanceId;
+                                    const isInteracting = printInteraction?.instanceId === item.instanceId;
+
+                                    return (
+                                        <div
+                                            key={item.instanceId}
+                                            data-print-sticker-shell="true"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={item.sticker.dramaText || item.sticker.category || '贴纸'}
+                                            className={`absolute z-10 flex select-none items-center justify-center ${isInteracting && printInteraction?.mode === 'drag' ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                            style={{
+                                                left: `${item.x}%`,
+                                                top: `${item.y}%`,
+                                                width: `${previewBaseWidth * item.scale}%`,
+                                                transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`,
+                                                touchAction: 'none',
+                                            }}
+                                            onClick={() => setSelectedPrintItemId(item.instanceId)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault();
+                                                    setSelectedPrintItemId(item.instanceId);
+                                                }
+                                            }}
+                                            onMouseDown={(event) => {
+                                                event.preventDefault();
+                                                handlePrintPointerDown(event.clientX, event.clientY, item.instanceId);
+                                            }}
+                                            onTouchStart={(event) => {
+                                                if (event.touches.length === 1) {
+                                                    event.preventDefault();
+                                                    handlePrintPointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId);
+                                                }
+                                            }}
+                                        >
+                                            <div className="relative flex w-full items-center justify-center transition-all" style={getPrintStickerFrameStyle(printTemplate, isSelected)}>
+                                                <img src={item.sticker.stickerImageUrl} alt={item.sticker.dramaText || 'sticker'} className="block h-auto w-full object-contain" />
+
+                                                {isSelected ? (
+                                                    <>
+                                                        <div className="pointer-events-none absolute inset-0 rounded-[24px] border-2 border-cyan-300/95 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]" />
+                                                        <button
+                                                            type="button"
+                                                            aria-label="移出贴纸"
+                                                            className="absolute -right-2 -top-2 z-[2] flex h-7 w-7 items-center justify-center rounded-full border border-red-300/30 bg-[#171717]/85 text-red-100 shadow-[0_8px_20px_rgba(0,0,0,0.28)] backdrop-blur transition-colors hover:border-red-300/60 hover:bg-red-500/90"
+                                                            onMouseDown={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                            }}
+                                                            onTouchStart={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                            }}
+                                                            onClick={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handleRemoveStickerFromPrint(item.sticker.id);
+                                                            }}
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                        <div className="pointer-events-none absolute left-1/2 top-0 h-6 w-px -translate-x-1/2 -translate-y-full bg-cyan-300/75" />
+                                                        <button
+                                                            type="button"
+                                                            aria-label="旋转贴纸"
+                                                            className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[175%] items-center justify-center rounded-full border border-cyan-200 bg-[#0f172a] text-cyan-200 shadow-lg ${printInteraction?.mode === 'rotate' && isInteracting ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                                            onMouseDown={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handlePrintRotatePointerDown(event.clientX, event.clientY, item.instanceId);
+                                                            }}
+                                                            onTouchStart={(event) => {
+                                                                if (event.touches.length === 1) {
+                                                                    event.preventDefault();
+                                                                    event.stopPropagation();
+                                                                    handlePrintRotatePointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <span className="block h-2 w-2 rounded-full bg-cyan-300" />
+                                                        </button>
+
+                                                        {PRINT_HANDLE_CONFIGS.map((handle) => (
+                                                            <button
+                                                                key={handle.id}
+                                                                type="button"
+                                                                aria-label="缩放贴纸"
+                                                                className={`absolute ${handle.className} h-4 w-4 rounded-full border-2 border-[#0f172a] bg-cyan-300 shadow-lg`}
+                                                                onMouseDown={(event) => {
+                                                                    event.preventDefault();
+                                                                    event.stopPropagation();
+                                                                    handlePrintResizePointerDown(event.clientX, event.clientY, item.instanceId);
+                                                                }}
+                                                                onTouchStart={(event) => {
+                                                                    if (event.touches.length === 1) {
+                                                                        event.preventDefault();
+                                                                        event.stopPropagation();
+                                                                        handlePrintResizePointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                            <div className="absolute inset-x-[8%] bottom-[4%] text-center text-[8px] font-display uppercase tracking-[0.24em]" style={{ color: printTemplate.secondaryTextColor }}>
+                                remuse monthly journal
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="w-full space-y-5 border-t border-neutral-800 bg-remuse-panel p-4 xl:w-[22rem] xl:overflow-y-auto xl:border-l xl:border-t-0 md:p-5">
+                        <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">贴纸池</label>
+                                    <p className="text-[11px] leading-relaxed text-neutral-500">把贴纸拖进月历里，或点击加入。移出后会自动回到这里。</p>
+                                </div>
+                                <span className="rounded-full border border-neutral-700 px-2.5 py-1 text-[11px] font-mono text-neutral-400">
+                                    {availablePrintStickers.length}/{regularStickers.length}
+                                </span>
+                            </div>
+
+                            <div className="mt-4 max-h-[18rem] space-y-3 overflow-y-auto pr-1">
+                                {availablePrintStickers.length > 0 ? (
+                                    availablePrintStickers.map((sticker) => (
+                                        <div
+                                            key={sticker.id}
+                                            draggable
+                                            onDragStart={(event) => {
+                                                event.dataTransfer.effectAllowed = 'move';
+                                                event.dataTransfer.setData('text/remuse-sticker-id', sticker.id);
+                                            }}
+                                            className="rounded-2xl border border-neutral-800 bg-neutral-950/70 p-3 transition-colors hover:border-remuse-secondary/40"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2">
+                                                    <img src={sticker.stickerImageUrl} alt={sticker.dramaText || 'sticker'} className="h-full w-full object-contain" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="line-clamp-2 text-sm font-display font-bold text-white">
+                                                        {sticker.dramaText || sticker.category}
+                                                    </p>
+                                                    <p className="mt-1 text-[11px] text-neutral-500">拖进月历或点击加入</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddStickerToPrint(sticker.id)}
+                                                className="mt-3 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-display text-white transition-colors hover:border-remuse-secondary hover:text-remuse-secondary"
+                                            >
+                                                加入月历
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-950/50 px-4 py-5 text-sm leading-relaxed text-neutral-500">
+                                        贴纸池已经空了。把画布里的贴纸移出后，它会自动回到这里。
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
+                            <p className="text-sm font-display font-bold text-white">月历设置</p>
+                            <div className="mt-4 grid grid-cols-2 gap-3">
+                                <label className="text-xs text-neutral-400">
+                                    <span className="mb-2 block font-display uppercase tracking-wider">年份</span>
+                                    <select
+                                        value={printYear}
+                                        onChange={(event) => setPrintYear(Number(event.target.value))}
+                                        className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3 text-sm text-white focus:border-remuse-secondary focus:outline-none"
+                                    >
+                                        {yearOptions.map((year) => (
+                                            <option key={year} value={year}>
+                                                {year}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="text-xs text-neutral-400">
+                                    <span className="mb-2 block font-display uppercase tracking-wider">月份</span>
+                                    <select
+                                        value={printMonth}
+                                        onChange={(event) => setPrintMonth(Number(event.target.value))}
+                                        className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3 text-sm text-white focus:border-remuse-secondary focus:outline-none"
+                                    >
+                                        {CALENDAR_MONTH_FULL_LABELS.map((monthLabel, index) => (
+                                            <option key={monthLabel} value={index + 1}>
+                                                {index + 1} / {monthLabel}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <label className="text-xs font-display uppercase tracking-wider text-neutral-400">纯色底色</label>
+                                    <input
+                                        type="color"
+                                        value={printBackgroundColor}
+                                        onChange={(event) => setPrintBackgroundColor(event.target.value)}
+                                        className="h-9 w-11 cursor-pointer rounded-lg border border-neutral-700 bg-neutral-900 p-1"
+                                    />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {CALENDAR_BACKGROUND_SWATCHES.map((color) => (
+                                        <button
+                                            key={color}
+                                            type="button"
+                                            aria-label={`Select ${color}`}
+                                            onClick={() => setPrintBackgroundColor(color)}
+                                            className={`h-9 w-9 rounded-full border transition-transform hover:scale-105 ${printBackgroundColor.toLowerCase() === color.toLowerCase() ? 'border-white' : 'border-white/15'}`}
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <label className="text-xs font-display uppercase tracking-wider text-neutral-400">背景图</label>
+                                    {printBackgroundImage ? (
+                                        <button
+                                            type="button"
+                                            onClick={clearPrintBackground}
+                                            className="rounded-full border border-neutral-700 px-3 py-1 text-[11px] font-display text-neutral-300 transition-colors hover:border-remuse-secondary hover:text-remuse-secondary"
+                                        >
+                                            清除
+                                        </button>
+                                    ) : null}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => printBackgroundInputRef.current?.click()}
+                                    className="w-full rounded-2xl border border-dashed border-neutral-700 bg-neutral-900/70 px-4 py-4 text-left transition-colors hover:border-remuse-secondary hover:bg-neutral-900"
+                                >
+                                    <p className="text-sm font-display font-bold text-white">上传手账纸或照片</p>
+                                    <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">支持把自己的底纸、照片或打印背景铺在整页下面。</p>
+                                </button>
+                                <input
+                                    ref={printBackgroundInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handlePrintBackgroundUpload}
+                                />
+                            </div>
+
+                            {printBackgroundImage ? (
+                                <div className="mt-4">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <label className="text-xs font-display uppercase tracking-wider text-neutral-400">背景覆盖度</label>
+                                        <span className="text-[11px] font-mono text-neutral-500">{Math.round(printBackgroundOverlay * 100)}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.2"
+                                        max="0.95"
+                                        step="0.05"
+                                        value={printBackgroundOverlay}
+                                        onChange={(event) => setPrintBackgroundOverlay(Number(event.target.value))}
+                                        className="w-full accent-remuse-secondary"
+                                    />
+                                </div>
+                            ) : null}
+
+                            <div className="mt-4">
+                                <label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">页眉文字</label>
+                                <textarea
+                                    rows={4}
+                                    maxLength={80}
+                                    value={printHeaderNote}
+                                    onChange={(event) => setPrintHeaderNote(event.target.value)}
+                                    placeholder="写一句这个月的主题、提醒或想记录的话。"
+                                    className="w-full rounded-2xl border border-neutral-700 bg-neutral-900 px-3 py-3 text-sm leading-relaxed text-white transition-colors focus:border-remuse-secondary focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">贴纸排版</label>
+                                    <p className="text-[11px] leading-relaxed text-neutral-500">在左侧拖动贴纸，自由摆成月历手账；点击贴纸后可直接拖动、缩放和旋转。</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => resetPrintLayout(selectedStickers)}
+                                    disabled={selectedStickers.length === 0}
+                                    className="shrink-0 rounded-full border border-neutral-700 px-3 py-1.5 text-[11px] font-display text-neutral-300 transition-colors hover:border-remuse-secondary hover:text-remuse-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    重置排版
+                                </button>
+                            </div>
+                            {selectedPrintItem ? (
+                                <div className="mt-4 space-y-4 rounded-2xl border border-white/10 bg-neutral-950/70 p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2">
+                                            <img src={selectedPrintItem.sticker.stickerImageUrl} alt={selectedPrintItem.sticker.dramaText || 'selected sticker'} className="h-full w-full object-contain" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-display uppercase tracking-[0.2em] text-neutral-500">selected sticker</p>
+                                            <p className="mt-1 line-clamp-2 text-sm font-display font-bold text-white">
+                                                {selectedPrintItem.sticker.dramaText || selectedPrintItem.sticker.category}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p className="rounded-2xl border border-dashed border-neutral-800 bg-black/20 px-3 py-3 text-xs leading-relaxed text-neutral-400">
+                                        直接在纸面上拖动、拉四角缩放，或拖顶部圆点旋转。
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="mt-4 rounded-2xl border border-dashed border-neutral-800 bg-neutral-950/50 px-4 py-5 text-sm text-neutral-500">
+                                    先点击纸面上的任意贴纸，再直接拖动、缩放或旋转它。
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
+                            <label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">预览缩放</label>
+                            <input
+                                type="range"
+                                min="0.6"
+                                max="1.45"
+                                step="0.05"
+                                value={printScale}
+                                onChange={(event) => setPrintScale(Number(event.target.value))}
+                                className="w-full accent-remuse-secondary"
+                            />
+                        </div>
+                    </div>
+
+                    {renderSaveFeedback()}
+                </div>
+            </div>
+        );
+    };
+
     const renderEditablePrintStudio = (selectedStickers: Sticker[]) => {
         const selectedPrintItem = layoutItems.find((item) => item.instanceId === selectedPrintItemId) ?? layoutItems[0] ?? null;
         const previewBaseWidth = getPrintBaseWidth(layoutItems.length || selectedStickers.length || 1);
+        const calendarCells = buildCalendarCells(printYear, printMonth);
+        const yearOptions = Array.from({ length: 8 }, (_, index) => new Date().getFullYear() - 1 + index);
 
         return (
             <div className="remuse-studio flex h-full flex-col bg-remuse-dark text-white">
@@ -2439,35 +3601,177 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                     <div className="flex flex-1 items-center justify-center bg-[#111] p-4 md:p-6">
                         <div
                             ref={printCanvasRef}
-                            className="relative w-full max-w-[360px] overflow-hidden rounded-[18px] border border-white/10 shadow-2xl touch-none"
-                            style={{ aspectRatio: '2480/3508', maxHeight: '75vh', transform: `scale(${printScale})`, transformOrigin: 'center center', transition: 'transform 0.3s', ...getPrintPageBackground(printTemplate) }}
+                            className="relative w-full max-w-[420px] overflow-hidden rounded-[22px] border border-white/10 shadow-2xl touch-none"
+                            style={{
+                                aspectRatio: '2480/3508',
+                                maxHeight: '78vh',
+                                transform: `scale(${printScale})`,
+                                transformOrigin: 'center center',
+                                transition: 'transform 0.3s',
+                                backgroundColor: printBackgroundColor,
+                            }}
+                            onMouseDown={(event) => handlePrintCanvasPointerDown(event.target)}
+                            onTouchStart={(event) => handlePrintCanvasPointerDown(event.target)}
+                            onDragOver={(event) => {
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDrop={handlePrintCanvasDrop}
                             onMouseMove={(event) => handlePrintPointerMove(event.clientX, event.clientY)}
-                            onMouseUp={() => setActiveDragId(null)}
-                            onMouseLeave={() => setActiveDragId(null)}
-                            onTouchMove={(event) => { if (activeDragId && event.touches.length === 1) { event.preventDefault(); handlePrintPointerMove(event.touches[0].clientX, event.touches[0].clientY); } }}
-                            onTouchEnd={() => setActiveDragId(null)}
-                            onTouchCancel={() => setActiveDragId(null)}
+                            onMouseUp={stopPrintInteraction}
+                            onMouseLeave={stopPrintInteraction}
+                            onTouchMove={(event) => { if (printInteraction && event.touches.length === 1) { event.preventDefault(); handlePrintPointerMove(event.touches[0].clientX, event.touches[0].clientY); } }}
+                            onTouchEnd={stopPrintInteraction}
+                            onTouchCancel={stopPrintInteraction}
                         >
-                            <div className="absolute inset-x-[7%] top-[5%] text-center">
-                                <p className="text-[7px] font-display font-bold uppercase tracking-[0.38em]" style={{ color: printTemplate.accentColor }}>{printTemplate.headerSubtitle}</p>
-                                <h3 className="mt-2 text-[19px] font-black" style={{ color: printTemplate.textColor }}>{printTemplate.headerTitle}</h3>
+                            {printBackgroundImage && (
+                                <img src={printBackgroundImage} alt="Calendar background" className="absolute inset-0 h-full w-full object-cover" />
+                            )}
+                            <div
+                                className="absolute inset-0"
+                                style={{ background: printBackgroundImage ? `rgba(255,255,255,${printBackgroundOverlay})` : 'rgba(255,255,255,0.18)' }}
+                            />
+                            <div className="absolute inset-[3.5%] rounded-[28px] border border-neutral-900/20" />
+
+                            <div className="absolute left-[6.5%] top-[5.5%] z-[2]">
+                                <p className="text-[18px] font-black leading-none tracking-[0.04em]" style={{ color: printTemplate.textColor }}>{printYear}</p>
+                                <div className="mt-[2%] flex items-end gap-[2%]">
+                                    <span className="text-[44px] font-black leading-none" style={{ color: printTemplate.textColor }}>{printMonth}</span>
+                                    <span className="pb-[5%] text-[15px] font-semibold" style={{ color: printTemplate.textColor }}>{CALENDAR_MONTH_SHORT_LABELS[printMonth - 1]}</span>
+                                </div>
                             </div>
-                            <div className="absolute inset-x-[7%] top-[14%] bottom-[8%] rounded-[26px] border-2 border-dashed" style={{ borderColor: `${printTemplate.accentColor}55` }} />
-                            {layoutItems.slice().sort((a, b) => a.zIndex - b.zIndex).map((item) => (
-                                <button
-                                    key={item.instanceId}
-                                    type="button"
-                                    className={`absolute z-10 flex select-none items-center justify-center ${activeDragId === item.instanceId ? 'cursor-grabbing' : 'cursor-grab'}`}
-                                    style={{ left: `${item.x}%`, top: `${item.y}%`, width: `${previewBaseWidth * item.scale}%`, transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`, touchAction: 'none' }}
-                                    onClick={() => setSelectedPrintItemId(item.instanceId)}
-                                    onMouseDown={(event) => { event.preventDefault(); handlePrintPointerDown(event.clientX, event.clientY, item.instanceId); }}
-                                    onTouchStart={(event) => { if (event.touches.length === 1) { event.preventDefault(); handlePrintPointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId); } }}
-                                >
-                                    <div className="flex w-full items-center justify-center transition-all" style={getPrintStickerFrameStyle(printTemplate, selectedPrintItemId === item.instanceId)}>
-                                        <img src={item.sticker.stickerImageUrl} alt={item.sticker.dramaText || 'sticker'} className="block h-auto w-full object-contain" />
+
+                            <div className="absolute inset-x-[26%] top-[8.5%] z-[2] text-center">
+                                <h3 className="text-[28px] font-black leading-none tracking-[-0.04em]" style={{ color: printTemplate.textColor }}>
+                                    {CALENDAR_MONTH_FULL_LABELS[printMonth - 1]}
+                                </h3>
+                            </div>
+
+                            {printHeaderNote.trim() ? (
+                                <div className="absolute right-[7%] top-[5.5%] z-[2] max-w-[32%] text-right">
+                                    <p className="whitespace-pre-line text-[9.5px] font-medium leading-[1.55]" style={{ color: printTemplate.textColor }}>
+                                        {printHeaderNote.trim()}
+                                    </p>
+                                </div>
+                            ) : null}
+
+                            <div className="absolute inset-x-[5%] top-[18%] bottom-[7%] z-[1] flex flex-col">
+                                <div className="mb-[1.5%] grid grid-cols-7 gap-[1.1%]">
+                                    {CALENDAR_WEEKDAY_LABELS.map((weekday, index) => {
+                                        const weekend = index >= 5;
+                                        return (
+                                            <div
+                                                key={weekday}
+                                                className="flex items-center justify-center rounded-[10px] border text-[9px] font-black tracking-[0.2em]"
+                                                style={{
+                                                    background: weekend ? '#111827' : 'rgba(255,255,255,0.82)',
+                                                    color: weekend ? '#ffffff' : printTemplate.textColor,
+                                                    borderColor: weekend ? '#111827' : 'rgba(15,23,42,0.18)',
+                                                }}
+                                            >
+                                                {weekday}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-[1.1%]">
+                                    {calendarCells.map((cell) => (
+                                        <div
+                                            key={cell.key}
+                                            className="relative overflow-hidden rounded-[14px] border"
+                                            style={{
+                                                background: cell.inCurrentMonth ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.42)',
+                                                borderColor: cell.inCurrentMonth ? 'rgba(15,23,42,0.16)' : 'rgba(100,116,139,0.18)',
+                                            }}
+                                        >
+                                            <span
+                                                className="absolute left-[8%] top-[8%] text-[9px] font-bold"
+                                                style={{ color: cell.inCurrentMonth ? printTemplate.textColor : printTemplate.secondaryTextColor }}
+                                            >
+                                                {cell.dayNumber}
+                                            </span>
+                                            <div className="absolute inset-x-[8%] bottom-[13%] h-px" style={{ background: 'rgba(148,163,184,0.28)' }} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            {layoutItems.slice().sort((a, b) => a.zIndex - b.zIndex).map((item) => {
+                                const isSelected = selectedPrintItemId === item.instanceId;
+                                const isInteracting = printInteraction?.instanceId === item.instanceId;
+
+                                return (
+                                    <div
+                                        key={item.instanceId}
+                                        data-print-sticker-shell="true"
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={item.sticker.dramaText || item.sticker.category || '贴纸'}
+                                        className={`absolute z-10 flex select-none items-center justify-center ${isInteracting && printInteraction?.mode === 'drag' ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                        style={{ left: `${item.x}%`, top: `${item.y}%`, width: `${previewBaseWidth * item.scale}%`, transform: `translate(-50%, -50%) rotate(${item.rotation}deg)`, touchAction: 'none' }}
+                                        onClick={() => setSelectedPrintItemId(item.instanceId)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                setSelectedPrintItemId(item.instanceId);
+                                            }
+                                        }}
+                                        onMouseDown={(event) => { event.preventDefault(); handlePrintPointerDown(event.clientX, event.clientY, item.instanceId); }}
+                                        onTouchStart={(event) => { if (event.touches.length === 1) { event.preventDefault(); handlePrintPointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId); } }}
+                                    >
+                                        <div className="relative flex w-full items-center justify-center transition-all" style={getPrintStickerFrameStyle(printTemplate, isSelected)}>
+                                            <img src={item.sticker.stickerImageUrl} alt={item.sticker.dramaText || 'sticker'} className="block h-auto w-full object-contain" />
+
+                                            {isSelected ? (
+                                                <>
+                                                    <div className="pointer-events-none absolute inset-0 rounded-[24px] border-2 border-cyan-300/95 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]" />
+                                                    <div className="pointer-events-none absolute left-1/2 top-0 h-6 w-px -translate-x-1/2 -translate-y-full bg-cyan-300/75" />
+                                                    <button
+                                                        type="button"
+                                                        aria-label="旋转贴纸"
+                                                        className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[175%] items-center justify-center rounded-full border border-cyan-200 bg-[#0f172a] text-cyan-200 shadow-lg ${printInteraction?.mode === 'rotate' && isInteracting ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                                        onMouseDown={(event) => {
+                                                            event.preventDefault();
+                                                            event.stopPropagation();
+                                                            handlePrintRotatePointerDown(event.clientX, event.clientY, item.instanceId);
+                                                        }}
+                                                        onTouchStart={(event) => {
+                                                            if (event.touches.length === 1) {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handlePrintRotatePointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <span className="block h-2 w-2 rounded-full bg-cyan-300" />
+                                                    </button>
+
+                                                    {PRINT_HANDLE_CONFIGS.map((handle) => (
+                                                        <button
+                                                            key={handle.id}
+                                                            type="button"
+                                                            aria-label="缩放贴纸"
+                                                            className={`absolute ${handle.className} h-4 w-4 rounded-full border-2 border-[#0f172a] bg-cyan-300 shadow-lg`}
+                                                            onMouseDown={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handlePrintResizePointerDown(event.clientX, event.clientY, item.instanceId);
+                                                            }}
+                                                            onTouchStart={(event) => {
+                                                                if (event.touches.length === 1) {
+                                                                    event.preventDefault();
+                                                                    event.stopPropagation();
+                                                                    handlePrintResizePointerDown(event.touches[0].clientX, event.touches[0].clientY, item.instanceId);
+                                                                }
+                                                            }}
+                                                        />
+                                                    ))}
+                                                </>
+                                            ) : null}
+                                        </div>
                                     </div>
-                                </button>
-                            ))}
+                                );
+                            })}
                             <div className="absolute inset-x-[8%] bottom-[4%] text-center text-[8px] font-display uppercase tracking-[0.24em]" style={{ color: printTemplate.secondaryTextColor }}>{printTemplate.footerText}</div>
                         </div>
                     </div>
@@ -2487,7 +3791,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
 
                         <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
                             <div className="flex items-start justify-between gap-4">
-                                <div><label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">贴纸排布</label><p className="text-[11px] leading-relaxed text-neutral-500">支持拖拽位置，并针对选中的贴纸调整大小。</p></div>
+                                <div><label className="mb-2 block text-xs font-display uppercase tracking-wider text-neutral-400">贴纸排布</label><p className="text-[11px] leading-relaxed text-neutral-500">支持鼠标直接拖动、缩放和旋转贴纸。</p></div>
                                 <button type="button" onClick={() => resetPrintLayout(selectedStickers)} disabled={selectedStickers.length === 0} className="shrink-0 rounded-full border border-neutral-700 px-3 py-1.5 text-[11px] font-display text-neutral-300 transition-colors hover:border-remuse-secondary hover:text-remuse-secondary disabled:cursor-not-allowed disabled:opacity-40">重置排版</button>
                             </div>
                             {selectedPrintItem ? (
@@ -2496,13 +3800,10 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                                         <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-2"><img src={selectedPrintItem.sticker.stickerImageUrl} alt={selectedPrintItem.sticker.dramaText || 'selected sticker'} className="h-full w-full object-contain" /></div>
                                         <div className="min-w-0"><p className="text-xs font-display uppercase tracking-[0.2em] text-neutral-500">selected sticker</p><p className="mt-1 line-clamp-2 text-sm font-display font-bold text-white">{selectedPrintItem.sticker.dramaText || selectedPrintItem.sticker.category}</p></div>
                                     </div>
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between"><label className="text-xs font-display uppercase tracking-wider text-neutral-400">贴纸大小</label><span className="text-[11px] font-mono text-neutral-500">{Math.round(selectedPrintItem.scale * 100)}%</span></div>
-                                        <input type="range" min="0.55" max="1.45" step="0.05" value={selectedPrintItem.scale} onChange={(event) => updatePrintLayoutItem(selectedPrintItem.instanceId, (item) => ({ ...item, scale: clampValue(Number(event.target.value), 0.55, 1.45) }))} className="w-full accent-remuse-secondary" />
-                                    </div>
+                                    <p className="rounded-2xl border border-dashed border-neutral-800 bg-black/20 px-3 py-3 text-xs leading-relaxed text-neutral-400">直接在纸面上拖动、拉四角缩放，或拖顶部圆点旋转。</p>
                                 </div>
                             ) : (
-                                <div className="mt-4 rounded-2xl border border-dashed border-neutral-800 bg-neutral-950/50 px-4 py-5 text-sm text-neutral-500">先点击纸面里的贴纸，再调节它的大小。</div>
+                                <div className="mt-4 rounded-2xl border border-dashed border-neutral-800 bg-neutral-950/50 px-4 py-5 text-sm text-neutral-500">先点击纸面上的贴纸，再直接拖动、缩放或旋转它。</div>
                             )}
                         </div>
 
@@ -2798,7 +4099,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
         };
         try {
             await onStickerCreated(newSticker);
-            showSaveFeedback('已存入表情包库', '这套表情包已经保存到你的贴纸库。');
+            showSaveFeedback('已存入表情包库', '这套表情包已经保存到再生成果库。');
             return;
         } catch (error) {
             logger.error('Save emoji pack to library failed:', error);
@@ -3150,7 +4451,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
 
         // --- Sub-render: 手账贴纸打印 ---
         if (canvasMode === 'PRINT') {
-            return renderEditablePrintStudio(selectedStickers);
+            return renderCalendarPrintStudio(selectedStickers);
             return (
                 <div className="remuse-studio h-full bg-remuse-dark text-white flex flex-col">
                     {/* Header */}
@@ -3246,17 +4547,6 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                     </div>
                 {renderSaveFeedback()}
                 </div>
-            );
-        }
-
-        // --- Sub-render: 拼豆图纸 ---
-        if (canvasMode === 'PERLER_PATTERN') {
-            return (
-                <PerlerPatternStudio
-                    sourceStickers={selectedStickers}
-                    onBack={handleReturnFromCanvas}
-                    onPatternSaved={onStickerCreated}
-                />
             );
         }
 
@@ -3558,7 +4848,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
 
     // --- RENDER: LIBRARY MODE ---
     return (
-        <div className="h-full bg-remuse-dark text-white p-6 md:p-10 overflow-y-auto pb-32">
+        <div data-testid="results-library" className="h-full bg-remuse-dark text-white p-6 md:p-10 overflow-y-auto pb-32">
             {/* Header */}
             <div className="flex flex-col xl:flex-row xl:items-end justify-between mb-10 gap-4">
                 <div>
@@ -3611,6 +4901,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
             <div className="mb-6 flex flex-wrap gap-2">
                 <button
                     onClick={() => { setLibraryTab('STICKERS'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    data-testid="results-tab-stickers"
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
                         ${libraryTab === 'STICKERS'
                             ? 'bg-remuse-accent text-black border-remuse-accent'
@@ -3623,6 +4914,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                 </button>
                 <button
                     onClick={() => { setLibraryTab('EMOJI_PACKS'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    data-testid="results-tab-emoji-packs"
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
                         ${libraryTab === 'EMOJI_PACKS'
                             ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-black border-yellow-400'
@@ -3635,6 +4927,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                 </button>
                 <button
                     onClick={() => { setLibraryTab('PERLER_PATTERNS'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    data-testid="results-tab-perler-patterns"
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
                         ${libraryTab === 'PERLER_PATTERNS'
                             ? 'bg-gradient-to-r from-cyan-300 to-violet-400 text-black border-cyan-300'
@@ -3646,7 +4939,21 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                     <span className="text-xs opacity-70">({perlerPatterns.length})</span>
                 </button>
                 <button
+                    onClick={() => { setLibraryTab('JOURNALS'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    data-testid="results-tab-journals"
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
+                        ${libraryTab === 'JOURNALS'
+                            ? 'bg-gradient-to-r from-cyan-300 to-sky-500 text-black border-cyan-300'
+                            : 'bg-transparent text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}
+                    `}
+                >
+                    <Scissors size={16} />
+                    手账库
+                    <span className="text-xs opacity-70">({safeJournals.length})</span>
+                </button>
+                <button
                     onClick={() => { setLibraryTab('TRANSFORMATION_GUIDES'); setIsSelectionMode(false); setSelectedIds(new Set()); }}
+                    data-testid="results-tab-guides"
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-display text-sm font-bold border transition-all
                         ${libraryTab === 'TRANSFORMATION_GUIDES'
                             ? 'bg-gradient-to-r from-remuse-accent to-remuse-secondary text-black border-remuse-accent'
@@ -3722,7 +5029,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                             <div className="text-5xl mb-4">😄 😂 🥹</div>
                             <p className="text-neutral-400 font-display mb-2">暂无表情包</p>
                             <p className="text-xs text-neutral-600 text-center max-w-xs">
-                                从再生工坊选择贴纸进入表情包工坊，生成后点击「存入表情包库」
+                                从再生工坊选择藏品进入表情包工坊，生成后点击「存入表情包库」
                             </p>
                         </div>
                     ) : (
@@ -3786,16 +5093,30 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                             </div>
                             <p className="text-neutral-400 font-display mb-2">暂无拼豆图纸</p>
                             <p className="text-xs text-neutral-600 text-center max-w-xs">
-                                从再生工坊选择单张贴纸进入拼豆图纸工坊，再点击「存入拼豆库」
+                                从再生工坊选择单件藏品进入拼豆图纸工坊，生成完成后会自动存入拼豆库
                             </p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                             {perlerPatterns.map((pattern) => (
-                                <div key={pattern.id} className="relative group bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-cyan-300/30 transition-all">
+                                <div
+                                    key={pattern.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => handleOpenPerlerPatternCard(pattern)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            handleOpenPerlerPatternCard(pattern);
+                                        }
+                                    }}
+                                    className="relative group bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-cyan-300/30 transition-all text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                                >
                                     <div className="absolute top-3 right-3 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
                                         <button
-                                            onClick={async () => {
+                                            onClick={async (event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
                                                 await runSaveAction(() => persistImageUrlToDevice(pattern.stickerImageUrl, `remuse-perler-pattern-${pattern.id}.png`));
                                             }}
                                             className="p-2 bg-neutral-800/90 text-white hover:text-cyan-300 rounded-lg border border-neutral-700 backdrop-blur-sm"
@@ -3804,7 +5125,11 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                                             <Download size={14} />
                                         </button>
                                         <button
-                                            onClick={() => onDeleteSticker(pattern.id)}
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onDeleteSticker(pattern.id);
+                                            }}
                                             className="p-2 bg-neutral-800/90 text-white hover:text-red-400 rounded-lg border border-neutral-700 backdrop-blur-sm"
                                             title="删除"
                                         >
@@ -3831,6 +5156,103 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                                         {pattern.dramaText && (
                                             <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2">{pattern.dramaText}</p>
                                         )}
+                                        <p className="mt-3 text-[11px] font-display uppercase tracking-[0.22em] text-cyan-300/80">
+                                            点击继续编辑拼豆图纸
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {libraryTab === 'JOURNALS' && (
+                <>
+                    {safeJournals.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-neutral-800 rounded-lg">
+                            <div className="w-16 h-16 rounded-2xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center mb-4">
+                                <Scissors size={28} className="text-cyan-300" />
+                            </div>
+                            <p className="text-neutral-400 font-display mb-2">暂无手账</p>
+                            <p className="text-xs text-neutral-600 text-center max-w-xs">
+                                在月历手账界面点击「存入手账库」，就能把当前排版保存到这里，并随时继续编辑。
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {safeJournals.map((journal) => (
+                                <div
+                                    key={journal.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => restoreLayoutItemsFromJournal(journal)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            restoreLayoutItemsFromJournal(journal);
+                                        }
+                                    }}
+                                    className="group relative overflow-hidden rounded-[24px] border border-neutral-800 bg-neutral-900 text-left transition-all hover:-translate-y-0.5 hover:border-cyan-300/30"
+                                >
+                                    <div className="absolute top-3 right-3 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
+                                        <button
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                void runSaveAction(() => persistImageUrlToDevice(journal.previewImageUrl, `remuse-journal-${journal.id}.png`));
+                                            }}
+                                            className="p-2 bg-neutral-800/90 text-white hover:text-cyan-300 rounded-lg border border-neutral-700 backdrop-blur-sm"
+                                            title="保存到相册"
+                                        >
+                                            <Download size={14} />
+                                        </button>
+                                        {onDeleteJournal ? (
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    void onDeleteJournal(journal.id);
+                                                }}
+                                                className="p-2 bg-neutral-800/90 text-white hover:text-red-400 rounded-lg border border-neutral-700 backdrop-blur-sm"
+                                                title="删除"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        ) : null}
+                                    </div>
+
+                                    <div className="aspect-[4/5] overflow-hidden bg-[#111]">
+                                        {journal.previewImageUrl ? (
+                                            <img
+                                                src={journal.previewImageUrl}
+                                                alt={journal.title}
+                                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-neutral-500">
+                                                <Scissors size={28} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-3 p-5">
+                                        <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.24em] text-cyan-300">
+                                            <Scissors size={13} />
+                                            Journal
+                                        </div>
+                                        <div>
+                                            <h3 className="font-display text-xl font-bold text-white">{journal.title}</h3>
+                                            <p className="mt-2 text-sm text-neutral-400">
+                                                {journal.year} / {String(journal.month).padStart(2, '0')} · 点击继续编辑原排版
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-3 text-xs text-neutral-500">
+                                            <span>{journal.layoutItems.length} 张贴纸</span>
+                                            <span>{new Date(journal.updatedAt || journal.dateCreated).toLocaleDateString('zh-CN')}</span>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -3917,8 +5339,8 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                                 <div className="w-11 h-11 rounded-xl mb-3 flex items-center justify-center text-white shadow-lg" style={{ background: 'linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%)', boxShadow: selectedIds.size > 0 ? '0 4px 20px rgba(34,211,238,0.35)' : 'none' }}>
                                     <Scissors size={20} />
                                 </div>
-                                <p className="font-display font-bold text-sm text-white mb-1">手账拼贴</p>
-                                <p className="text-[11px] text-neutral-500 leading-relaxed">A4排版+裁切线打印</p>
+                                <p className="font-display font-bold text-sm text-white mb-1">月历手账</p>
+                                <p className="text-[11px] text-neutral-500 leading-relaxed">上传背景，自由排版后导出打印</p>
                             </div>
                         </button>
 
@@ -3943,46 +5365,6 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                             </div>
                         </button>
 
-                        {/* 表情包 */}
-                        <button
-                            onClick={() => enterCanvasMode('PERLER_PATTERN')}
-                            disabled={selectedIds.size !== 1}
-                            className={`group relative p-5 rounded-2xl text-left transition-all duration-200 overflow-hidden
-                                ${selectedIds.size === 1
-                                    ? 'cursor-pointer hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.98]'
-                                    : 'opacity-35 cursor-not-allowed'}
-                            `}
-                            style={{ background: selectedIds.size === 1 ? 'linear-gradient(135deg, rgba(34,211,238,0.12) 0%, rgba(168,85,247,0.08) 100%)' : 'rgba(255,255,255,0.03)', border: selectedIds.size === 1 ? '1px solid rgba(34,211,238,0.25)' : '1px solid rgba(255,255,255,0.06)' }}
-                        >
-                            {selectedIds.size === 1 && <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.08) 0%, rgba(168,85,247,0.06) 100%)' }} />}
-                            <div className="relative">
-                                <div className="w-11 h-11 rounded-xl mb-3 flex items-center justify-center text-black shadow-lg" style={{ background: 'linear-gradient(135deg, #67e8f9 0%, #a78bfa 100%)', boxShadow: selectedIds.size === 1 ? '0 4px 20px rgba(34,211,238,0.35)' : 'none' }}>
-                                    <Box size={20} />
-                                </div>
-                                <p className="font-display font-bold text-sm text-white mb-1">拼豆图纸</p>
-                                <p className="text-[11px] text-neutral-500 leading-relaxed">单图像素化 + 色号统计</p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => enterCanvasMode('EMOJI_PACK')}
-                            disabled={selectedIds.size === 0}
-                            className={`group relative p-5 rounded-2xl text-left transition-all duration-200 overflow-hidden
-                                ${selectedIds.size > 0
-                                    ? 'cursor-pointer hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.98]'
-                                    : 'opacity-35 cursor-not-allowed'}
-                            `}
-                            style={{ background: selectedIds.size > 0 ? 'linear-gradient(135deg, rgba(250,204,21,0.12) 0%, rgba(251,146,60,0.08) 100%)' : 'rgba(255,255,255,0.03)', border: selectedIds.size > 0 ? '1px solid rgba(250,204,21,0.25)' : '1px solid rgba(255,255,255,0.06)' }}
-                        >
-                            {selectedIds.size > 0 && <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(250,204,21,0.08) 0%, rgba(251,146,60,0.06) 100%)' }} />}
-                            <div className="relative">
-                                <div className="w-11 h-11 rounded-xl mb-3 flex items-center justify-center text-black shadow-lg" style={{ background: 'linear-gradient(135deg, #facc15 0%, #fb923c 100%)', boxShadow: selectedIds.size > 0 ? '0 4px 20px rgba(250,204,21,0.35)' : 'none' }}>
-                                    <Smile size={20} />
-                                </div>
-                                <p className="font-display font-bold text-sm text-white mb-1">表情包</p>
-                                <p className="text-[11px] text-neutral-500 leading-relaxed">语音心情，拟人贴纸</p>
-                            </div>
-                        </button>
                     </div>
                 </div>
             )}
@@ -3992,7 +5374,7 @@ const StickerLibrary: React.FC<StickerLibraryProps> = ({
                 <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-neutral-800 rounded-lg">
                     <StickerIcon size={48} className="text-neutral-500 mb-4" />
                     <p className="text-neutral-400 font-display">暂无贴纸</p>
-                    <p className="text-xs text-neutral-400 mt-2">使用扫描仪生成你的第一个贴纸</p>
+                    <p className="text-xs text-neutral-400 mt-2">从再生工坊生成你的第一张贴纸</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

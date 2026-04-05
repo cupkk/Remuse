@@ -43,7 +43,7 @@ test('registered user can verify email, login, scan, archive, generate sticker, 
   await loginIfNeeded(page, email, password);
 
   if (!(await page.getByTestId('scanner-open-upload').isVisible().catch(() => false))) {
-    await page.getByRole('tab', { name: '扫描仪' }).click();
+    await page.getByTestId('desktop-nav-scanner').click();
     await expect(page.getByTestId('scanner-open-upload')).toBeVisible();
   }
 
@@ -67,12 +67,13 @@ test('registered user can verify email, login, scan, archive, generate sticker, 
   await expect(page.getByText('NEW STICKER')).toBeVisible();
 
   await page.getByTestId('scanner-go-to-hall').click();
-  await expect(page.getByRole('heading', { name: '测试旧物样本' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('museum-gallery')).toBeVisible({ timeout: 20_000 });
 
-  await page.getByRole('tab', { name: '贴纸库' }).click();
-  await expect(page.getByText('我叫测试旧物样本').first()).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('desktop-nav-workshop').click();
+  await expect(page.getByTestId('workshop-home')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('workshop-open-emoji-pack')).toBeVisible();
 
-  await page.getByRole('tab', { name: '记忆对话' }).click();
+  await page.getByTestId('desktop-nav-memory').click();
   await expect(page.getByTestId('memory-query-input')).toBeVisible();
 
   const queryResponse = page.waitForResponse((response) => (
@@ -89,7 +90,7 @@ test('registered user can verify email, login, scan, archive, generate sticker, 
   await expect(page.getByTestId('memory-message-user').filter({ hasText: memoryPrompt })).toBeVisible();
   await expect.poll(async () => page.getByTestId('memory-message-assistant').count()).toBeGreaterThan(1);
 
-  await page.getByRole('tab', { name: '馆长办公室' }).click();
+  await page.getByTestId('desktop-nav-profile').click();
   await page.getByTestId('curator-logout').click();
   await waitForAuthScreen(page);
 });

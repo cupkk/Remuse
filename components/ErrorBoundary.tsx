@@ -20,7 +20,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[Error Boundary]', error, info.componentStack);
+    console.error('[REMUSE] \u9519\u8bef\u8fb9\u754c', error, info.componentStack);
     reportClientError({
       source: 'error-boundary',
       message: error.message,

@@ -80,7 +80,7 @@ function resolveAuthenticatedRequest(
     }
   }
 
-  return { ok: false, errorBody: { error: 'Authentication token is required.' } };
+  return { ok: false, errorBody: { error: '\u7f3a\u5c11\u767b\u5f55\u51ed\u8bc1\u3002' } };
 }
 
 function getBearerToken(authorizationHeader: string | undefined): string | null {
@@ -97,22 +97,22 @@ function validateAccessToken(token: string) {
     const payload = verifyToken(token);
 
     if (payload.type !== 'access') {
-      return { ok: false as const, errorBody: { error: 'Invalid token type.' } };
+      return { ok: false as const, errorBody: { error: '\u4ee4\u724c\u7c7b\u578b\u65e0\u6548\u3002' } };
     }
 
     const user = getUserById(payload.sub);
     if (!user) {
-      return { ok: false as const, errorBody: { error: 'User not found.' } };
+      return { ok: false as const, errorBody: { error: '\u8d26\u53f7\u4e0d\u5b58\u5728\u3002' } };
     }
 
     return { ok: true as const, strategy: 'access-token' as const, user };
   } catch (err: unknown) {
     const error = err as { name?: string };
     if (error.name === 'TokenExpiredError') {
-      return { ok: false as const, errorBody: { error: 'token_expired', message: 'Authentication token expired.' } };
+      return { ok: false as const, errorBody: { error: 'token_expired', message: '\u767b\u5f55\u51ed\u8bc1\u5df2\u8fc7\u671f\u3002' } };
     }
 
-    return { ok: false as const, errorBody: { error: 'Token verification failed.' } };
+    return { ok: false as const, errorBody: { error: '\u4ee4\u724c\u9a8c\u8bc1\u5931\u8d25\u3002' } };
   }
 }
 
@@ -135,7 +135,7 @@ function validateRefreshCookie(token: string) {
 
     const user = getUserById(payload.sub);
     if (!user) {
-      return { ok: false as const, errorBody: { error: 'User not found.' } };
+      return { ok: false as const, errorBody: { error: '\u8d26\u53f7\u4e0d\u5b58\u5728\u3002' } };
     }
 
     return { ok: true as const, strategy: 'refresh-cookie' as const, user };

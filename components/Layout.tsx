@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ViewState } from '../types';
-import { Box, Compass, History, ScanLine, Shield, Sparkles, Trophy, Zap } from 'lucide-react';
+import { Box, Compass, Heart, History, ScanLine, Shield, Sparkles, Trophy, Zap } from 'lucide-react';
 
 interface LayoutProps {
   currentView: ViewState;
@@ -16,15 +16,17 @@ interface NavItemProps {
   active: boolean;
   onClick: () => void;
   desktop?: boolean;
+  testId?: string;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, desktop }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, desktop, testId }) => (
   <button
     onClick={onClick}
     role="tab"
     aria-selected={active}
     aria-current={active ? 'page' : undefined}
     aria-label={label}
+    data-testid={testId}
     className={`flex w-full min-h-[52px] flex-col items-center justify-center gap-1 px-2 py-2.5 transition-all duration-300 md:w-auto md:flex-row md:justify-start md:gap-4 md:px-6 md:py-4 ${
       active
         ? 'border-t-2 border-remuse-accent bg-neutral-900 text-remuse-accent md:border-l-2 md:border-t-0'
@@ -89,19 +91,63 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
           </div>
 
           <div className="flex-1 space-y-1 py-4" role="tablist" aria-label="页面导航">
-            <NavItem icon={<ScanLine size={20} />} label="扫描仪" active={currentView === 'SCANNER'} onClick={() => onChangeView('SCANNER')} />
+            <NavItem
+              icon={<ScanLine size={20} />}
+              label="扫描仪"
+              active={currentView === 'SCANNER'}
+              onClick={() => onChangeView('SCANNER')}
+              testId="desktop-nav-scanner"
+            />
             <NavItem
               icon={<Box size={20} />}
               label="藏品馆"
               active={currentView === 'MUSEUM' || currentView === 'ITEM_DETAIL'}
               onClick={() => onChangeView('MUSEUM')}
+              testId="desktop-nav-museum"
             />
-            <NavItem icon={<Sparkles size={20} />} label="再生工坊" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
-            <NavItem icon={<Compass size={20} />} label="灵感广场" active={currentView === 'INSPIRATION'} onClick={() => onChangeView('INSPIRATION')} />
-            <NavItem icon={<Trophy size={20} />} label="馆长办公室" active={currentView === 'PROFILE'} onClick={() => onChangeView('PROFILE')} />
-            <NavItem icon={<History size={20} />} label="记忆对话" active={currentView === 'MEMORY_RAG'} onClick={() => onChangeView('MEMORY_RAG')} />
+            <NavItem
+              icon={<Heart size={20} />}
+              label="共建藏馆"
+              active={currentView === 'SHARED_MUSEUMS'}
+              onClick={() => onChangeView('SHARED_MUSEUMS')}
+              testId="desktop-nav-shared-museums"
+            />
+            <NavItem
+              icon={<Sparkles size={20} />}
+              label="再生工坊"
+              active={currentView === 'STICKER_LIBRARY'}
+              onClick={() => onChangeView('STICKER_LIBRARY')}
+              testId="desktop-nav-workshop"
+            />
+            <NavItem
+              icon={<Compass size={20} />}
+              label="灵感广场"
+              active={currentView === 'INSPIRATION'}
+              onClick={() => onChangeView('INSPIRATION')}
+              testId="desktop-nav-inspiration"
+            />
+            <NavItem
+              icon={<Trophy size={20} />}
+              label="馆长办公室"
+              active={currentView === 'PROFILE'}
+              onClick={() => onChangeView('PROFILE')}
+              testId="desktop-nav-profile"
+            />
+            <NavItem
+              icon={<History size={20} />}
+              label="记忆对话"
+              active={currentView === 'MEMORY_RAG'}
+              onClick={() => onChangeView('MEMORY_RAG')}
+              testId="desktop-nav-memory"
+            />
             {showAdminEntry ? (
-              <NavItem icon={<Shield size={20} />} label="管理后台" active={currentView === 'ADMIN'} onClick={() => onChangeView('ADMIN')} />
+              <NavItem
+                icon={<Shield size={20} />}
+                label="管理后台"
+                active={currentView === 'ADMIN'}
+                onClick={() => onChangeView('ADMIN')}
+                testId="desktop-nav-admin"
+              />
             ) : null}
           </div>
 
@@ -126,16 +172,36 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
 
       <nav
         aria-label="移动端导航"
-        className="safe-area-pb z-50 grid min-h-[4.75rem] grid-cols-5 items-end border-t border-remuse-border bg-remuse-panel/95 px-2 pt-2 backdrop-blur md:hidden"
+        className="safe-area-pb z-50 grid min-h-[4.75rem] grid-cols-6 items-end border-t border-remuse-border bg-remuse-panel/95 px-2 pt-2 backdrop-blur md:hidden"
       >
-        <NavItem icon={<ScanLine size={20} />} label="扫描" active={currentView === 'SCANNER'} onClick={() => onChangeView('SCANNER')} />
-        <NavItem icon={<Sparkles size={20} />} label="工坊" active={currentView === 'STICKER_LIBRARY'} onClick={() => onChangeView('STICKER_LIBRARY')} />
+        <NavItem
+          icon={<ScanLine size={20} />}
+          label="扫描"
+          active={currentView === 'SCANNER'}
+          onClick={() => onChangeView('SCANNER')}
+          testId="mobile-nav-scanner"
+        />
+        <NavItem
+          icon={<Sparkles size={20} />}
+          label="工坊"
+          active={currentView === 'STICKER_LIBRARY'}
+          onClick={() => onChangeView('STICKER_LIBRARY')}
+          testId="mobile-nav-workshop"
+        />
+        <NavItem
+          icon={<Heart size={20} />}
+          label="共建"
+          active={currentView === 'SHARED_MUSEUMS'}
+          onClick={() => onChangeView('SHARED_MUSEUMS')}
+          testId="mobile-nav-shared-museums"
+        />
 
         <div className="relative -top-6 flex items-center justify-center">
           <button
             onClick={() => onChangeView('MUSEUM')}
             aria-label="藏品馆"
             aria-current={currentView === 'MUSEUM' ? 'page' : undefined}
+            data-testid="mobile-nav-museum"
             className="group relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full shadow-[0_0_15px_rgba(204,255,0,0.4)] transition-transform hover:scale-105 active:scale-95"
           >
             <span className="absolute inset-0 scale-110 rounded-full bg-remuse-secondary opacity-30" />
@@ -145,8 +211,20 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onChangeView, children, ec
           </button>
         </div>
 
-        <NavItem icon={<Compass size={20} />} label="灵感" active={currentView === 'INSPIRATION'} onClick={() => onChangeView('INSPIRATION')} />
-        <NavItem icon={<Trophy size={20} />} label="我的" active={currentView === 'PROFILE'} onClick={() => onChangeView('PROFILE')} />
+        <NavItem
+          icon={<Compass size={20} />}
+          label="灵感"
+          active={currentView === 'INSPIRATION'}
+          onClick={() => onChangeView('INSPIRATION')}
+          testId="mobile-nav-inspiration"
+        />
+        <NavItem
+          icon={<Trophy size={20} />}
+          label="我的"
+          active={currentView === 'PROFILE'}
+          onClick={() => onChangeView('PROFILE')}
+          testId="mobile-nav-profile"
+        />
       </nav>
     </div>
   );

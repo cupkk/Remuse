@@ -59,10 +59,10 @@ async function main() {
     }
 
     updated += 1;
-    console.log(`[cover] regenerated ${item.id} ${item.name}`);
+    console.log(`[cover] 已重建藏品封面：${item.id} ${item.name}`);
   }
 
-  console.log(`[cover] done. updated=${updated} skipped=${skipped}`);
+  console.log(`[cover] 处理完成：updated=${updated} skipped=${skipped}`);
 }
 
 function inferMimeType(fileName: string) {
@@ -80,6 +80,6 @@ function inferMimeType(fileName: string) {
 }
 
 main().catch((error) => {
-  console.error('[cover] regeneration failed', error);
+  console.error('[cover] 重建藏品封面失败', error);
   process.exitCode = 1;
 });

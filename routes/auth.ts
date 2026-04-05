@@ -35,12 +35,14 @@ import {
 } from '../services/authLifecycleStore.ts';
 import {
   MailDispatchResult,
+  isLiveMailDeliveryEnabled,
   resolveAppBaseUrl,
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from '../services/mailer.ts';
 import { LEGAL_VERSION_SNAPSHOT } from '../services/legalDocuments.ts';
-import { isAdminUser, resolveUserRole } from '../services/permissions.ts';
+import { resolveUserRole } from '../services/permissions.ts';
+import { serverLogger } from '../services/serverLogger.ts';
 import { deleteUserAccount, recordUserConsents } from '../services/userGovernance.ts';
 import { getUsageSnapshotForUser, recordProductUsageEvent } from '../services/usageQuota.ts';
 
@@ -48,12 +50,47 @@ const router = Router();
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 type UserRecord = NonNullable<ReturnType<typeof getUserById>>;
 
+const AUTH_MESSAGE_AUTH_ATTEMPT_LIMIT = '\u767b\u5f55\u6216\u6ce8\u518c\u5c1d\u8bd5\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_GUEST_LIMIT = '\u6e38\u5ba2\u4f1a\u8bdd\u521b\u5efa\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_SESSION_LIMIT = '\u8ba4\u8bc1\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_MAIL_LIMIT = '\u90ae\u4ef6\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_RECOVERY_LIMIT = '\u8d26\u53f7\u6062\u590d\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_INVALID_BODY = '\u8bf7\u6c42\u53c2\u6570\u65e0\u6548\u3002';
+const AUTH_MESSAGE_USER_NOT_FOUND = '\u672a\u627e\u5230\u8be5\u7528\u6237\u3002';
+const AUTH_MESSAGE_REGISTER_FAILED = '\u6ce8\u518c\u5931\u8d25\u3002';
+const AUTH_MESSAGE_LOGIN_FAILED = '\u767b\u5f55\u5931\u8d25\u3002';
+const AUTH_MESSAGE_FORGOT_PASSWORD_SENT = '\u5982\u679c\u8be5\u90ae\u7bb1\u5df2\u6ce8\u518c\uff0c\u6211\u4eec\u5df2\u5411\u4f60\u53d1\u9001\u91cd\u7f6e\u5bc6\u7801\u94fe\u63a5\u3002';
+const AUTH_MESSAGE_GUEST_VERIFY_UPGRADE = '\u8bf7\u5148\u5c06\u6e38\u5ba2\u8d26\u53f7\u5347\u7ea7\u4e3a\u6b63\u5f0f\u8d26\u53f7\uff0c\u518d\u9a8c\u8bc1\u90ae\u7bb1\u3002';
+const AUTH_MESSAGE_EMAIL_ALREADY_VERIFIED = '\u8be5\u90ae\u7bb1\u5df2\u5b8c\u6210\u9a8c\u8bc1\u3002';
+const AUTH_MESSAGE_VERIFICATION_SENT = '\u9a8c\u8bc1\u90ae\u4ef6\u5df2\u53d1\u9001\u3002';
+const AUTH_MESSAGE_VERIFICATION_SEND_FAILED = '\u5f53\u524d\u6682\u65f6\u65e0\u6cd5\u53d1\u9001\u9a8c\u8bc1\u90ae\u4ef6\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const AUTH_MESSAGE_VERIFICATION_EXPIRED = '\u9a8c\u8bc1\u94fe\u63a5\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u9a8c\u8bc1\u90ae\u4ef6\u3002';
+const AUTH_MESSAGE_VERIFICATION_INVALID = '\u9a8c\u8bc1\u94fe\u63a5\u65e0\u6548\u3002';
+const AUTH_MESSAGE_VERIFICATION_SUCCESS = '\u90ae\u7bb1\u9a8c\u8bc1\u6210\u529f\u3002';
+const AUTH_MESSAGE_RESET_LINK_EXPIRED = '\u91cd\u7f6e\u5bc6\u7801\u94fe\u63a5\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u7533\u8bf7\u3002';
+const AUTH_MESSAGE_RESET_LINK_INVALID = '\u91cd\u7f6e\u5bc6\u7801\u94fe\u63a5\u65e0\u6548\u3002';
+const AUTH_MESSAGE_RESET_SUCCESS = '\u5bc6\u7801\u91cd\u7f6e\u6210\u529f\u3002';
+const AUTH_MESSAGE_RESET_FAILED = '\u5bc6\u7801\u91cd\u7f6e\u5931\u8d25\u3002';
+const AUTH_MESSAGE_REFRESH_MISSING = '\u7f3a\u5c11\u5237\u65b0\u4ee4\u724c\u3002';
+const AUTH_MESSAGE_REFRESH_TYPE_INVALID = '\u5237\u65b0\u4ee4\u724c\u7c7b\u578b\u65e0\u6548\u3002';
+const AUTH_MESSAGE_REFRESH_INVALID = '\u5237\u65b0\u4ee4\u724c\u65e0\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002';
+const AUTH_MESSAGE_REFRESH_EXPIRED = '\u5237\u65b0\u4ee4\u724c\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002';
+const AUTH_MESSAGE_REFRESH_VERIFY_FAILED = '\u5237\u65b0\u4ee4\u724c\u9a8c\u8bc1\u5931\u8d25\u3002';
+const AUTH_MESSAGE_GUEST_CHANGE_PASSWORD = '\u8bf7\u5148\u5c06\u6e38\u5ba2\u8d26\u53f7\u5347\u7ea7\u4e3a\u6b63\u5f0f\u8d26\u53f7\uff0c\u518d\u4fee\u6539\u5bc6\u7801\u3002';
+const AUTH_MESSAGE_CURRENT_PASSWORD_INCORRECT = '\u5f53\u524d\u5bc6\u7801\u4e0d\u6b63\u786e\u3002';
+const AUTH_MESSAGE_PASSWORD_CHANGE_FAILED = '\u4fee\u6539\u5bc6\u7801\u5931\u8d25\u3002';
+const AUTH_MESSAGE_SESSION_UNAVAILABLE = '\u5f53\u524d\u4f1a\u8bdd\u4e0d\u53ef\u7528\u3002';
+const AUTH_MESSAGE_SESSION_INVALID = '\u5f53\u524d\u4f1a\u8bdd\u5df2\u5931\u6548\u3002';
+const AUTH_MESSAGE_DELETE_REQUIRES_PASSWORD_RESET = '\u8be5\u8d26\u53f7\u9700\u5148\u91cd\u7f6e\u5bc6\u7801\uff0c\u624d\u80fd\u6267\u884c\u6ce8\u9500\u3002';
+const AUTH_MESSAGE_DELETE_PASSWORD_REQUIRED = '\u8bf7\u8f93\u5165\u5f53\u524d\u5bc6\u7801\u4ee5\u6ce8\u9500\u8d26\u53f7\u3002';
+const AUTH_MESSAGE_PASSWORD_RESET_UNAVAILABLE = '\u5f53\u524d\u5bc6\u7801\u627e\u56de\u529f\u80fd\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458\u5904\u7406\u3002';
+
 const authAttemptLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 12,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many login or registration attempts. Please try again later.' },
+  message: { error: AUTH_MESSAGE_AUTH_ATTEMPT_LIMIT },
 });
 
 const guestBootstrapLimiter = rateLimit({
@@ -61,7 +98,7 @@ const guestBootstrapLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many guest sessions created. Please try again later.' },
+  message: { error: AUTH_MESSAGE_GUEST_LIMIT },
 });
 
 const authSessionLimiter = rateLimit({
@@ -69,7 +106,7 @@ const authSessionLimiter = rateLimit({
   max: 240,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many authentication requests. Please try again later.' },
+  message: { error: AUTH_MESSAGE_SESSION_LIMIT },
 });
 
 const authMailLimiter = rateLimit({
@@ -77,7 +114,7 @@ const authMailLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many email requests. Please try again later.' },
+  message: { error: AUTH_MESSAGE_MAIL_LIMIT },
 });
 
 const authRecoveryLimiter = rateLimit({
@@ -85,37 +122,37 @@ const authRecoveryLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many account recovery attempts. Please try again later.' },
+  message: { error: AUTH_MESSAGE_RECOVERY_LIMIT },
 });
 
-const emailSchema = z.string().trim().email('Please enter a valid email address.');
+const emailSchema = z.string().trim().email('\u8bf7\u8f93\u5165\u6709\u6548\u7684\u90ae\u7bb1\u5730\u5740\u3002');
 const registerSchema = z.object({
   email: emailSchema,
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
+  password: z.string().min(6, '\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002'),
   nickname: z.string().trim().min(1).max(50).optional(),
   acceptPolicies: z.boolean().refine(Boolean, {
-    message: 'You must agree to the terms, privacy policy, and AI notice before registering.',
+    message: '\u6ce8\u518c\u524d\u9700\u540c\u610f\u7528\u6237\u534f\u8bae\u3001\u9690\u79c1\u653f\u7b56\u4e0e AI \u751f\u6210\u8bf4\u660e\u3002',
   }),
 });
 const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, 'Please enter your password.'),
+  password: z.string().min(1, '\u8bf7\u8f93\u5165\u5bc6\u7801\u3002'),
 });
 const forgotPasswordSchema = z.object({
   email: emailSchema,
 });
 const verifyEmailSchema = z.object({
-  token: z.string().trim().min(1, 'Verification token is required.'),
+  token: z.string().trim().min(1, '\u9a8c\u8bc1\u4ee4\u724c\u4e0d\u80fd\u4e3a\u7a7a\u3002'),
 });
 const resetPasswordSchema = z.object({
-  token: z.string().trim().min(1, 'Reset token is required.'),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters.'),
+  token: z.string().trim().min(1, '\u91cd\u7f6e\u4ee4\u724c\u4e0d\u80fd\u4e3a\u7a7a\u3002'),
+  newPassword: z.string().min(6, '\u65b0\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002'),
 });
 const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Please enter your current password.'),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters.'),
+  currentPassword: z.string().min(1, '\u8bf7\u8f93\u5165\u5f53\u524d\u5bc6\u7801\u3002'),
+  newPassword: z.string().min(6, '\u65b0\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002'),
 }).refine((value) => value.currentPassword !== value.newPassword, {
-  message: 'New password must be different from the current password.',
+  message: '\u65b0\u5bc6\u7801\u4e0d\u80fd\u4e0e\u5f53\u524d\u5bc6\u7801\u76f8\u540c\u3002',
   path: ['newPassword'],
 });
 const deleteAccountSchema = z.object({
@@ -134,7 +171,7 @@ const preferencesSchema = z.object({
   onboardingSeen: z.boolean().optional(),
   toolbox: z.array(toolSchema).max(32).optional(),
 }).refine((value) => Object.keys(value).length > 0, {
-  message: 'At least one preference field is required.',
+  message: '\u81f3\u5c11\u9700\u8981\u63d0\u4ea4\u4e00\u9879\u504f\u597d\u8bbe\u7f6e\u3002',
 });
 
 router.post('/guest', guestBootstrapLimiter, (_req: Request, res: Response) => {
@@ -147,7 +184,7 @@ router.post('/guest', guestBootstrapLimiter, (_req: Request, res: Response) => {
     });
     sendSessionResponse(res, user.id, user);
   } catch (error) {
-    res.status(500).json({ error: 'Unable to create guest account.' });
+    res.status(500).json({ error: '\u521b\u5efa\u6e38\u5ba2\u8d26\u53f7\u5931\u8d25\u3002' });
   }
 });
 
@@ -155,7 +192,7 @@ router.post('/register', authAttemptLimiter, async (req: Request, res: Response)
   try {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
       return;
     }
 
@@ -163,7 +200,7 @@ router.post('/register', authAttemptLimiter, async (req: Request, res: Response)
     const { password, nickname } = parsed.data;
     const existing = getUserByEmail(email);
     if (existing) {
-      res.status(409).json({ error: 'This email address is already registered.' });
+      res.status(409).json({ error: '\u8be5\u90ae\u7bb1\u5df2\u88ab\u6ce8\u518c\u3002' });
       return;
     }
 
@@ -205,7 +242,7 @@ router.post('/register', authAttemptLimiter, async (req: Request, res: Response)
       emailDelivery,
     });
   } catch {
-    res.status(500).json({ error: 'Registration failed.' });
+    res.status(500).json({ error: AUTH_MESSAGE_REGISTER_FAILED });
   }
 });
 
@@ -213,21 +250,43 @@ router.post('/login', authAttemptLimiter, async (req: Request, res: Response) =>
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
       return;
     }
 
     const email = normalizeEmailAddress(parsed.data.email);
     const { password } = parsed.data;
     const user = getUserByEmail(email);
-    if (!user || !user.password_hash) {
-      res.status(401).json({ error: 'Invalid email or password.' });
+    if (!user) {
+      serverLogger.warn('auth.login_rejected', {
+        reason: 'user_not_found',
+        email: maskEmail(email),
+        ip: getRequestIp(req),
+      });
+      res.status(401).json({ error: '\u90ae\u7bb1\u6216\u5bc6\u7801\u9519\u8bef\u3002' });
+      return;
+    }
+
+    if (!user.password_hash) {
+      serverLogger.warn('auth.login_rejected', {
+        reason: 'password_hash_missing',
+        userId: user.id,
+        email: maskEmail(email),
+        ip: getRequestIp(req),
+      });
+      res.status(401).json({ error: '\u90ae\u7bb1\u6216\u5bc6\u7801\u9519\u8bef\u3002' });
       return;
     }
 
     const valid = await comparePassword(password, user.password_hash);
     if (!valid) {
-      res.status(401).json({ error: 'Invalid email or password.' });
+      serverLogger.warn('auth.login_rejected', {
+        reason: 'password_mismatch',
+        userId: user.id,
+        email: maskEmail(email),
+        ip: getRequestIp(req),
+      });
+      res.status(401).json({ error: '\u90ae\u7bb1\u6216\u5bc6\u7801\u9519\u8bef\u3002' });
       return;
     }
 
@@ -237,14 +296,23 @@ router.post('/login', authAttemptLimiter, async (req: Request, res: Response) =>
     });
     sendSessionResponse(res, user.id, user);
   } catch {
-    res.status(500).json({ error: 'Login failed.' });
+    res.status(500).json({ error: AUTH_MESSAGE_LOGIN_FAILED });
   }
 });
 
 router.post('/forgot-password', authMailLimiter, async (req: Request, res: Response) => {
   const parsed = forgotPasswordSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
+    return;
+  }
+
+  if (IS_PRODUCTION && !isLiveMailDeliveryEnabled()) {
+    serverLogger.error('auth.password_reset_unavailable', {
+      reason: 'mail_delivery_disabled',
+      ip: getRequestIp(req),
+    });
+    res.status(503).json({ error: AUTH_MESSAGE_PASSWORD_RESET_UNAVAILABLE });
     return;
   }
 
@@ -261,7 +329,7 @@ router.post('/forgot-password', authMailLimiter, async (req: Request, res: Respo
 
   res.json({
     success: true,
-    message: 'If an account exists for this email address, a password reset link has been sent.',
+    message: AUTH_MESSAGE_FORGOT_PASSWORD_SENT,
   });
 });
 
@@ -269,35 +337,35 @@ router.post('/send-verification', authMailLimiter, authMiddleware, async (req: R
   try {
     const user = getUserById(req.userId!);
     if (!user) {
-      res.status(404).json({ error: 'User not found.' });
+      res.status(404).json({ error: '未找到该用户。' });
       return;
     }
 
     if (user.is_guest || !user.email) {
-      res.status(403).json({ error: 'Please upgrade this guest account before verifying an email address.' });
+      res.status(403).json({ error: AUTH_MESSAGE_GUEST_VERIFY_UPGRADE });
       return;
     }
 
     if (isEmailVerified(user)) {
-      res.status(409).json({ error: 'This email address is already verified.' });
+      res.status(409).json({ error: AUTH_MESSAGE_EMAIL_ALREADY_VERIFIED });
       return;
     }
 
     const emailDelivery = await dispatchEmailVerification(req, user);
     res.json({
       success: true,
-      message: 'Verification email sent.',
+      message: AUTH_MESSAGE_VERIFICATION_SENT,
       emailDelivery,
     });
   } catch {
-    res.status(503).json({ error: 'Unable to send verification email right now.' });
+    res.status(503).json({ error: AUTH_MESSAGE_VERIFICATION_SEND_FAILED });
   }
 });
 
 router.post('/verify-email', authRecoveryLimiter, async (req: Request, res: Response) => {
   const parsed = verifyEmailSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
     return;
   }
 
@@ -306,8 +374,8 @@ router.post('/verify-email', authRecoveryLimiter, async (req: Request, res: Resp
     res.status(result.status === 'expired' ? 410 : 400).json({
       error:
         result.status === 'expired'
-          ? 'Verification link expired. Please request a new verification email.'
-          : 'Verification link is invalid.',
+          ? AUTH_MESSAGE_VERIFICATION_EXPIRED
+          : AUTH_MESSAGE_VERIFICATION_INVALID,
     });
     return;
   }
@@ -322,7 +390,7 @@ router.post('/verify-email', authRecoveryLimiter, async (req: Request, res: Resp
 
   res.json({
     success: true,
-    message: 'Email verified successfully.',
+    message: AUTH_MESSAGE_VERIFICATION_SUCCESS,
     user: sanitizeUser(result.user),
   });
 });
@@ -331,7 +399,7 @@ router.post('/reset-password', authRecoveryLimiter, async (req: Request, res: Re
   try {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
       return;
     }
 
@@ -341,18 +409,18 @@ router.post('/reset-password', authRecoveryLimiter, async (req: Request, res: Re
       res.status(result.status === 'expired' ? 410 : 400).json({
         error:
           result.status === 'expired'
-            ? 'Password reset link expired. Please request a new one.'
-            : 'Password reset link is invalid.',
+            ? AUTH_MESSAGE_RESET_LINK_EXPIRED
+            : AUTH_MESSAGE_RESET_LINK_INVALID,
       });
       return;
     }
 
     revokeRefreshTokenSessionsForUser(result.user.id);
     sendSessionResponse(res, result.user.id, result.user, {
-      message: 'Password reset successful.',
+      message: AUTH_MESSAGE_RESET_SUCCESS,
     });
   } catch {
-    res.status(500).json({ error: 'Password reset failed.' });
+    res.status(500).json({ error: AUTH_MESSAGE_RESET_FAILED });
   }
 });
 
@@ -361,14 +429,14 @@ router.post('/refresh', authSessionLimiter, (req: Request, res: Response) => {
     const refreshToken = extractRefreshToken(req);
     if (!refreshToken) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'refresh_missing', message: 'Missing refresh token.' });
+      res.status(401).json({ error: 'refresh_missing', message: AUTH_MESSAGE_REFRESH_MISSING });
       return;
     }
 
     const payload = verifyToken(refreshToken);
     if (payload.type !== 'refresh' || !payload.jti) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'refresh_invalid', message: 'Refresh token type is invalid.' });
+      res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_REFRESH_TYPE_INVALID });
       return;
     }
 
@@ -380,14 +448,14 @@ router.post('/refresh', authSessionLimiter, (req: Request, res: Response) => {
       new Date(session.expires_at).getTime() <= Date.now()
     ) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'refresh_invalid', message: 'Refresh token is invalid. Please sign in again.' });
+      res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_REFRESH_INVALID });
       return;
     }
 
     const user = getUserById(payload.sub);
     if (!user) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'User not found.' });
+      res.status(401).json({ error: '未找到该用户。' });
       return;
     }
 
@@ -403,11 +471,11 @@ router.post('/refresh', authSessionLimiter, (req: Request, res: Response) => {
     clearRefreshCookie(res);
     const authError = error as { name?: string };
     if (authError.name === 'TokenExpiredError') {
-      res.status(401).json({ error: 'refresh_expired', message: 'Refresh token expired. Please sign in again.' });
+      res.status(401).json({ error: 'refresh_expired', message: AUTH_MESSAGE_REFRESH_EXPIRED });
       return;
     }
 
-    res.status(401).json({ error: 'refresh_invalid', message: 'Refresh token verification failed.' });
+    res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_REFRESH_VERIFY_FAILED });
   }
 });
 
@@ -432,7 +500,7 @@ router.post('/logout', authSessionLimiter, (req: Request, res: Response) => {
 router.get('/me', authSessionLimiter, authMiddleware, (req: Request, res: Response) => {
   const user = getUserById(req.userId!);
   if (!user) {
-    res.status(404).json({ error: 'User not found.' });
+    res.status(404).json({ error: '未找到该用户。' });
     return;
   }
 
@@ -442,13 +510,13 @@ router.get('/me', authSessionLimiter, authMiddleware, (req: Request, res: Respon
 router.patch('/preferences', authSessionLimiter, authMiddleware, (req: Request, res: Response) => {
   const parsed = preferencesSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
     return;
   }
 
   const user = updateUserPreferences(req.userId!, parsed.data);
   if (!user) {
-    res.status(404).json({ error: 'User not found.' });
+    res.status(404).json({ error: '未找到该用户。' });
     return;
   }
 
@@ -459,45 +527,45 @@ router.post('/change-password', authSessionLimiter, authMiddleware, async (req: 
   try {
     const parsed = changePasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
       return;
     }
 
     const user = getUserById(req.userId!);
     if (!user) {
-      res.status(404).json({ error: 'User not found.' });
+      res.status(404).json({ error: '未找到该用户。' });
       return;
     }
 
     if (user.is_guest || !user.password_hash) {
-      res.status(403).json({ error: 'Please upgrade this guest account before changing its password.' });
+      res.status(403).json({ error: AUTH_MESSAGE_GUEST_CHANGE_PASSWORD });
       return;
     }
 
     const passwordMatches = await comparePassword(parsed.data.currentPassword, user.password_hash);
     if (!passwordMatches) {
-      res.status(401).json({ error: 'Current password is incorrect.' });
+      res.status(401).json({ error: AUTH_MESSAGE_CURRENT_PASSWORD_INCORRECT });
       return;
     }
 
     const passwordHash = await hashPassword(parsed.data.newPassword);
     const updatedUser = updateUserPassword(user.id, passwordHash);
     if (!updatedUser) {
-      res.status(404).json({ error: 'User not found.' });
+      res.status(404).json({ error: '未找到该用户。' });
       return;
     }
 
     revokeRefreshTokenSessionsForUser(user.id);
     sendSessionResponse(res, updatedUser.id, updatedUser);
   } catch {
-    res.status(500).json({ error: 'Password change failed.' });
+    res.status(500).json({ error: AUTH_MESSAGE_PASSWORD_CHANGE_FAILED });
   }
 });
 
 router.post('/logout-others', authSessionLimiter, authMiddleware, (req: Request, res: Response) => {
   const refreshToken = getRefreshTokenFromCookies(req);
   if (!refreshToken) {
-    res.status(400).json({ error: 'Current session is unavailable.' });
+    res.status(400).json({ error: AUTH_MESSAGE_SESSION_UNAVAILABLE });
     return;
   }
 
@@ -505,7 +573,7 @@ router.post('/logout-others', authSessionLimiter, authMiddleware, (req: Request,
     const payload = verifyToken(refreshToken);
     if (payload.type !== 'refresh' || !payload.jti) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'refresh_invalid', message: 'Current session is invalid.' });
+      res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_SESSION_INVALID });
       return;
     }
 
@@ -517,7 +585,7 @@ router.post('/logout-others', authSessionLimiter, authMiddleware, (req: Request,
       new Date(session.expires_at).getTime() <= Date.now()
     ) {
       clearRefreshCookie(res);
-      res.status(401).json({ error: 'refresh_invalid', message: 'Current session is invalid.' });
+      res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_SESSION_INVALID });
       return;
     }
 
@@ -525,37 +593,37 @@ router.post('/logout-others', authSessionLimiter, authMiddleware, (req: Request,
     res.json({ success: true });
   } catch {
     clearRefreshCookie(res);
-    res.status(401).json({ error: 'refresh_invalid', message: 'Current session is invalid.' });
+    res.status(401).json({ error: 'refresh_invalid', message: AUTH_MESSAGE_SESSION_INVALID });
   }
 });
 
 router.post('/delete-account', authSessionLimiter, authMiddleware, async (req: Request, res: Response) => {
   const parsed = deleteAccountSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '请求参数无效。' });
     return;
   }
 
   const user = getUserById(req.userId!);
   if (!user) {
-    res.status(404).json({ error: 'User not found.' });
+    res.status(404).json({ error: '未找到该用户。' });
     return;
   }
 
   if (!user.is_guest) {
     if (!user.password_hash) {
-      res.status(403).json({ error: 'This account cannot be deleted without a password reset first.' });
+      res.status(403).json({ error: AUTH_MESSAGE_DELETE_REQUIRES_PASSWORD_RESET });
       return;
     }
 
     if (!parsed.data.password) {
-      res.status(400).json({ error: 'Please enter your current password to delete this account.' });
+      res.status(400).json({ error: AUTH_MESSAGE_DELETE_PASSWORD_REQUIRED });
       return;
     }
 
     const passwordMatches = await comparePassword(parsed.data.password, user.password_hash);
     if (!passwordMatches) {
-      res.status(401).json({ error: 'Current password is incorrect.' });
+      res.status(401).json({ error: AUTH_MESSAGE_CURRENT_PASSWORD_INCORRECT });
       return;
     }
   }
@@ -652,7 +720,7 @@ function sanitizeUser(user: {
     onboardingSeen: !!user.onboarding_seen,
     toolbox: safeJsonParse(user.toolbox_json, []),
     role,
-    isAdmin: isAdminUser(user),
+    isAdmin: role === 'admin',
     agreements: {
       termsVersionAccepted: user.terms_accepted_version || null,
       privacyVersionAccepted: user.privacy_accepted_version || null,
@@ -777,7 +845,7 @@ function resolveGuestFromRefreshToken(token: string): UserRecord | null {
 
 async function dispatchEmailVerification(req: Request, user: UserRecord): Promise<MailDispatchResult> {
   if (!user.email) {
-    throw new Error('Cannot send a verification email to an account without an email address.');
+    throw new Error('当前账号没有邮箱地址，无法发送验证邮件。');
   }
 
   const { token } = issueEmailVerificationToken(user.id, user.email);
@@ -791,7 +859,7 @@ async function dispatchEmailVerification(req: Request, user: UserRecord): Promis
 
 async function dispatchPasswordReset(req: Request, user: UserRecord): Promise<MailDispatchResult> {
   if (!user.email) {
-    throw new Error('Cannot send a password reset email to an account without an email address.');
+    throw new Error('当前账号没有邮箱地址，无法发送重置密码邮件。');
   }
 
   const { token } = issuePasswordResetToken(user.id, user.email);
@@ -813,6 +881,25 @@ function getRequestOrigin(req: Request): string | undefined {
   const forwardedProto = req.header('x-forwarded-proto');
   const protocol = forwardedProto?.split(',')[0]?.trim() || req.protocol || 'http';
   return `${protocol}://${host}`;
+}
+
+function getRequestIp(req: Request): string | undefined {
+  const forwardedFor = req.header('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0]?.trim() || undefined;
+  }
+
+  return req.ip || undefined;
+}
+
+function maskEmail(email: string): string {
+  const [localPart, domain] = email.split('@');
+  if (!domain) {
+    return email.slice(0, 2) + '***';
+  }
+
+  const visibleLocal = localPart.length <= 2 ? (localPart[0] || '*') : localPart.slice(0, 2);
+  return `${visibleLocal}***@${domain}`;
 }
 
 export default router;

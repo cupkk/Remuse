@@ -32,7 +32,7 @@ const memoryMessageSchema = z.object({
 });
 
 const memoryQuerySchema = z.object({
-  query: z.string().trim().min(2, 'Please enter a more specific memory prompt.').max(300),
+  query: z.string().trim().min(2, '\u8bf7\u8f93\u5165\u66f4\u5177\u4f53\u7684\u8bb0\u5fc6\u63d0\u95ee\u3002').max(300),
   history: z.array(memoryMessageSchema).max(12).optional(),
 });
 
@@ -41,7 +41,7 @@ const createThreadSchema = z.object({
 });
 
 const renameThreadSchema = z.object({
-  title: z.string().trim().min(1, 'Please provide a thread title.').max(80),
+  title: z.string().trim().min(1, '\u8bf7\u8f93\u5165\u4f1a\u8bdd\u6807\u9898\u3002').max(80),
 });
 
 router.get('/threads', (req: Request, res: Response) => {
@@ -51,13 +51,13 @@ router.get('/threads', (req: Request, res: Response) => {
 
 router.post('/threads', (req: Request, res: Response) => {
   if (isAdminUserRestricted(req.userId!)) {
-    res.status(403).json({ error: 'This account is temporarily restricted from creating memory threads.' });
+    res.status(403).json({ error: '\u5f53\u524d\u8d26\u53f7\u6682\u65f6\u65e0\u6cd5\u521b\u5efa\u8bb0\u5fc6\u4f1a\u8bdd\u3002' });
     return;
   }
 
   const parsed = createThreadSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid thread payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '会话参数无效。' });
     return;
   }
 
@@ -75,7 +75,7 @@ router.post('/threads', (req: Request, res: Response) => {
 router.get('/threads/:id', (req: Request, res: Response) => {
   const thread = getMemoryThreadSession(req.userId!, readRouteParam(req.params.id));
   if (!thread) {
-    res.status(404).json({ error: 'Memory thread not found.' });
+    res.status(404).json({ error: '\u8bb0\u5fc6\u4f1a\u8bdd\u4e0d\u5b58\u5728\u3002' });
     return;
   }
 
@@ -85,13 +85,13 @@ router.get('/threads/:id', (req: Request, res: Response) => {
 router.patch('/threads/:id', (req: Request, res: Response) => {
   const parsed = renameThreadSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid thread update payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '会话更新参数无效。' });
     return;
   }
 
   const thread = renameMemoryThread(req.userId!, readRouteParam(req.params.id), parsed.data.title);
   if (!thread) {
-    res.status(404).json({ error: 'Memory thread not found.' });
+    res.status(404).json({ error: '\u8bb0\u5fc6\u4f1a\u8bdd\u4e0d\u5b58\u5728\u3002' });
     return;
   }
 
@@ -101,7 +101,7 @@ router.patch('/threads/:id', (req: Request, res: Response) => {
 router.delete('/threads/:id', (req: Request, res: Response) => {
   const result = deleteMemoryThread(req.userId!, readRouteParam(req.params.id));
   if (result.changes === 0) {
-    res.status(404).json({ error: 'Memory thread not found.' });
+    res.status(404).json({ error: '\u8bb0\u5fc6\u4f1a\u8bdd\u4e0d\u5b58\u5728\u3002' });
     return;
   }
 
@@ -116,7 +116,7 @@ router.delete('/threads/:id', (req: Request, res: Response) => {
 
 router.post('/threads/:id/query', async (req: Request, res: Response) => {
   if (isAdminUserRestricted(req.userId!)) {
-    res.status(403).json({ error: 'This account is temporarily restricted from memory queries.' });
+    res.status(403).json({ error: '\u5f53\u524d\u8d26\u53f7\u6682\u65f6\u65e0\u6cd5\u4f7f\u7528\u8bb0\u5fc6\u68c0\u7d22\u3002' });
     return;
   }
 
@@ -124,7 +124,7 @@ router.post('/threads/:id/query', async (req: Request, res: Response) => {
   const quota = assertWithinUsageQuota(req.userId!, 'memory-query');
   if (!quota.allowed) {
     res.status(429).json({
-      error: 'Daily memory query quota exceeded.',
+      error: '\u4eca\u65e5\u8bb0\u5fc6\u95ee\u7b54\u989d\u5ea6\u5df2\u7528\u5b8c\u3002',
       usage: quota,
     });
     return;
@@ -132,13 +132,13 @@ router.post('/threads/:id/query', async (req: Request, res: Response) => {
 
   const parsed = memoryQuerySchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
     return;
   }
 
   const thread = getMemoryThreadSession(req.userId!, readRouteParam(req.params.id));
   if (!thread) {
-    res.status(404).json({ error: 'Memory thread not found.' });
+    res.status(404).json({ error: '\u8bb0\u5fc6\u4f1a\u8bdd\u4e0d\u5b58\u5728\u3002' });
     return;
   }
 
@@ -207,13 +207,13 @@ router.post('/threads/:id/query', async (req: Request, res: Response) => {
         error: error instanceof Error ? error.message : 'unknown',
       },
     });
-    res.status(500).json({ error: 'Memory query failed.' });
+    res.status(500).json({ error: '\u8bb0\u5fc6\u68c0\u7d22\u5931\u8d25\u3002' });
   }
 });
 
 router.post('/query', async (req: Request, res: Response) => {
   if (isAdminUserRestricted(req.userId!)) {
-    res.status(403).json({ error: 'This account is temporarily restricted from memory queries.' });
+    res.status(403).json({ error: '\u5f53\u524d\u8d26\u53f7\u6682\u65f6\u65e0\u6cd5\u4f7f\u7528\u8bb0\u5fc6\u68c0\u7d22\u3002' });
     return;
   }
 
@@ -221,7 +221,7 @@ router.post('/query', async (req: Request, res: Response) => {
   const quota = assertWithinUsageQuota(req.userId!, 'memory-query');
   if (!quota.allowed) {
     res.status(429).json({
-      error: 'Daily memory query quota exceeded.',
+      error: '\u4eca\u65e5\u8bb0\u5fc6\u95ee\u7b54\u989d\u5ea6\u5df2\u7528\u5b8c\u3002',
       usage: quota,
     });
     return;
@@ -230,7 +230,7 @@ router.post('/query', async (req: Request, res: Response) => {
   try {
     const parsed = memoryQuerySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
       return;
     }
 
@@ -280,7 +280,7 @@ router.post('/query', async (req: Request, res: Response) => {
         error: error instanceof Error ? error.message : 'unknown',
       },
     });
-    res.status(500).json({ error: 'Memory query failed.' });
+    res.status(500).json({ error: '\u8bb0\u5fc6\u68c0\u7d22\u5931\u8d25\u3002' });
   }
 });
 

@@ -1,0 +1,40 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" rx="64" fill="#09131D"/>
+  <rect width="800" height="1000" rx="64" fill="url(#bg)"/>
+  <circle cx="178" cy="184" r="170" fill="#67DAFF" fill-opacity="0.18"/>
+  <circle cx="630" cy="850" r="188" fill="#CCFF00" fill-opacity="0.09"/>
+  <rect x="56" y="60" width="688" height="880" rx="42" fill="#121A1F" stroke="rgba(255,255,255,0.1)"/>
+  <rect x="96" y="108" width="238" height="40" rx="20" fill="#00E7FF" fill-opacity="0.12" stroke="#00E7FF" stroke-opacity="0.42"/>
+  <text x="136" y="134" fill="#7FE8FF" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="3">TEXTILE GIFT</text>
+  <text x="96" y="196" fill="#F8FBFF" font-family="Noto Sans SC, sans-serif" font-size="48" font-weight="700">旧牛仔口袋</text>
+  <text x="96" y="232" fill="#90A1AD" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="2">REMUSE TEXTILE ARCHIVE</text>
+  <ellipse cx="400" cy="818" rx="196" ry="34" fill="#000000" fill-opacity="0.3"/>
+  <g transform="translate(160 270)">
+    <path d="M118 68C118 30.4 148.4 0 186 0H294C331.6 0 362 30.4 362 68V450C362 485.3 333.3 514 298 514H182C146.7 514 118 485.3 118 450V68Z" fill="url(#denim)"/>
+    <path d="M152 112C152 86.6 172.6 66 198 66H282C307.4 66 328 86.6 328 112V338C328 363.4 307.4 384 282 384H198C172.6 384 152 363.4 152 338V112Z" fill="#5A88B0"/>
+    <path d="M126 116C126 80.7 154.7 52 190 52H290C325.3 52 354 80.7 354 116V214H126V116Z" fill="#6B9BC5"/>
+    <path d="M160 140C160 108 186 82 218 82H262C294 82 320 108 320 140V194H160V140Z" fill="#7DA8CB"/>
+    <path d="M152 386H328V446C328 467 311 484 290 484H190C169 484 152 467 152 446V386Z" fill="#50799A"/>
+    <path d="M174 104L306 104" stroke="#E6D6B4" stroke-width="7" stroke-linecap="round" stroke-dasharray="3 14"/>
+    <path d="M160 146L160 436" stroke="#E6D6B4" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 13"/>
+    <path d="M320 146L320 436" stroke="#E6D6B4" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 13"/>
+    <path d="M190 420H290" stroke="#E6D6B4" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 13"/>
+    <circle cx="182" cy="110" r="11" fill="#D3B172"/>
+    <circle cx="298" cy="110" r="11" fill="#D3B172"/>
+    <path d="M208 244C224 216 256 214 274 244" stroke="#C8EDFF" stroke-width="10" stroke-linecap="round"/>
+    <path d="M220 294C238 308 246 308 262 294" stroke="#C8EDFF" stroke-width="10" stroke-linecap="round"/>
+    <rect x="188" y="226" width="20" height="20" rx="10" fill="#C8EDFF"/>
+    <rect x="272" y="226" width="20" height="20" rx="10" fill="#C8EDFF"/>
+  </g>
+  <text x="96" y="914" fill="#D7E0E6" font-family="Noto Sans SC, sans-serif" font-size="28" font-weight="600">把陪伴缝进礼物里，也缝进可以再次打开的网页。</text>
+  <defs>
+    <linearGradient id="bg" x1="400" y1="0" x2="400" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#13222C"/>
+      <stop offset="1" stop-color="#090D11"/>
+    </linearGradient>
+    <linearGradient id="denim" x1="240" y1="0" x2="240" y2="514" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AA7D0"/>
+      <stop offset="1" stop-color="#436A8B"/>
+    </linearGradient>
+  </defs>
+</svg>

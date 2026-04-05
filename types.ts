@@ -25,12 +25,24 @@ export interface CollectedItem {
   description?: string;
   imageUrl: string;
   coverImageUrl?: string;
+  coverPending?: boolean;
   audioUrl?: string;
   dateCollected: string;
   story?: string;
   tags: string[];
   status: 'raw' | 'in-progress' | 'remused';
 }
+
+export const EMOJI_STYLE_PRESETS = [
+  '有梗有趣',
+  '可爱软萌',
+  '治愈手绘',
+  '国潮中式',
+  '复古涂鸦',
+  '艺术油画',
+] as const;
+
+export type EmojiStylePreset = typeof EMOJI_STYLE_PRESETS[number];
 
 export interface TransformationGuide {
   title: string;
@@ -61,6 +73,70 @@ export interface SavedTransformationGuide extends TransformationGuide {
   dateCreated: string;
 }
 
+export type PerlerPatternModeValue = 'dominant' | 'average';
+export type PerlerPatternSourceModeValue = 'original' | 'prepared';
+export type PerlerPatternCropModeValue = 'content' | 'full';
+
+export interface PerlerPatternCellSnapshot {
+  key: string;
+  color: string;
+  isTransparent?: boolean;
+}
+
+export interface PerlerPatternColorCountSnapshot {
+  key: string;
+  color: string;
+  count: number;
+}
+
+export interface PerlerPatternResultSnapshot {
+  columns: number;
+  rows: number;
+  totalBeads: number;
+  colorCounts: PerlerPatternColorCountSnapshot[];
+  cells: PerlerPatternCellSnapshot[][];
+  settings: {
+    columns: number;
+    similarityThreshold: number;
+    mode: PerlerPatternModeValue;
+    transparentThreshold: number;
+    cropMode?: PerlerPatternCropModeValue;
+    edgeBias?: number;
+  };
+}
+
+export interface PerlerPatternSourceStickerSnapshot {
+  id: string;
+  originalItemId: string;
+  stickerImageUrl: string;
+  originalImageUrl?: string;
+  preparedImageUrl?: string;
+  dramaText: string;
+  category: string;
+  dateCreated: string;
+}
+
+export interface PerlerPatternStudioSnapshot {
+  sourceSticker: PerlerPatternSourceStickerSnapshot;
+  pattern: PerlerPatternResultSnapshot;
+  options: {
+    columns: number;
+    similarityThreshold: number;
+    mode: PerlerPatternModeValue;
+    sourceMode?: PerlerPatternSourceModeValue;
+    transparentThreshold?: number;
+    cropMode?: PerlerPatternCropModeValue;
+    edgeBias?: number;
+    colorSystem: string;
+    previewCellSize: number;
+    showCellCodes: boolean;
+  };
+}
+
+export interface StickerMetadata {
+  perlerPatternSnapshot?: PerlerPatternStudioSnapshot;
+}
+
 export interface Sticker {
   id: string;
   originalItemId: string;
@@ -68,6 +144,165 @@ export interface Sticker {
   dramaText: string;
   category: string;
   dateCreated: string;
+  metadata?: StickerMetadata;
+}
+
+export interface SavedJournalLayoutItem {
+  stickerId: string;
+  sticker: Sticker;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+  zIndex: number;
+}
+
+export interface SavedJournal {
+  id: string;
+  title: string;
+  previewImageUrl: string;
+  backgroundImageUrl?: string;
+  templateId: string;
+  year: number;
+  month: number;
+  headerNote: string;
+  backgroundColor: string;
+  backgroundOverlay: number;
+  selectedStickerIds: string[];
+  layoutItems: SavedJournalLayoutItem[];
+  dateCreated: string;
+  updatedAt: string;
+}
+
+export type SharedMuseumStatus = 'active' | 'quiet' | 'archived' | 'ended';
+
+export type SharedMuseumMemberRole = 'creator' | 'partner';
+
+export interface SharedMuseumMember {
+  id: string;
+  userId: string;
+  nickname: string;
+  role: SharedMuseumMemberRole;
+  joinedAt: string;
+  notificationEnabled: boolean;
+  quietMode: boolean;
+}
+
+export interface SharedMuseumItem {
+  id: string;
+  museumId: string;
+  sourceItemId: string;
+  sourceUserId: string;
+  sharedByUserId: string;
+  name: string;
+  hallId: string;
+  category: string;
+  material: string;
+  description?: string;
+  imageUrl: string;
+  coverImageUrl?: string;
+  audioUrl?: string;
+  story?: string;
+  tags: string[];
+  sharedNote: string;
+  relationLabel: string;
+  dateCollected: string;
+  dateShared: string;
+}
+
+export interface SharedMuseumMomentCard {
+  id: string;
+  type: 'report' | 'story' | 'milestone' | 'anniversary';
+  title: string;
+  description: string;
+  status: 'placeholder' | 'ready' | 'paused';
+}
+
+export interface SharedMuseumMonthlyReportSnapshot {
+  monthKey: string;
+  monthLabel: string;
+  itemCount: number;
+  categoryCount: number;
+  topCategories: string[];
+  topTags: string[];
+  relationLabels: string[];
+  highlights: string[];
+  narrative: string;
+  timeline: Array<{
+    id: string;
+    name: string;
+    dateLabel: string;
+    sharedNote: string;
+    relationLabel: string;
+    coverImageUrl: string;
+    imageUrl: string;
+  }>;
+  milestoneMessage: string | null;
+}
+
+export interface SharedMuseumMonthlyReport {
+  id: string;
+  museumId: string;
+  monthKey: string;
+  monthLabel: string;
+  snapshot: SharedMuseumMonthlyReportSnapshot;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SharedMuseumSummary {
+  id: string;
+  name: string;
+  description: string;
+  inviteCode: string;
+  inviteEnabled: boolean;
+  status: SharedMuseumStatus;
+  anniversaryDate?: string;
+  theme: string;
+  quietMode: boolean;
+  coverImageUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  members: SharedMuseumMember[];
+  itemCount: number;
+  milestoneCount: number;
+}
+
+export interface SharedMuseumDetail extends SharedMuseumSummary {
+  items: SharedMuseumItem[];
+  momentCards: SharedMuseumMomentCard[];
+  reports: SharedMuseumMonthlyReport[];
+}
+
+export interface SaveJournalInput {
+  id?: string;
+  title: string;
+  previewImageBase64?: string;
+  previewImageUrl?: string;
+  backgroundImageBase64?: string;
+  backgroundImageUrl?: string;
+  templateId: string;
+  year: number;
+  month: number;
+  headerNote?: string;
+  backgroundColor?: string;
+  backgroundOverlay?: number;
+  selectedStickerIds: string[];
+  layoutItems: SavedJournalLayoutItem[];
+  dateCreated?: string;
+}
+
+export interface CreateSharedMuseumInput {
+  name: string;
+  description?: string;
+  anniversaryDate?: string;
+  theme?: string;
+}
+
+export interface AddSharedMuseumItemInput {
+  sourceItemId: string;
+  sharedNote?: string;
+  relationLabel?: string;
 }
 
 export interface InspirationPost {
@@ -276,6 +511,7 @@ export interface AdminOverview {
 export type ViewState =
   | 'ADMIN'
   | 'MUSEUM'
+  | 'SHARED_MUSEUMS'
   | 'SCANNER'
   | 'ITEM_DETAIL'
   | 'PROFILE'

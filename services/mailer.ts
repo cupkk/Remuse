@@ -37,33 +37,33 @@ export async function sendVerificationEmail(input: VerificationEmailInput): Prom
 
   return sendEmail({
     to: input.to,
-    subject: 'Verify your Re-Museum email',
+    subject: '请验证你的 Re-Museum 邮箱',
     text: [
-      `Hi ${input.nickname},`,
+      `${input.nickname}，你好：`,
       '',
-      'Please verify your Re-Museum email address by opening the link below:',
+      '请打开下方链接，完成 Re-Museum 邮箱验证：',
       actionUrl,
       '',
-      'The link expires in 24 hours.',
+      '该链接将在 24 小时后失效。',
       '',
-      'If you did not create this account, you can ignore this email.',
+      '如果这不是你的操作，可以直接忽略这封邮件。',
     ].join('\n'),
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #171717;">
-        <p>Hi ${escapeHtml(input.nickname)},</p>
-        <p>Please verify your Re-Museum email address by clicking the button below.</p>
+        <p>${escapeHtml(input.nickname)}，你好：</p>
+        <p>请点击下方按钮，完成 Re-Museum 邮箱验证。</p>
         <p style="margin: 24px 0;">
           <a
             href="${escapeHtml(actionUrl)}"
             style="display: inline-block; padding: 12px 20px; border-radius: 999px; background: #d97706; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
-            Verify Email
+            验证邮箱
           </a>
         </p>
-        <p>If the button does not work, copy and paste this link into your browser:</p>
+        <p>如果按钮无法打开，请将下面的链接复制到浏览器中访问：</p>
         <p><a href="${escapeHtml(actionUrl)}">${escapeHtml(actionUrl)}</a></p>
-        <p>The link expires in 24 hours.</p>
-        <p>If you did not create this account, you can ignore this email.</p>
+        <p>该链接将在 24 小时后失效。</p>
+        <p>如果这不是你的操作，可以直接忽略这封邮件。</p>
       </div>
     `,
     previewUrl: actionUrl,
@@ -75,34 +75,34 @@ export async function sendPasswordResetEmail(input: PasswordResetEmailInput): Pr
 
   return sendEmail({
     to: input.to,
-    subject: 'Reset your Re-Museum password',
+    subject: '重置你的 Re-Museum 密码',
     text: [
-      `Hi ${input.nickname},`,
+      `${input.nickname}，你好：`,
       '',
-      'We received a request to reset your Re-Museum password.',
-      'Open the link below to choose a new password:',
+      '我们收到了一次 Re-Museum 密码重置请求。',
+      '请打开下方链接重新设置密码：',
       actionUrl,
       '',
-      'The link expires in 60 minutes.',
+      '该链接将在 60 分钟后失效。',
       '',
-      'If you did not request this change, you can ignore this email.',
+      '如果这不是你的操作，可以直接忽略这封邮件。',
     ].join('\n'),
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #171717;">
-        <p>Hi ${escapeHtml(input.nickname)},</p>
-        <p>We received a request to reset your Re-Museum password.</p>
+        <p>${escapeHtml(input.nickname)}，你好：</p>
+        <p>我们收到了一次 Re-Museum 密码重置请求。</p>
         <p style="margin: 24px 0;">
           <a
             href="${escapeHtml(actionUrl)}"
             style="display: inline-block; padding: 12px 20px; border-radius: 999px; background: #0f766e; color: #ffffff; text-decoration: none; font-weight: 700;"
           >
-            Reset Password
+            重置密码
           </a>
         </p>
-        <p>If the button does not work, copy and paste this link into your browser:</p>
+        <p>如果按钮无法打开，请将下面的链接复制到浏览器中访问：</p>
         <p><a href="${escapeHtml(actionUrl)}">${escapeHtml(actionUrl)}</a></p>
-        <p>The link expires in 60 minutes.</p>
-        <p>If you did not request this change, you can ignore this email.</p>
+        <p>该链接将在 60 分钟后失效。</p>
+        <p>如果这不是你的操作，可以直接忽略这封邮件。</p>
       </div>
     `,
     previewUrl: actionUrl,
@@ -120,7 +120,7 @@ export function resolveAppBaseUrl(requestOrigin?: string): string {
     return requestBased;
   }
 
-  throw new Error('APP_BASE_URL is required when the request origin is unavailable.');
+  throw new Error('\u5f53\u8bf7\u6c42\u6765\u6e90\u4e0d\u53ef\u7528\u65f6\uff0c\u5fc5\u987b\u914d\u7f6e APP_BASE_URL\u3002');
 }
 
 function buildAuthActionUrl(baseUrl: string, action: 'verify-email' | 'reset-password', token: string): string {
@@ -161,7 +161,7 @@ async function sendEmail(input: EmailContent): Promise<MailDispatchResult> {
   const resendApiKey = process.env.RESEND_API_KEY?.trim();
   const fromEmail = process.env.MAIL_FROM_EMAIL?.trim();
   if (!resendApiKey || !fromEmail) {
-    throw new Error('RESEND_API_KEY and MAIL_FROM_EMAIL are required when EMAIL_DELIVERY_MODE=resend.');
+    throw new Error('EMAIL_DELIVERY_MODE=resend \u65f6\uff0c\u5fc5\u987b\u540c\u65f6\u914d\u7f6e RESEND_API_KEY \u548c MAIL_FROM_EMAIL\u3002');
   }
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -181,13 +181,13 @@ async function sendEmail(input: EmailContent): Promise<MailDispatchResult> {
 
   if (!response.ok) {
     const responseText = await response.text().catch(() => '');
-    throw new Error(`Resend API request failed with status ${response.status}: ${responseText}`);
+    throw new Error(`Resend 邮件接口请求失败，状态码 ${response.status}：${responseText}`);
   }
 
   return { mode };
 }
 
-function resolveMailDeliveryMode(): MailDeliveryMode {
+export function resolveMailDeliveryMode(): MailDeliveryMode {
   const configuredMode = process.env.EMAIL_DELIVERY_MODE?.trim().toLowerCase();
   if (configuredMode === 'resend') {
     return 'resend';
@@ -198,6 +198,10 @@ function resolveMailDeliveryMode(): MailDeliveryMode {
   }
 
   return process.env.RESEND_API_KEY ? 'resend' : 'log';
+}
+
+export function isLiveMailDeliveryEnabled(): boolean {
+  return resolveMailDeliveryMode() === 'resend';
 }
 
 function formatSender(fromEmail: string): string {
@@ -224,7 +228,7 @@ function escapeHtml(value: string): string {
 
 if (process.env.NODE_ENV === 'production' && resolveMailDeliveryMode() === 'log') {
   console.warn(
-    '[mailer] Email delivery is running in log mode. Set EMAIL_DELIVERY_MODE=resend, RESEND_API_KEY, MAIL_FROM_EMAIL, and APP_BASE_URL for real emails.',
+    '[mailer] 当前邮件发送仍处于日志模式；如需真实发信，请配置 EMAIL_DELIVERY_MODE=resend、RESEND_API_KEY、MAIL_FROM_EMAIL 和 APP_BASE_URL。',
   );
 }
 

@@ -95,14 +95,14 @@ export async function queryUserMemories({
   try {
     await syncUserMemoryEmbeddings(userId, sourceItems);
   } catch (error) {
-    console.error('Memory embedding sync failed before retrieval:', error);
+    console.error('记忆向量同步失败，检索前将继续降级处理：', error);
   }
 
   let vectorHits: Array<{ itemId: string; score: number }> = [];
   try {
     vectorHits = await searchMemoryVectors(userId, retrievalQuery, 8);
   } catch (error) {
-    console.error('Memory vector retrieval failed, falling back to lexical retrieval:', error);
+    console.error('记忆向量检索失败，已回退到关键词检索：', error);
   }
 
   const candidates = mergeRetrievalScores(sourceItems, retrievalQuery, vectorHits).slice(0, 4);
@@ -149,7 +149,7 @@ export async function queryUserMemories({
       usedFallback: false,
     };
   } catch (error) {
-    console.error('Memory assistant generation failed:', error);
+    console.error('记忆问答生成失败，已回退到基础回答：', error);
     return {
       answer: buildFallbackAnswer(matches),
       matches,
@@ -451,11 +451,11 @@ async function generateGroundedMemoryAnswer({
   sourceCount: number;
 }) {
   if (APP_CONFIG.disableLiveAi) {
-    throw new Error('Live AI is disabled for memory answer generation.');
+    throw new Error('\u5f53\u524d\u5df2\u5173\u95ed\u8bb0\u5fc6\u95ee\u7b54\u7684\u5b9e\u65f6 AI \u751f\u6210\u80fd\u529b\u3002');
   }
 
   if (!GEMINI_API_KEY) {
-    throw new Error('Missing GEMINI_API_KEY');
+    throw new Error('\u7f3a\u5c11 GEMINI_API_KEY \u914d\u7f6e');
   }
 
   const ai = new GoogleGenAI({
@@ -516,7 +516,7 @@ async function generateGroundedMemoryAnswer({
 
   const answer = response.text?.trim();
   if (!answer) {
-    throw new Error('No memory answer returned from Gemini');
+    throw new Error('Gemini \u672a\u8fd4\u56de\u8bb0\u5fc6\u95ee\u7b54\u5185\u5bb9');
   }
 
   return answer;

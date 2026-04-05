@@ -1,0 +1,749 @@
+[
+  {
+    "slug": "campus-cup",
+    "capsuleLabel": "NFC Capsule 01",
+    "archiveCode": "RM-GIFT-213-01",
+    "publicUrl": "https://gift.remuse.top/campus-cup",
+    "title": "夏午珍珠奶茶",
+    "subtitle": "这杯奶茶把夏天最轻的一阵风留在了杯底。轻触 NFC，先看真实原图，再看它被重新写成礼物封面后的样子。",
+    "originalImageUrl": "/nfc-showcase/campus-cup/original.webp",
+    "coverImageUrl": "/nfc-showcase/campus-cup/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/campus-cup/sticker.webp",
+    "imageAlt": "夏午珍珠奶茶 的真实原图",
+    "coverAlt": "夏午珍珠奶茶 的 AI 展示封面",
+    "stickerAlt": "夏午珍珠奶茶 的 AI 贴纸图",
+    "stickerCaption": "夏天的甜，今天也陪你出场。",
+    "sourceItemName": "冰摇珍珠奶茶",
+    "sourceCategory": "其他",
+    "sourceMaterial": "塑料、复合饮品",
+    "sourceStory": "琥珀色的液体承载着午后的慵懒，每一颗沉底的珍珠都是光阴凝固的甜蜜瞬间。",
+    "analyzedName": "琥珀流光珍珠奶茶",
+    "analyzedCategory": "奶茶周边",
+    "analyzedMaterial": "塑料、聚丙烯、木薯粉圆",
+    "analyzedStory": "午后蝉鸣声中，冰块撞击杯底的清脆，是属于那个夏天的序曲。醇厚的茶香里，藏着年少时的欢欣与青涩，那是我们曾一起分享过的微甜时光。",
+    "tags": [
+      "夏日旧物",
+      "奶茶记忆",
+      "午后微甜"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "campus-cup-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "campus-cup-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“夏午珍珠奶茶”，并归入“其他”这一页公开档案。"
+      },
+      {
+        "id": "campus-cup-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "campus-cup-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "campus-cup-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/campus-cup，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(255, 188, 92, 0.26)",
+      "spotlight": "#ffcd7b",
+      "panelTint": "rgba(255, 193, 124, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "denim-pocket",
+    "capsuleLabel": "NFC Capsule 02",
+    "archiveCode": "RM-GIFT-213-02",
+    "publicUrl": "https://gift.remuse.top/denim-pocket",
+    "title": "陪我四年的牛仔外套",
+    "subtitle": "袖口磨起的毛边、口袋里遗落的票根，都还留在这件旧外套里。轻触 NFC，就能把这段穿了四年的旧时光，完整地收进这份礼物里。",
+    "originalImageUrl": "/nfc-showcase/denim-pocket/original.webp",
+    "coverImageUrl": "/nfc-showcase/denim-pocket/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/denim-pocket/sticker.webp",
+    "imageAlt": "陪我四年的牛仔外套 的真实原图",
+    "coverAlt": "陪我四年的牛仔外套 的 AI 展示封面",
+    "stickerAlt": "陪我四年的牛仔外套 的 AI 贴纸图",
+    "stickerCaption": "旧口袋还记得那场演唱会。",
+    "sourceItemName": "旧牛仔外套",
+    "sourceCategory": "其他",
+    "sourceMaterial": "牛仔布 / 棉",
+    "sourceStory": "大学时期最爱的那一件牛仔外套，穿了整整四年。袖口磨出了毛边，口袋里好像还能找到当年偷偷塞进去的演唱会票根。现在虽然穿不下了，但每一道褶皱都记录着那些无忧无虑的日子。",
+    "analyzedName": "岁月里的单宁牛仔裤",
+    "analyzedCategory": "其他",
+    "analyzedMaterial": "丹宁棉布",
+    "analyzedStory": "每一条牛仔裤都承载着一段奔跑或漫步的时光。在反复的洗涤与穿着中，自然的色落记录了身体的曲线与生活的节奏，让旧物拥有了独特的温度。",
+    "tags": [
+      "校园旧衣",
+      "单宁记忆",
+      "演唱会票根"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "denim-pocket-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "denim-pocket-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“陪我四年的牛仔外套”，并归入“其他”这一页公开档案。"
+      },
+      {
+        "id": "denim-pocket-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "denim-pocket-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "denim-pocket-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/denim-pocket，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(102, 215, 255, 0.26)",
+      "spotlight": "#7fe8ff",
+      "panelTint": "rgba(114, 214, 255, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "midnight-ticket",
+    "capsuleLabel": "NFC Capsule 03",
+    "archiveCode": "RM-GIFT-213-03",
+    "publicUrl": "https://gift.remuse.top/midnight-ticket",
+    "title": "放课后的秘密色纸",
+    "subtitle": "这张色纸像被课本夹住的一小段青春，安静，却一直没有褪色。轻触 NFC，把那段没说出口的心事重新翻出来看看。",
+    "originalImageUrl": "/nfc-showcase/midnight-ticket/original.webp",
+    "coverImageUrl": "/nfc-showcase/midnight-ticket/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/midnight-ticket/sticker.webp",
+    "imageAlt": "放课后的秘密色纸 的真实原图",
+    "coverAlt": "放课后的秘密色纸 的 AI 展示封面",
+    "stickerAlt": "放课后的秘密色纸 的 AI 贴纸图",
+    "stickerCaption": "放课后的心事，我替你先收好。",
+    "sourceItemName": "缄默的秘密",
+    "sourceCategory": "其他",
+    "sourceMaterial": "纸质印刷",
+    "sourceStory": "光影交织出的静谧瞬间，那是被时光温柔裁切下的、关于青春的一枚缄默切片。",
+    "analyzedName": "放课后的秘密色纸",
+    "analyzedCategory": "其他",
+    "analyzedMaterial": "特种纸",
+    "analyzedStory": "藏在旧课本里的这张色纸，记录了那个洒满金辉的放课后。每当看到她指尖轻抵唇边的模样，总能想起那些未曾说出口的青涩约定，以及那个永不褪色的盛夏。",
+    "tags": [
+      "青春收藏",
+      "纸品档案",
+      "放课后"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "midnight-ticket-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "midnight-ticket-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“放课后的秘密色纸”，并归入“其他”这一页公开档案。"
+      },
+      {
+        "id": "midnight-ticket-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "midnight-ticket-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "midnight-ticket-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/midnight-ticket，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(204, 255, 0, 0.26)",
+      "spotlight": "#ccff00",
+      "panelTint": "rgba(204, 255, 0, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "bottlecap-badge",
+    "capsuleLabel": "NFC Capsule 04",
+    "archiveCode": "RM-GIFT-213-04",
+    "publicUrl": "https://gift.remuse.top/bottlecap-badge",
+    "title": "复古玻璃汽水瓶",
+    "subtitle": "它原本只是旧货店货架上的一只玻璃瓶，现在成了装住季节碎片的小容器。轻触 NFC，看看这件真实旧物怎样被重新整理成一份可以送出去的礼物。",
+    "originalImageUrl": "/nfc-showcase/bottlecap-badge/original.webp",
+    "coverImageUrl": "/nfc-showcase/bottlecap-badge/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/bottlecap-badge/sticker.webp",
+    "imageAlt": "复古玻璃汽水瓶 的真实原图",
+    "coverAlt": "复古玻璃汽水瓶 的 AI 展示封面",
+    "stickerAlt": "复古玻璃汽水瓶 的 AI 贴纸图",
+    "stickerCaption": "这一瓶，装的是慢慢攒下来的旧时光。",
+    "sourceItemName": "复古玻璃汽水瓶",
+    "sourceCategory": "瓶瓶罐罐",
+    "sourceMaterial": "玻璃",
+    "sourceStory": "从学校旁边的复古小店淘到的汽水瓶，瓶身上印着 80 年代的广告标语。老板说这是他爸爸年轻时候喝汽水攒下来的，一攒就是三十年。现在它在我的书桌上，装着来自不同季节的小物件。",
+    "analyzedName": "森林绿哑光不锈钢水壶",
+    "analyzedCategory": "瓶瓶罐罐",
+    "analyzedMaterial": "不锈钢、硅胶",
+    "analyzedStory": "它是陪伴我穿过清晨雾气的伙伴，在自习室的午后记录下笔尖摩擦纸张的声音。即便漆面略有磨损，这抹宁静的森林绿意依旧温暖着日常。",
+    "tags": [
+      "玻璃器物",
+      "复古小店",
+      "桌面收藏",
+      "瓶瓶罐罐"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "bottlecap-badge-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "bottlecap-badge-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“复古玻璃汽水瓶”，并归入“瓶瓶罐罐”这一页公开档案。"
+      },
+      {
+        "id": "bottlecap-badge-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "bottlecap-badge-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "bottlecap-badge-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/bottlecap-badge，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(255, 124, 102, 0.24)",
+      "spotlight": "#ff9c7c",
+      "panelTint": "rgba(255, 145, 122, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "metro-pass",
+    "capsuleLabel": "NFC Capsule 05",
+    "archiveCode": "RM-GIFT-213-05",
+    "publicUrl": "https://gift.remuse.top/metro-pass",
+    "title": "排排站的小伙伴",
+    "subtitle": "它们挨在一起站好的样子，很像把今天的小小开心也排整齐了。轻触 NFC，看看我怎样把这一排软乎乎的陪伴，整理成一份可以送出去的小礼物。",
+    "originalImageUrl": "/nfc-showcase/metro-pass/original.webp",
+    "coverImageUrl": "/nfc-showcase/metro-pass/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/metro-pass/sticker.webp",
+    "imageAlt": "排排站的小伙伴 的真实原图",
+    "coverAlt": "排排站的小伙伴 的 AI 展示封面",
+    "stickerAlt": "排排站的小伙伴 的 AI 贴纸图",
+    "stickerCaption": "把今天的好心情，也一起递给你。",
+    "sourceItemName": "治愈系萌趣公仔系列",
+    "sourceCategory": "手办玩偶",
+    "sourceMaterial": "毛绒、织物、PVC",
+    "sourceStory": "它们是藏在心底的温柔守候。不需要多言，仅凭那副憨态可掬的模样，就能唤醒童年里的快乐，在喧嚣世界中为你提供一份治愈。",
+    "analyzedName": "ZZTONG治愈系毛绒玩偶",
+    "analyzedCategory": "手办玩偶",
+    "analyzedMaterial": "聚酯纤维、毛绒织物",
+    "analyzedStory": "它们是童年梦境里的守门人，红扑扑的脸蛋藏着数不尽的温柔。在那些疲惫的午后，这些小小的身影总能治愈每一个不再年少的心灵。",
+    "tags": [
+      "毛绒收藏",
+      "小伙伴",
+      "治愈时刻",
+      "手办玩偶"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "metro-pass-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "metro-pass-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“排排站的小伙伴”，并归入“手办玩偶”这一页公开档案。"
+      },
+      {
+        "id": "metro-pass-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "metro-pass-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "metro-pass-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/metro-pass，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(255, 167, 128, 0.24)",
+      "spotlight": "#ffc18a",
+      "panelTint": "rgba(255, 181, 142, 0.08)"
+    },
+    "generatedAt": "2026-03-21T00:35:40.850Z",
+    "generatedAtLabel": "2026/03/21 08:35",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "sweater-button",
+    "capsuleLabel": "NFC Capsule 06",
+    "archiveCode": "RM-GIFT-213-06",
+    "publicUrl": "https://gift.remuse.top/sweater-button",
+    "title": "云端入梦小像",
+    "subtitle": "小小的睡脸像把噪音按下静音键，让人一眼就慢下来。轻触 NFC，看看它怎样从桌角摆件变成一份柔软的公开礼物。",
+    "originalImageUrl": "/nfc-showcase/sweater-button/original.webp",
+    "coverImageUrl": "/nfc-showcase/sweater-button/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/sweater-button/sticker.webp",
+    "imageAlt": "云端入梦小像 的真实原图",
+    "coverAlt": "云端入梦小像 的 AI 展示封面",
+    "stickerAlt": "云端入梦小像 的 AI 贴纸图",
+    "stickerCaption": "今晚的好梦，我帮你先守着。",
+    "sourceItemName": "云端入梦小像",
+    "sourceCategory": "手办玩偶",
+    "sourceMaterial": "树脂/PVC",
+    "sourceStory": "在喧嚣世界的边缘，总有一处如云朵般柔软的角落，安放着那个从未长大的、正在做梦的孩子。",
+    "analyzedName": "云端的守梦者",
+    "analyzedCategory": "手办玩偶",
+    "analyzedMaterial": "PVC/树脂",
+    "analyzedStory": "它是寒冷冬日里的一抹亮色，在洁白云朵中守护着一个未完的梦。每当疲惫时看着他静谧的睡颜，仿佛全世界的喧嚣都随之安静了下来。",
+    "tags": [
+      "治愈摆件",
+      "云朵小像",
+      "柔软时刻",
+      "手办玩偶"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "sweater-button-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "sweater-button-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“云端入梦小像”，并归入“手办玩偶”这一页公开档案。"
+      },
+      {
+        "id": "sweater-button-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "sweater-button-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "sweater-button-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/sweater-button，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(255, 166, 200, 0.22)",
+      "spotlight": "#ffc0dd",
+      "panelTint": "rgba(255, 184, 217, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "cassette-ribbon",
+    "capsuleLabel": "NFC Capsule 07",
+    "archiveCode": "RM-GIFT-213-07",
+    "publicUrl": "https://gift.remuse.top/cassette-ribbon",
+    "title": "库迪×柯南联名纸袋",
+    "subtitle": "一只纸袋也可以被认真收藏，因为它背后站着一整段熟悉的角色记忆。轻触 NFC，看看这份联名周边怎样被重新装进一份轻巧的小礼物里。",
+    "originalImageUrl": "/nfc-showcase/cassette-ribbon/original.webp",
+    "coverImageUrl": "/nfc-showcase/cassette-ribbon/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/cassette-ribbon/sticker.webp",
+    "imageAlt": "库迪×柯南联名纸袋 的真实原图",
+    "coverAlt": "库迪×柯南联名纸袋 的 AI 展示封面",
+    "stickerAlt": "库迪×柯南联名纸袋 的 AI 贴纸图",
+    "stickerCaption": "今日份推理能量，已经替你装袋。",
+    "sourceItemName": "库迪咖啡×名侦探柯南联名纸袋",
+    "sourceCategory": "奶茶周边",
+    "sourceMaterial": "纸质",
+    "sourceStory": "在那个微凉的夜晚，这一抹纯白如约而至。它装载过指尖的余温与咖啡的浓郁，也将那段关于月下魔术师的浪漫回忆，稳稳地留在了身边。",
+    "analyzedName": "库迪咖啡×名侦探柯南联名纸袋",
+    "analyzedCategory": "奶茶周边",
+    "analyzedMaterial": "纸质",
+    "analyzedStory": "街角咖啡店带回的那抹月光。虽是普通的纸袋，却定格了月下魔术师的华丽身姿，在平凡的忙碌午后，轻唤起关于童年与浪漫的所有憧憬。",
+    "tags": [
+      "联名周边",
+      "角色收藏",
+      "咖啡纸袋",
+      "奶茶周边"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "cassette-ribbon-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "cassette-ribbon-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“库迪×柯南联名纸袋”，并归入“奶茶周边”这一页公开档案。"
+      },
+      {
+        "id": "cassette-ribbon-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "cassette-ribbon-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "cassette-ribbon-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/cassette-ribbon，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(196, 133, 255, 0.24)",
+      "spotlight": "#d4b2ff",
+      "panelTint": "rgba(206, 155, 255, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "paper-crane",
+    "capsuleLabel": "NFC Capsule 08",
+    "archiveCode": "RM-GIFT-213-08",
+    "publicUrl": "https://gift.remuse.top/paper-crane",
+    "title": "童话毛绒小队",
+    "subtitle": "这组玩偶像从旧童话里一起走出来，负责把人重新带回软软的安全区。轻触 NFC，看看它们的真实照片、封面和贴纸怎样被串成同一份礼物体验。",
+    "originalImageUrl": "/nfc-showcase/paper-crane/original.webp",
+    "coverImageUrl": "/nfc-showcase/paper-crane/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/paper-crane/sticker.webp",
+    "imageAlt": "童话毛绒小队 的真实原图",
+    "coverAlt": "童话毛绒小队 的 AI 展示封面",
+    "stickerAlt": "童话毛绒小队 的 AI 贴纸图",
+    "stickerCaption": "童话入口开着，欢迎你靠近一点。",
+    "sourceItemName": "治愈系童话毛绒玩偶",
+    "sourceCategory": "手办玩偶",
+    "sourceMaterial": "涤纶纤维、毛绒、塑料",
+    "sourceStory": "每一只玩偶都是由时光碎片与纯真幻象编织而成的美梦，在红色的展台上静默守望，等待着某个瞬间重新点亮那些被尘封的童年温暖。",
+    "analyzedName": "童话梦境系列毛绒玩偶",
+    "analyzedCategory": "手办玩偶",
+    "analyzedMaterial": "优质毛绒布料、聚酯纤维填充、PVC塑料",
+    "analyzedStory": "这些憨态可掬的小生灵，像是从旧时光的童话书里走出来的。它们用无声的陪伴，温柔地守护着每一个不愿长大的梦。每当指尖触碰到那柔软的绒毛，心底最柔软的角落总会被悄悄唤醒。",
+    "tags": [
+      "毛绒收藏",
+      "童话感",
+      "治愈玩偶",
+      "手办玩偶"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "paper-crane-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "paper-crane-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“童话毛绒小队”，并归入“手办玩偶”这一页公开档案。"
+      },
+      {
+        "id": "paper-crane-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "paper-crane-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "paper-crane-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/paper-crane，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(194, 255, 124, 0.22)",
+      "spotlight": "#ddff9a",
+      "panelTint": "rgba(203, 255, 145, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "film-roll",
+    "capsuleLabel": "NFC Capsule 09",
+    "archiveCode": "RM-GIFT-213-09",
+    "publicUrl": "https://gift.remuse.top/film-roll",
+    "title": "城市限定咖啡杯",
+    "subtitle": "旅行结束之后，最容易留下来的往往不是照片，而是一只每天还会继续使用的杯子。轻触 NFC，看看这件城市限定周边如何把一个下午重新端回眼前。",
+    "originalImageUrl": "/nfc-showcase/film-roll/original.webp",
+    "coverImageUrl": "/nfc-showcase/film-roll/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/film-roll/sticker.webp",
+    "imageAlt": "城市限定咖啡杯 的真实原图",
+    "coverAlt": "城市限定咖啡杯 的 AI 展示封面",
+    "stickerAlt": "城市限定咖啡杯 的 AI 贴纸图",
+    "stickerCaption": "那个午后，我还替你暖着。",
+    "sourceItemName": "星巴克城市限定杯",
+    "sourceCategory": "奶茶周边",
+    "sourceMaterial": "陶瓷",
+    "sourceStory": "去年和闺蜜去旅行，在当地星巴克入手的城市限定杯。虽然杯子已经小磕了一块釉，但每次看到它都会想起那个阳光明媚的下午，我们坐在街角的咖啡店里笑到肚子疼。",
+    "analyzedName": "记忆里的午后拿铁",
+    "analyzedCategory": "其他",
+    "analyzedMaterial": "陶瓷、金属、咖啡、牛奶",
+    "analyzedStory": "在那个被雨水洗过的午后，钻进街角的小店，点了一杯带着微热温度的拿铁。奶泡在杯中勾勒出的不仅是叶片的形状，更是那段被香气充盈的宁静旧时光。",
+    "tags": [
+      "旅行纪念",
+      "咖啡杯",
+      "城市限定",
+      "奶茶周边"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "film-roll-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "film-roll-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“城市限定咖啡杯”，并归入“奶茶周边”这一页公开档案。"
+      },
+      {
+        "id": "film-roll-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "film-roll-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "film-roll-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/film-roll，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(255, 206, 118, 0.22)",
+      "spotlight": "#ffd889",
+      "panelTint": "rgba(255, 214, 136, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  },
+  {
+    "slug": "concert-band",
+    "capsuleLabel": "NFC Capsule 10",
+    "archiveCode": "RM-GIFT-213-10",
+    "publicUrl": "https://gift.remuse.top/concert-band",
+    "title": "瑞幸万店纪念套装",
+    "subtitle": "深蓝色包材把一次品牌庆典变成了能拿在手里的具体时刻。轻触 NFC，看看这套纪念周边怎样被整理成一份能直接送到朋友手里的数字礼物。",
+    "originalImageUrl": "/nfc-showcase/concert-band/original.webp",
+    "coverImageUrl": "/nfc-showcase/concert-band/cover.webp",
+    "stickerImageUrl": "/nfc-showcase/concert-band/sticker.webp",
+    "imageAlt": "瑞幸万店纪念套装 的真实原图",
+    "coverAlt": "瑞幸万店纪念套装 的 AI 展示封面",
+    "stickerAlt": "瑞幸万店纪念套装 的 AI 贴纸图",
+    "stickerCaption": "万店同庆这一站，我替你留了位置。",
+    "sourceItemName": "瑞幸咖啡万店同庆纪念套装",
+    "sourceCategory": "奶茶周边",
+    "sourceMaterial": "纸, 塑料",
+    "sourceStory": "那是鹿鸣林间的清晨，万人共饮的一杯苦甜，被镌刻在湛蓝的纸笺上，记录着一个品牌跨越山海的足迹。",
+    "analyzedName": "瑞幸咖啡万店同庆主题包材",
+    "analyzedCategory": "奶茶周边",
+    "analyzedMaterial": "纸、塑料",
+    "analyzedStory": "那年夏日，瑞幸迎来了第万家门店。深蓝色纸袋上的神鹿跃动，仿佛带走了午后的燥热。这杯咖啡不仅是提神饮品，更是那个奋斗季节里，与你我并肩前行的微小幸运。",
+    "tags": [
+      "品牌周边",
+      "纪念套装",
+      "蓝色包装",
+      "奶茶周边"
+    ],
+    "highlights": [
+      "首屏展示真实原图，不再用占位插画充当结果页。",
+      "封面与贴纸已经固化成公开静态资源，扫码现场打开更稳定。",
+      "NFC 标签只写固定 URL，用户轻触即可直达，不依赖登录或后台接口。"
+    ],
+    "processTimeline": [
+      {
+        "id": "concert-band-step-1",
+        "label": "01",
+        "title": "选取真实原图",
+        "description": "从项目已有上传记录里提取真实照片，并导出为可公开访问的静态展示资源。"
+      },
+      {
+        "id": "concert-band-step-2",
+        "label": "02",
+        "title": "整理展台档案",
+        "description": "把这件物件整理成展台标题“瑞幸万店纪念套装”，并归入“奶茶周边”这一页公开档案。"
+      },
+      {
+        "id": "concert-band-step-3",
+        "label": "03",
+        "title": "生成封面主视觉",
+        "description": "当前封面由 Gemini 图像生成 输出，作为扫码后第一眼看到的展台主视觉。"
+      },
+      {
+        "id": "concert-band-step-4",
+        "label": "04",
+        "title": "输出贴纸结果",
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+      },
+      {
+        "id": "concert-band-step-5",
+        "label": "05",
+        "title": "固定公开链接",
+        "description": "最终页面发布到 https://gift.remuse.top/concert-band，NFC 贴纸只需写入这个固定地址即可直接展示。"
+      }
+    ],
+    "palette": {
+      "glow": "rgba(95, 255, 216, 0.22)",
+      "spotlight": "#9effe9",
+      "panelTint": "rgba(118, 255, 220, 0.08)"
+    },
+    "generatedAt": "2026-03-20T18:31:33.464Z",
+    "generatedAtLabel": "2026/03/21 02:31",
+    "coverProvider": "gemini",
+    "coverUsedFallback": false
+  }
+]

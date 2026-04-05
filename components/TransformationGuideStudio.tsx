@@ -68,7 +68,7 @@ const TransformationGuideStudio: React.FC<TransformationGuideStudioProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-remuse-dark px-4 py-5 md:px-8 md:py-8">
+    <div data-testid="guide-studio" className="h-full overflow-y-auto bg-remuse-dark px-4 py-5 md:px-8 md:py-8">
       <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
         <section className="rounded-[32px] border border-remuse-border bg-[radial-gradient(circle_at_top_left,rgba(204,255,0,0.14),transparent_30%),linear-gradient(180deg,rgba(18,22,26,0.98),rgba(8,10,13,0.98))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.3)] md:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

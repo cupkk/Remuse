@@ -323,7 +323,7 @@ export function getAdminUserDetail(userId: string) {
 export function updateAdminUserFlag(userId: string, status: 'watch' | 'restricted' | 'cleared', note = '') {
   const exists = stmts.userExists.get({ user_id: userId }) as { id: string } | undefined;
   if (!exists) {
-    throw new Error('User not found.');
+    throw new Error('未找到该用户。');
   }
 
   stmts.upsertFlag.run({

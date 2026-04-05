@@ -34,6 +34,7 @@ interface ScannerProps {
   generatingStickersGlobal?: Record<string, boolean>;
   onNavigateToHall?: (hallId: string) => void;
   onNavigateToStickerLibrary?: () => void;
+  onNavigateToWorkshop?: () => void;
 }
 
 const ScrambleButton: React.FC<{ 
@@ -97,7 +98,7 @@ const ScrambleButton: React.FC<{
     );
 };
 
-const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers, onGenerateStickerRequest, generatingStickersGlobal = {}, onNavigateToHall, onNavigateToStickerLibrary }) => { 
+const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCreated, onCancel, onReset, onViewDetail, onCompleteItem, onUpdateItem, onDeleteItem, existingStickers, onGenerateStickerRequest, generatingStickersGlobal = {}, onNavigateToHall, onNavigateToStickerLibrary, onNavigateToWorkshop }) => { 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingStickerLocal, setIsGeneratingSticker] = useState(false);
   
@@ -137,6 +138,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
 
   const hallsSafe = Array.isArray(halls) ? halls : [];
   const selectedHallName = hallsSafe.find(h => h.id === selectedHallId)?.name;
+  const isVoiceArchiveCapturing = isRecordingMemoryDraft || isRecordingAudio;
   const isExpandedScannerLayout = isBatchMode || isAnalyzing || isGeneratingSticker || !!analysisResult;
   const memoryDraftDirty = Boolean(analysisResult && memoryDraft.trim() !== (analysisResult.story || '').trim());
   const audioDraftDirty = Boolean(analysisResult && audioDraftUrl !== (analysisResult.audioUrl || ''));
@@ -145,6 +147,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
   // Track blob URLs for cleanup on unmount to avoid revoking on state updates
   const blobUrlsRef = useRef<Set<string>>(new Set());
   const memoryDraftRef = useRef('');
+  const audioDraftRef = useRef('');
   const memoryCaptureRef = useRef<SpeechCaptureSession | null>(null);
   const audioRecordingRef = useRef<AudioRecordingSession | null>(null);
   const analyzingLeftRef = useRef<HTMLDivElement>(null);
@@ -153,6 +156,10 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
   useEffect(() => {
     memoryDraftRef.current = memoryDraft;
   }, [memoryDraft]);
+
+  useEffect(() => {
+    audioDraftRef.current = audioDraftUrl;
+  }, [audioDraftUrl]);
 
   useEffect(() => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -337,6 +344,27 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
     setIsRecordingMemoryDraft(false);
   };
 
+  const stopAudioDraftCapture = async () => {
+    const session = audioRecordingRef.current;
+    if (!session) {
+      setIsRecordingAudio(false);
+      return;
+    }
+
+    audioRecordingRef.current = null;
+
+    try {
+      const recorded = await session.stop();
+      setAudioDraftUrl(recorded.dataUrl);
+      setAudioRecordError(null);
+      setMemorySaveState(null);
+    } catch (error) {
+      setAudioRecordError(error instanceof Error ? error.message : '录音保存失败。');
+    } finally {
+      setIsRecordingAudio(false);
+    }
+  };
+
   const handleSaveMemoryDraft = async () => {
     if (!analysisResult || !archiveDraftDirty || !onUpdateItem) {
       return;
@@ -358,7 +386,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
       }
       setMemorySaveState('记忆内容已更新到藏品档案。');
     } catch (error) {
-      console.error('Failed to save memory draft from scanner result:', error);
+      console.error('\u4fdd\u5b58\u626b\u63cf\u7ed3\u679c\u7684\u8bb0\u5fc6\u8349\u7a3f\u5931\u8d25\uff1a', error);
       setMemorySaveState('保存失败，请稍后重试。');
     } finally {
       setIsSavingMemoryDraft(false);
@@ -401,6 +429,77 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
       onEnd: () => {
         memoryCaptureRef.current = null;
         setIsRecordingMemoryDraft(false);
+      },
+    });
+  };
+
+  const handleToggleVoiceArchiveCapture = async () => {
+    if (isRecordingMemoryDraft || isRecordingAudio) {
+      stopMemoryCapture();
+      await stopAudioDraftCapture();
+      return;
+    }
+
+    setMemoryVoiceError(null);
+    setAudioRecordError(null);
+    setMemorySaveState(null);
+
+    const speechSupported = isSpeechRecognitionSupported();
+    const audioSupported = isAudioRecordingSupported();
+
+    if (!speechSupported && !audioSupported) {
+      setMemoryVoiceError('当前浏览器不支持语音补录，请改用 Chrome 或 Edge。');
+      return;
+    }
+
+    if (audioSupported) {
+      try {
+        audioRecordingRef.current = await startAudioRecording();
+        setIsRecordingAudio(true);
+      } catch (error) {
+        setAudioRecordError(error instanceof Error ? error.message : '录音启动失败。');
+        setIsRecordingAudio(false);
+      }
+    } else {
+      setAudioRecordError('当前浏览器不支持录音原声保存，本次只会保留转写文字。');
+    }
+
+    if (!speechSupported) {
+      setMemoryVoiceError('当前浏览器不支持语音转文字，本次会只保存录音原声。');
+      return;
+    }
+
+    let committed = memoryDraftRef.current.trim();
+    setIsRecordingMemoryDraft(true);
+    memoryCaptureRef.current = startSpeechCapture({
+      lang: 'zh-CN',
+      continuous: true,
+      interimResults: true,
+      onTranscript: (transcript, isFinal) => {
+        const spoken = transcript.trim();
+        const next = [committed, spoken].filter(Boolean).join(committed && spoken ? '\n' : '');
+        setMemoryDraft(next);
+        setMemorySaveState(null);
+
+        if (isFinal) {
+          committed = next;
+          memoryDraftRef.current = next;
+        }
+      },
+      onError: (message) => {
+        setMemoryVoiceError(message);
+        memoryCaptureRef.current = null;
+        setIsRecordingMemoryDraft(false);
+        if (audioRecordingRef.current) {
+          void stopAudioDraftCapture();
+        }
+      },
+      onEnd: () => {
+        memoryCaptureRef.current = null;
+        setIsRecordingMemoryDraft(false);
+        if (audioRecordingRef.current) {
+          void stopAudioDraftCapture();
+        }
       },
     });
   };
@@ -477,11 +576,12 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
         category: getHallNameById(hallsSafe, hallId, analysis.category),
         material: analysis.material,
         description: analysis.description || analysis.story || '',
-        story: '',
+        story: memoryDraftRef.current.trim(),
         tags: analysis.tags,
         imageUrl: `data:${file.type || 'image/jpeg'};base64,${base64}`,
         dateCollected: new Date().toISOString(),
         status: 'raw',
+        audioUrl: audioDraftRef.current || undefined,
       };
 
       const persistedItem = await onItemAdded(newItem);
@@ -523,7 +623,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
     setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: true } : i));
 
     try {
-      const base64 = await imageUrlToBase64(item.result.imageUrl);
+      const base64 = await imageUrlToBase64(item.result.imageUrl, {
+        compress: true,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        quality: 0.74,
+        outputType: 'image/jpeg',
+      });
       const { stickerImageUrl, dramaText } = await generateSticker(base64, item.result.name);
 
       const newSticker: Sticker = {
@@ -540,7 +646,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
       ));
       await onStickerCreated(newSticker);
     } catch (e: unknown) {
-      console.error("Batch sticker generation failed:", e);
+      console.error("\u6279\u91cf\u751f\u6210\u8d34\u7eb8\u5931\u8d25\uff1a", e);
       setBatchItems(prev => prev.map(i => i.id === itemId ? { ...i, isGeneratingSticker: false } : i));
     }
   };
@@ -588,15 +694,54 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
         status: 'raw',
       };
 
-      setStatusText('正在归档并生成展馆封面...');
-      const persistedItem = await onItemAdded(newItem);
-        setAiDetectedCategory(analysis.category);
-        setMemoryDraft('');
-        memoryDraftRef.current = '';
-        setAudioDraftUrl('');
+      setStatusText('正在归档藏品...');
+      let nextAnalysisResult = await onItemAdded(newItem);
+      const latestDraftStory = memoryDraftRef.current.trim();
+      const latestAudioDraft = audioDraftRef.current;
+
+      nextAnalysisResult = {
+        ...nextAnalysisResult,
+        story: nextAnalysisResult.story || newItem.story,
+        audioUrl: nextAnalysisResult.audioUrl || newItem.audioUrl,
+      };
+
+      const shouldSyncLatestDraft =
+        latestDraftStory !== (nextAnalysisResult.story || '').trim()
+        || latestAudioDraft !== (nextAnalysisResult.audioUrl || '');
+
+      if (shouldSyncLatestDraft && onUpdateItem) {
+        const latestDraftItem: CollectedItem = {
+          ...nextAnalysisResult,
+          story: latestDraftStory,
+          audioUrl: latestAudioDraft,
+        };
+
+        setAnalysisResult(latestDraftItem);
+
+        try {
+          const persistedLatestDraft = await onUpdateItem(latestDraftItem);
+          if (persistedLatestDraft) {
+            nextAnalysisResult = {
+              ...latestDraftItem,
+              ...persistedLatestDraft,
+              story: persistedLatestDraft.story ?? latestDraftItem.story,
+              audioUrl: persistedLatestDraft.audioUrl ?? latestDraftItem.audioUrl,
+            };
+          } else {
+            nextAnalysisResult = latestDraftItem;
+          }
+          setMemorySaveState('等待归档时补充的故事已自动保存。');
+        } catch (saveError) {
+          console.error('同步最新故事草稿失败：', saveError);
+          setMemorySaveState('最新输入已保留在当前界面，可继续补充后再保存。');
+        }
+      } else {
         setMemorySaveState(null);
+      }
+
+      setAiDetectedCategory(analysis.category);
       setAnalysisSourceImageUrl(newItem.imageUrl);
-      setAnalysisResult(persistedItem);
+      setAnalysisResult(nextAnalysisResult);
       stopMemoryCapture();
       setIsAnalyzing(false);
 
@@ -635,7 +780,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
     setStatusText("正在生成专属贴纸与藏品物语");
 
     try {
-        const base64 = await imageUrlToBase64(analysisSourceImageUrl || analysisResult.imageUrl);
+        const base64 = await imageUrlToBase64(analysisSourceImageUrl || analysisResult.imageUrl, {
+          compress: true,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          quality: 0.74,
+          outputType: 'image/jpeg',
+        });
 
         const { stickerImageUrl, dramaText } = await generateSticker(base64, analysisResult.name);
         
@@ -740,25 +891,6 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                           <span className="text-remuse-accent">{item.result.category}</span> · {item.result.material}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {item.generatedSticker ? (
-                            <div className="flex items-center gap-2 bg-remuse-secondary/10 px-2 py-1 rounded border border-remuse-secondary/20 truncate max-w-full">
-                              <img src={item.generatedSticker.stickerImageUrl} alt="Sticker" className="w-5 h-5 object-contain drop-shadow-[0_0_2px_rgba(255,255,255,0.5)] shrink-0" />
-                              <span className="text-remuse-secondary text-xs font-mono truncate">已生成贴纸</span>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleGenerateBatchSticker(item.id)}
-                              disabled={item.isGeneratingSticker}
-                              className="flex items-center gap-1.5 text-xs font-mono bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded border border-neutral-700 transition-colors disabled:opacity-50 shrink-0"
-                            >
-                              {item.isGeneratingSticker ? (
-                                <><Loader2 size={12} className="animate-spin shrink-0" /> 生成中...</>
-                              ) : (
-                                <><StickerIcon size={12} className="text-remuse-secondary shrink-0" /> 生成贴纸</>
-                              )}
-                            </button>
-                          )}
-                          
                           <button
                             onClick={() => onViewDetail(item.result!)}
                             className="flex items-center gap-1.5 text-xs font-mono bg-remuse-accent/10 hover:bg-remuse-accent/20 text-remuse-accent px-2 py-1 rounded border border-remuse-accent/20 transition-colors shrink-0"
@@ -853,47 +985,47 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
               style={analyzingPanelHeight ? { height: `${analyzingPanelHeight}px` } : undefined}
             >
               <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div>
-                  <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">Memory Draft</p>
-                  <h4 className="mt-2 text-xl font-display text-white">边识别边写下你和它的故事</h4>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">故事草稿</p>
+                    <h4 className="mt-2 text-xl font-display text-white">先把你此刻想到的故事记下来</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleVoiceArchiveCapture()}
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-display transition-colors ${
+                      isRecordingMemoryDraft
+                        ? 'border-red-500/60 bg-red-500/10 text-red-200'
+                        : 'border-remuse-secondary/40 bg-remuse-secondary/10 text-remuse-secondary hover:border-remuse-secondary'
+                    }`}
+                  >
+                    {isRecordingMemoryDraft ? <Square size={14} /> : <Mic size={14} />}
+                    {isRecordingMemoryDraft ? '停止记录' : '语音记录'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleToggleMemoryCapture}
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-display transition-colors ${
-                    isRecordingMemoryDraft
-                      ? 'border-red-500/60 bg-red-500/10 text-red-200'
-                      : 'border-remuse-secondary/40 bg-remuse-secondary/10 text-remuse-secondary hover:border-remuse-secondary'
-                  }`}
-                >
-                  {isRecordingMemoryDraft ? <Square size={14} /> : <Mic size={14} />}
-                  {isRecordingMemoryDraft ? '停止语音输入' : '语音记录记忆'}
-                </button>
+
+                <textarea
+                  value={memoryDraft}
+                  onChange={(event) => {
+                    setMemoryDraft(event.target.value);
+                    setMemorySaveState(null);
+                  }}
+                  placeholder="写下你和这件物品的故事。"
+                  className="w-full min-h-[220px] resize-none rounded-[24px] border border-neutral-800 bg-black/60 px-5 py-4 text-sm leading-7 text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-remuse-accent/60 xl:min-h-0 xl:flex-1"
+                />
               </div>
 
-              <textarea
-                value={memoryDraft}
-                onChange={(event) => {
-                  setMemoryDraft(event.target.value);
-                  setMemorySaveState(null);
-                }}
-                placeholder="例如：这是我大学毕业前最后一次和室友一起买的玩偶，当时我们约好以后也要一直联系。"
-                className="w-full min-h-[220px] resize-none rounded-[24px] border border-neutral-800 bg-black/60 px-5 py-4 text-sm leading-7 text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-remuse-accent/60 xl:min-h-0 xl:flex-1"
-              />
-
-              </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
-                  可输入文字，也可直接说话
-                </span>
-                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
-                  识别完成前输入的内容会和 AI 档案注记一起归档
+                  {audioDraftUrl ? '已附带一段语音记录' : '可附带一段语音记录'}
                 </span>
               </div>
 
               {memoryVoiceError && (
                 <p className="mt-3 text-sm text-red-300">{memoryVoiceError}</p>
+              )}
+              {audioRecordError && (
+                <p className="mt-3 text-sm text-amber-300">{audioRecordError}</p>
               )}
             </div>
           </div>
@@ -1069,28 +1201,19 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                     </div>
                 </div>
                 
-                {generatedSticker ? (
-                     <div className="mb-6 bg-neutral-900 p-4 border border-remuse-secondary/50 rounded-lg relative overflow-hidden">
-                         <div className="absolute top-0 right-0 bg-remuse-secondary text-black text-[10px] font-bold px-2 py-1">NEW STICKER</div>
-                         <div className="flex items-center gap-4">
-                            <img src={generatedSticker.stickerImageUrl} alt="Sticker" className="w-20 h-20 object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" />
-                            <div className="flex-1">
-                                <div className="bg-black border border-white p-2 rounded-tl-xl rounded-br-xl">
-                                    <p className="text-xs text-white font-mono">"{generatedSticker.dramaText}"</p>
-                                </div>
-                            </div>
-                         </div>
-                     </div>
-                ) : (
-                    <button 
-                        onClick={handleGenerateSticker}
-                        className="w-full mb-4 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group rounded-[20px]"
-                        data-testid="scanner-generate-sticker"
-                    >
-                        <StickerIcon size={16} className="text-remuse-secondary group-hover:animate-bounce" />
-                        生成专属贴纸
-                    </button>
-                )}
+                <button
+                    onClick={async () => {
+                      if (archiveDraftDirty) {
+                        await handleSaveMemoryDraft();
+                      }
+                      onNavigateToWorkshop?.();
+                    }}
+                    className="w-full mb-4 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white py-3 font-display text-sm flex items-center justify-center gap-2 transition-colors group rounded-[20px]"
+                    data-testid="scanner-open-workshop"
+                >
+                    <Box size={16} className="text-remuse-secondary shrink-0" />
+                    前往再生工坊
+                </button>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                     <button
@@ -1110,10 +1233,6 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                           if (archiveDraftDirty) {
                             await handleSaveMemoryDraft();
                           }
-                          if (generatedSticker && onNavigateToStickerLibrary) {
-                            onNavigateToStickerLibrary();
-                            return;
-                          }
                           if (analysisResult) {
                             onViewDetail({
                               ...analysisResult,
@@ -1123,9 +1242,9 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                           }
                         }}
                         className="py-3 bg-remuse-accent text-black font-bold hover:bg-white transition-colors font-display text-sm flex items-center justify-center gap-2 rounded-[20px]"
-                        data-testid={generatedSticker ? 'scanner-view-sticker' : 'scanner-view-idea'}
+                        data-testid="scanner-view-archive"
                     >
-                        {generatedSticker ? '打开成果库' : '查看藏品档案'} <ArrowRight size={16} />
+                        查看藏品档案 <ArrowRight size={16} />
                     </button>
                 </div>
 
@@ -1152,12 +1271,12 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                 <div className="rounded-[28px] border border-neutral-800 bg-neutral-950/70 p-5 md:p-6 min-w-0 flex flex-col">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                         <div>
-                            <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">Memory Archive</p>
-                            <h4 className="mt-2 text-xl font-display text-white">归档后继续补充你的记忆与故事</h4>
+                            <p className="text-[11px] font-mono tracking-[0.28em] text-remuse-accent uppercase">故事档案</p>
+                            <h4 className="mt-2 text-xl font-display text-white">归档后继续补充这件藏品的故事</h4>
                         </div>
                         <button
                             type="button"
-                            onClick={handleToggleMemoryCapture}
+                            onClick={() => void handleToggleVoiceArchiveCapture()}
                             className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-display transition-colors ${
                               isRecordingMemoryDraft
                                 ? 'border-red-500/60 bg-red-500/10 text-red-200'
@@ -1165,7 +1284,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                             }`}
                         >
                             {isRecordingMemoryDraft ? <Square size={14} /> : <Mic size={14} />}
-                            {isRecordingMemoryDraft ? '停止语音输入' : '继续语音补录'}
+                            {isRecordingMemoryDraft ? '停止记录' : '继续语音补录'}
                         </button>
                     </div>
 
@@ -1175,7 +1294,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                           setMemoryDraft(event.target.value);
                           setMemorySaveState(null);
                         }}
-                        placeholder="可以继续补充更完整的故事、人物、时间或地点。这里保存的是最终进入藏品档案的记忆文本。"
+                        placeholder="继续补充这件藏品的故事、时间或场景。"
                         className="w-full min-h-[220px] resize-y rounded-[24px] border border-neutral-800 bg-black/60 px-5 py-4 text-sm leading-7 text-neutral-100 outline-none transition-colors placeholder:text-neutral-500 focus:border-remuse-accent/60 xl:min-h-[140px] xl:flex-1 xl:resize-none"
                     />
 
@@ -1184,10 +1303,11 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                             识别结束后仍可继续编辑
                         </span>
                         <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
-                            保存后会同步更新记忆向量索引
+                            保存后会同步更新记忆索引
                         </span>
                     </div>
 
+                    {false && (
                     <div className="mt-4 rounded-[24px] border border-neutral-800 bg-black/30 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
@@ -1235,6 +1355,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
                             <p className="mt-3 text-sm text-red-300">{audioRecordError}</p>
                         ) : null}
                     </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <span className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-400">
+                            {audioDraftUrl ? '本次补录已附带语音原声' : '语音补录会同时保存原声'}
+                        </span>
+                    </div>
 
                     <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                         <div className="text-sm text-neutral-500">
@@ -1253,6 +1380,9 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
 
                     {memoryVoiceError && (
                       <p className="mt-3 text-sm text-red-300">{memoryVoiceError}</p>
+                    )}
+                    {audioRecordError && (
+                      <p className="mt-3 text-sm text-amber-300">{audioRecordError}</p>
                     )}
                 </div>
                 </div>

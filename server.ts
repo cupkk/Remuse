@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import compression from 'compression';
 import express from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Agent } from 'undici';
 import 'dotenv/config';
 
@@ -19,7 +19,9 @@ import clientErrorsRouter from './routes/clientErrors.ts';
 import feedbackRouter from './routes/feedback.ts';
 import hallsRouter from './routes/halls.ts';
 import itemsRouter from './routes/items.ts';
+import journalsRouter from './routes/journals.ts';
 import memoryRouter from './routes/memory.ts';
+import sharedMuseumsRouter from './routes/sharedMuseums.ts';
 import stickersRouter from './routes/stickers.ts';
 import testRouter from './routes/test.ts';
 import transformationGuidesRouter from './routes/transformationGuides.ts';
@@ -40,6 +42,23 @@ const geminiDispatcher = new Agent({
   connect: { timeout: 30_000 },
 });
 const execFileAsync = promisify(execFile);
+const MESSAGE_INVALID_REQUEST_RATE = '\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const MESSAGE_AI_BUSY = '\u5f53\u524d AI \u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const MESSAGE_AI_BUSY_TITLE = 'AI \u670d\u52a1\u7e41\u5fd9';
+const MESSAGE_AI_BUSY_SUGGESTION = '\u8bf7\u7b49\u5f85\u7247\u523b\u540e\u91cd\u8bd5\u3002';
+const MESSAGE_AI_QUOTA_EXCEEDED = '\u4eca\u65e5 AI \u8c03\u7528\u989d\u5ea6\u5df2\u7528\u5b8c\u3002';
+const MESSAGE_AI_QUOTA_TITLE = 'AI \u989d\u5ea6\u4e0d\u8db3';
+const MESSAGE_AI_QUOTA_SUGGESTION = '\u8bf7\u660e\u5929\u518d\u8bd5\uff0c\u6216\u8054\u7cfb\u7ba1\u7406\u5458\u8c03\u6574\u989d\u5ea6\u914d\u7f6e\u3002';
+const MESSAGE_LIVE_AI_DISABLED = '\u5f53\u524d\u73af\u5883\u5df2\u5173\u95ed\u5b9e\u65f6 AI \u80fd\u529b\u3002';
+const MESSAGE_UNKNOWN_UPSTREAM_ERROR = '\u4e0a\u6e38 AI \u670d\u52a1\u5f02\u5e38';
+const MESSAGE_UPSTREAM_UNREACHABLE = '\u65e0\u6cd5\u8fde\u63a5 Gemini \u4e0a\u6e38\u670d\u52a1';
+const MESSAGE_PROXY_ERROR_PREFIX = '\u4ee3\u7406\u8bf7\u6c42\u5931\u8d25';
+const MESSAGE_IMAGE_NOT_FOUND = '\u56fe\u7247\u4e0d\u5b58\u5728\u3002';
+const MESSAGE_FORBIDDEN = '\u65e0\u6743\u8bbf\u95ee\u3002';
+const MESSAGE_NOT_FOUND = '\u672a\u627e\u5230\u5bf9\u5e94\u8d44\u6e90\u3002';
+const MESSAGE_INTERNAL_SERVER_ERROR = '\u670d\u52a1\u5668\u5f00\u5c0f\u5dee\u4e86\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+const MESSAGE_CURL_UNEXPECTED = '\u5907\u7528\u4ee3\u7406\u8fd4\u56de\u7684\u54cd\u5e94\u5185\u5bb9\u4e0d\u7b26\u5408\u9884\u671f';
+const MESSAGE_CURL_INVALID_STATUS = '\u5907\u7528\u4ee3\u7406\u8fd4\u56de\u7684\u72b6\u6001\u7801\u65e0\u6548';
 
 validateAppConfig();
 
@@ -53,7 +72,7 @@ export function createApp() {
     max: 240,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Too many requests. Please slow down and try again shortly.' },
+    message: { error: MESSAGE_INVALID_REQUEST_RATE },
   });
 
   const aiLimiter = rateLimit({
@@ -61,7 +80,17 @@ export function createApp() {
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Too many AI requests. Please try again in a few minutes.' },
+    keyGenerator: (req) => req.userId || ipKeyGenerator(req.ip || ''),
+    skip: (req) => {
+      const requestPath = (req.originalUrl || '').split('?')[0];
+      return req.method === 'GET' && /^\/api\/ai\/generate-emoji-pack\/tasks\/[^/]+$/.test(requestPath);
+    },
+    message: {
+      error: MESSAGE_AI_BUSY,
+      title: MESSAGE_AI_BUSY_TITLE,
+      category: 'RATE_LIMIT',
+      suggestion: MESSAGE_AI_BUSY_SUGGESTION,
+    },
   });
 
   app.use(compression());
@@ -104,8 +133,8 @@ export function createApp() {
 
   app.use(
     '/api/gemini',
-    aiLimiter,
     authMiddleware,
+    aiLimiter,
     express.json({ limit: '20mb' }),
     async (req, res) => {
       const startedAt = Date.now();
@@ -113,7 +142,10 @@ export function createApp() {
       const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
       if (!quota.allowed) {
         res.status(429).json({
-          error: 'Daily AI generation quota exceeded.',
+          error: MESSAGE_AI_QUOTA_EXCEEDED,
+          title: MESSAGE_AI_QUOTA_TITLE,
+          category: 'QUOTA_EXCEEDED',
+          suggestion: MESSAGE_AI_QUOTA_SUGGESTION,
           usage: quota,
         });
         return;
@@ -131,7 +163,7 @@ export function createApp() {
         res.status(503).json({
           error: {
             code: 503,
-            message: 'Live AI is disabled in this environment.',
+            message: MESSAGE_LIVE_AI_DISABLED,
           },
         });
         return;
@@ -224,7 +256,7 @@ export function createApp() {
         durationMs: Date.now() - startedAt,
         details: {
           upstream: lastUpstream,
-          error: lastError?.message || 'Unknown upstream error',
+          error: lastError?.message || MESSAGE_UNKNOWN_UPSTREAM_ERROR,
         },
       });
 
@@ -232,7 +264,7 @@ export function createApp() {
       res.status(isTimeout ? 504 : 502).json({
         error: {
           code: isTimeout ? 504 : 502,
-          message: `Proxy error: ${lastError?.message || 'Unable to reach Gemini upstream'}`,
+          message: `${MESSAGE_PROXY_ERROR_PREFIX}: ${lastError?.message || MESSAGE_UPSTREAM_UNREACHABLE}`,
           upstream: lastUpstream,
         },
       });
@@ -241,12 +273,14 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/client-errors', apiLimiter, clientErrorsRouter);
-  app.use('/api/ai', aiLimiter, authMiddleware, aiRouter);
+  app.use('/api/ai', authMiddleware, aiLimiter, aiRouter);
   app.use('/api/items', apiLimiter, authMiddleware, itemsRouter);
   app.use('/api/stickers', apiLimiter, authMiddleware, stickersRouter);
+  app.use('/api/journals', apiLimiter, authMiddleware, journalsRouter);
+  app.use('/api/shared-museums', apiLimiter, authMiddleware, sharedMuseumsRouter);
   app.use('/api/transformation-guides', apiLimiter, authMiddleware, transformationGuidesRouter);
   app.use('/api/halls', apiLimiter, authMiddleware, hallsRouter);
-  app.use('/api/memory', aiLimiter, authMiddleware, memoryRouter);
+  app.use('/api/memory', authMiddleware, aiLimiter, memoryRouter);
   app.use('/api/feedback', apiLimiter, authMiddleware, feedbackRouter);
   app.use('/api/admin', apiLimiter, authMiddleware, adminMiddleware, adminRouter);
 
@@ -259,22 +293,25 @@ export function createApp() {
     const uploadInfo = getManagedUploadInfo(internalUploadPath);
 
     if (!uploadInfo) {
-      res.status(404).json({ error: 'Image not found' });
+      res.status(404).json({ error: MESSAGE_IMAGE_NOT_FOUND });
       return;
     }
 
     if (uploadInfo.userId !== req.userId) {
-      res.status(403).json({ error: 'Forbidden' });
+      res.status(403).json({ error: MESSAGE_FORBIDDEN });
       return;
     }
 
     if (!fs.existsSync(uploadInfo.absolutePath)) {
-      res.status(404).json({ error: 'Image not found' });
+      res.status(404).json({ error: MESSAGE_IMAGE_NOT_FOUND });
       return;
     }
 
     res.setHeader('Cache-Control', 'private, max-age=300, must-revalidate');
-    res.sendFile(uploadInfo.absolutePath);
+    res.sendFile(uploadInfo.fileName, {
+      root: path.dirname(uploadInfo.absolutePath),
+      dotfiles: 'deny',
+    });
   });
 
   app.use(
@@ -308,7 +345,7 @@ export function createApp() {
   });
 
   app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'Not found' });
+    res.status(404).json({ error: MESSAGE_NOT_FOUND });
   });
 
   app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -324,16 +361,16 @@ export function createApp() {
       return;
     }
 
-    res.status(500).json({ error: 'Internal server error.' });
+    res.status(500).json({ error: MESSAGE_INTERNAL_SERVER_ERROR });
   });
 
   app.use((req, res) => {
     if (path.extname(req.path)) {
-      res.status(404).type('text/plain').send('Not found');
+      res.status(404).type('text/plain').send(MESSAGE_NOT_FOUND);
       return;
     }
 
-    res.status(404).type('text/plain').send('Not found');
+    res.status(404).type('text/plain').send(MESSAGE_NOT_FOUND);
   });
 
   return app;
@@ -415,13 +452,13 @@ async function proxyGeminiWithCurl(
   const normalized = stdout.replace(/\r\n/g, '\n').trimEnd();
   const splitIndex = normalized.lastIndexOf('\n');
   if (splitIndex === -1) {
-    throw new Error('Curl fallback returned an unexpected response');
+    throw new Error(MESSAGE_CURL_UNEXPECTED);
   }
 
   const responseBody = normalized.slice(0, splitIndex);
   const statusCode = parseInt(normalized.slice(splitIndex + 1), 10);
   if (!Number.isFinite(statusCode)) {
-    throw new Error('Curl fallback returned an invalid status code');
+    throw new Error(MESSAGE_CURL_INVALID_STATUS);
   }
 
   return {
@@ -475,10 +512,14 @@ function isSecureRequest(req: express.Request) {
 }
 
 const currentFilePath = fileURLToPath(import.meta.url);
-const isStartedByPm2 = typeof process.env.pm_id !== 'undefined';
-const isMainModule = isStartedByPm2 || (process.argv[1] ? path.resolve(process.argv[1]) === currentFilePath : false);
+const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
+const isMainModule = entryPath === currentFilePath;
+const shouldAutoStart =
+  process.env.REMUSE_NO_AUTO_START !== '1'
+  && process.env.NODE_ENV !== 'test'
+  && (isMainModule || process.env.NODE_ENV === 'production');
 
-if (isMainModule) {
+if (shouldAutoStart) {
   registerProcessErrorHooks();
   startServer();
 }

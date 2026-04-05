@@ -11,6 +11,8 @@ import { normalizeEmailAddress } from './auth.ts';
 const APP_ROOT = process.env.APP_ROOT ? path.resolve(process.env.APP_ROOT) : process.cwd();
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(APP_ROOT, 'data', 'remuse.db'));
 
+export type UserRole = 'admin' | 'user';
+
 // 确保 data/ 目录存在
 const dataDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dataDir)) {
@@ -35,6 +37,7 @@ db.exec(`
     nickname    TEXT NOT NULL DEFAULT '游客',
     avatar_url  TEXT,
     is_guest    INTEGER NOT NULL DEFAULT 1,
+    role        TEXT NOT NULL DEFAULT 'user',
     onboarding_seen INTEGER NOT NULL DEFAULT 0,
     sample_seeded   INTEGER NOT NULL DEFAULT 0,
     toolbox_json    TEXT NOT NULL DEFAULT '[]',
@@ -68,6 +71,7 @@ db.exec(`
     original_item_id TEXT,
     image_path       TEXT NOT NULL DEFAULT '',
     drama_text       TEXT NOT NULL DEFAULT '',
+    metadata_json    TEXT NOT NULL DEFAULT '{}',
     category         TEXT NOT NULL DEFAULT '其他',
     date_created     TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id)          REFERENCES users(id)              ON DELETE CASCADE,
@@ -96,6 +100,118 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_transformation_guides_user
   ON transformation_guides(user_id, date_created DESC);
+
+  CREATE TABLE IF NOT EXISTS saved_journals (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL,
+    title                 TEXT NOT NULL DEFAULT '',
+    preview_image_path    TEXT NOT NULL DEFAULT '',
+    background_image_path TEXT NOT NULL DEFAULT '',
+    template_id           TEXT NOT NULL DEFAULT 'calendar-journal',
+    year                  INTEGER NOT NULL DEFAULT 2026,
+    month                 INTEGER NOT NULL DEFAULT 1,
+    header_note           TEXT NOT NULL DEFAULT '',
+    background_color      TEXT NOT NULL DEFAULT '#fffdf7',
+    background_overlay    REAL NOT NULL DEFAULT 0.74,
+    selected_sticker_ids_json TEXT NOT NULL DEFAULT '[]',
+    layout_items_json     TEXT NOT NULL DEFAULT '[]',
+    date_created          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_saved_journals_user
+  ON saved_journals(user_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS shared_museums (
+    id               TEXT PRIMARY KEY,
+    owner_user_id    TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    description      TEXT NOT NULL DEFAULT '',
+    invite_code      TEXT NOT NULL UNIQUE,
+    invite_enabled   INTEGER NOT NULL DEFAULT 1,
+    status           TEXT NOT NULL DEFAULT 'active',
+    anniversary_date TEXT NOT NULL DEFAULT '',
+    theme            TEXT NOT NULL DEFAULT 'shared-memory',
+    quiet_mode       INTEGER NOT NULL DEFAULT 0,
+    cover_image_path TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_shared_museums_owner
+  ON shared_museums(owner_user_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS shared_museum_members (
+    id                   TEXT PRIMARY KEY,
+    museum_id            TEXT NOT NULL,
+    user_id              TEXT NOT NULL,
+    role                 TEXT NOT NULL DEFAULT 'partner',
+    notification_enabled INTEGER NOT NULL DEFAULT 1,
+    quiet_mode           INTEGER NOT NULL DEFAULT 0,
+    joined_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (museum_id) REFERENCES shared_museums(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_museum_members_unique
+  ON shared_museum_members(museum_id, user_id);
+
+  CREATE INDEX IF NOT EXISTS idx_shared_museum_members_user
+  ON shared_museum_members(user_id, joined_at DESC);
+
+  CREATE TABLE IF NOT EXISTS shared_museum_items (
+    id               TEXT PRIMARY KEY,
+    museum_id        TEXT NOT NULL,
+    source_item_id   TEXT NOT NULL,
+    source_user_id   TEXT NOT NULL,
+    shared_by_user_id TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    hall_id          TEXT NOT NULL DEFAULT '其他',
+    category         TEXT NOT NULL DEFAULT '其他',
+    material         TEXT NOT NULL DEFAULT '',
+    description      TEXT NOT NULL DEFAULT '',
+    image_path       TEXT NOT NULL DEFAULT '',
+    cover_image_path TEXT NOT NULL DEFAULT '',
+    audio_path       TEXT NOT NULL DEFAULT '',
+    story            TEXT NOT NULL DEFAULT '',
+    tags_json        TEXT NOT NULL DEFAULT '[]',
+    shared_note      TEXT NOT NULL DEFAULT '',
+    relation_label   TEXT NOT NULL DEFAULT '',
+    date_collected   TEXT NOT NULL DEFAULT (datetime('now')),
+    date_shared      TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (museum_id) REFERENCES shared_museums(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_item_id) REFERENCES collected_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (shared_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_museum_items_unique
+  ON shared_museum_items(museum_id, source_item_id);
+
+  CREATE INDEX IF NOT EXISTS idx_shared_museum_items_museum
+  ON shared_museum_items(museum_id, date_shared DESC);
+
+  CREATE TABLE IF NOT EXISTS shared_museum_reports (
+    id            TEXT PRIMARY KEY,
+    museum_id     TEXT NOT NULL,
+    month_key     TEXT NOT NULL,
+    month_label   TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (museum_id) REFERENCES shared_museums(id) ON DELETE CASCADE
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_museum_reports_unique
+  ON shared_museum_reports(museum_id, month_key);
+
+  CREATE INDEX IF NOT EXISTS idx_shared_museum_reports_museum
+  ON shared_museum_reports(museum_id, updated_at DESC);
 
   CREATE TABLE IF NOT EXISTS exhibition_halls (
     id          TEXT PRIMARY KEY,
@@ -137,13 +253,27 @@ db.exec(`
 ensureColumn('users', 'onboarding_seen', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('users', 'sample_seeded', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('users', 'toolbox_json', `TEXT NOT NULL DEFAULT '[]'`);
+ensureColumn('users', 'role', `TEXT NOT NULL DEFAULT 'user'`);
 ensureColumn('collected_items', 'hall_id', `TEXT NOT NULL DEFAULT '其他'`);
 ensureColumn('collected_items', 'is_sample', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('collected_items', 'cover_image_path', `TEXT NOT NULL DEFAULT ''`);
 ensureColumn('collected_items', 'description', `TEXT NOT NULL DEFAULT ''`);
 ensureColumn('collected_items', 'audio_path', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('stickers', 'metadata_json', `TEXT NOT NULL DEFAULT '{}'`);
+ensureColumn('saved_journals', 'preview_image_path', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('saved_journals', 'background_image_path', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('saved_journals', 'template_id', `TEXT NOT NULL DEFAULT 'calendar-journal'`);
+ensureColumn('saved_journals', 'year', `INTEGER NOT NULL DEFAULT 2026`);
+ensureColumn('saved_journals', 'month', `INTEGER NOT NULL DEFAULT 1`);
+ensureColumn('saved_journals', 'header_note', `TEXT NOT NULL DEFAULT ''`);
+ensureColumn('saved_journals', 'background_color', `TEXT NOT NULL DEFAULT '#fffdf7'`);
+ensureColumn('saved_journals', 'background_overlay', `REAL NOT NULL DEFAULT 0.74`);
+ensureColumn('saved_journals', 'selected_sticker_ids_json', `TEXT NOT NULL DEFAULT '[]'`);
+ensureColumn('saved_journals', 'layout_items_json', `TEXT NOT NULL DEFAULT '[]'`);
+ensureColumn('saved_journals', 'updated_at', `TEXT NOT NULL DEFAULT (datetime('now'))`);
 ensureColumn('exhibition_halls', 'system_hall_id', `TEXT`);
 ensureColumn('exhibition_halls', 'is_hidden', `INTEGER NOT NULL DEFAULT 0`);
+ensureColumn('shared_museums', 'invite_enabled', `INTEGER NOT NULL DEFAULT 1`);
 db.exec(`
   UPDATE collected_items
   SET hall_id = category
@@ -154,6 +284,13 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_halls_user_system
   ON exhibition_halls(user_id, system_hall_id)
   WHERE system_hall_id IS NOT NULL
+`);
+db.exec(`
+  UPDATE users
+  SET role = CASE
+    WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+    ELSE 'user'
+  END
 `);
 normalizeStoredUserEmails();
 
@@ -168,11 +305,16 @@ interface UserRow {
   nickname: string;
   avatar_url: string | null;
   is_guest: number;
+  role: UserRole;
   email_verified: number;
   email_verified_at: string | null;
   onboarding_seen: number;
   sample_seeded: number;
   toolbox_json: string;
+  terms_accepted_version: string | null;
+  privacy_accepted_version: string | null;
+  ai_notice_accepted_version: string | null;
+  consent_accepted_at: string | null;
   created_at: string;
 }
 
@@ -203,6 +345,7 @@ interface StickerRow {
   image_path: string;
   drama_text: string;
   category: string;
+  metadata_json: string;
   date_created: string;
 }
 
@@ -220,6 +363,86 @@ interface TransformationGuideRow {
   image_path: string;
   date_created: string;
   created_at: string;
+}
+
+interface SavedJournalRow {
+  id: string;
+  user_id: string;
+  title: string;
+  preview_image_path: string;
+  background_image_path: string;
+  template_id: string;
+  year: number;
+  month: number;
+  header_note: string;
+  background_color: string;
+  background_overlay: number;
+  selected_sticker_ids_json: string;
+  layout_items_json: string;
+  date_created: string;
+  updated_at: string;
+  created_at: string;
+}
+
+interface SharedMuseumRow {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  description: string;
+  invite_code: string;
+  invite_enabled: number;
+  status: string;
+  anniversary_date: string;
+  theme: string;
+  quiet_mode: number;
+  cover_image_path: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SharedMuseumMemberRow {
+  id: string;
+  museum_id: string;
+  user_id: string;
+  role: string;
+  notification_enabled: number;
+  quiet_mode: number;
+  joined_at: string;
+  created_at: string;
+  nickname: string;
+}
+
+interface SharedMuseumItemRow {
+  id: string;
+  museum_id: string;
+  source_item_id: string;
+  source_user_id: string;
+  shared_by_user_id: string;
+  name: string;
+  hall_id: string;
+  category: string;
+  material: string;
+  description: string;
+  image_path: string;
+  cover_image_path: string;
+  audio_path: string;
+  story: string;
+  tags_json: string;
+  shared_note: string;
+  relation_label: string;
+  date_collected: string;
+  date_shared: string;
+  created_at: string;
+}
+
+interface SharedMuseumReportRow {
+  id: string;
+  museum_id: string;
+  month_key: string;
+  month_label: string;
+  snapshot_json: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface HallRow {
@@ -290,6 +513,14 @@ const stmts = {
     SET onboarding_seen = @onboarding_seen,
         sample_seeded = @sample_seeded,
         toolbox_json = @toolbox_json
+    WHERE id = @id
+  `),
+  updateUserRole: db.prepare<{
+    id: string;
+    role: UserRole;
+  }>(`
+    UPDATE users
+    SET role = @role
     WHERE id = @id
   `),
 
@@ -367,10 +598,10 @@ const stmts = {
   // Stickers
   insertSticker: db.prepare<{
     id: string; user_id: string; original_item_id: string | null;
-    image_path: string; drama_text: string; category: string; date_created: string;
+    image_path: string; drama_text: string; category: string; metadata_json: string; date_created: string;
   }>(`
-    INSERT INTO stickers (id, user_id, original_item_id, image_path, drama_text, category, date_created)
-    VALUES (@id, @user_id, @original_item_id, @image_path, @drama_text, @category, @date_created)
+    INSERT INTO stickers (id, user_id, original_item_id, image_path, drama_text, category, metadata_json, date_created)
+    VALUES (@id, @user_id, @original_item_id, @image_path, @drama_text, @category, @metadata_json, @date_created)
   `),
   getStickersByUser: db.prepare<[string]>(`SELECT * FROM stickers WHERE user_id = ? ORDER BY date_created DESC`),
   getStickerById: db.prepare<[string, string]>(`SELECT * FROM stickers WHERE id = ? AND user_id = ?`),
@@ -434,6 +665,406 @@ const stmts = {
   deleteTransformationGuide: db.prepare<[string, string]>(`
     DELETE FROM transformation_guides
     WHERE id = ? AND user_id = ?
+  `),
+
+  // Saved journals
+  insertSavedJournal: db.prepare<{
+    id: string;
+    user_id: string;
+    title: string;
+    preview_image_path: string;
+    background_image_path: string;
+    template_id: string;
+    year: number;
+    month: number;
+    header_note: string;
+    background_color: string;
+    background_overlay: number;
+    selected_sticker_ids_json: string;
+    layout_items_json: string;
+    date_created: string;
+  }>(`
+    INSERT INTO saved_journals (
+      id,
+      user_id,
+      title,
+      preview_image_path,
+      background_image_path,
+      template_id,
+      year,
+      month,
+      header_note,
+      background_color,
+      background_overlay,
+      selected_sticker_ids_json,
+      layout_items_json,
+      date_created,
+      updated_at
+    )
+    VALUES (
+      @id,
+      @user_id,
+      @title,
+      @preview_image_path,
+      @background_image_path,
+      @template_id,
+      @year,
+      @month,
+      @header_note,
+      @background_color,
+      @background_overlay,
+      @selected_sticker_ids_json,
+      @layout_items_json,
+      @date_created,
+      datetime('now')
+    )
+  `),
+  updateSavedJournal: db.prepare<{
+    id: string;
+    user_id: string;
+    title: string;
+    preview_image_path: string;
+    background_image_path: string;
+    template_id: string;
+    year: number;
+    month: number;
+    header_note: string;
+    background_color: string;
+    background_overlay: number;
+    selected_sticker_ids_json: string;
+    layout_items_json: string;
+  }>(`
+    UPDATE saved_journals
+    SET title = @title,
+        preview_image_path = @preview_image_path,
+        background_image_path = @background_image_path,
+        template_id = @template_id,
+        year = @year,
+        month = @month,
+        header_note = @header_note,
+        background_color = @background_color,
+        background_overlay = @background_overlay,
+        selected_sticker_ids_json = @selected_sticker_ids_json,
+        layout_items_json = @layout_items_json,
+        updated_at = datetime('now')
+    WHERE id = @id AND user_id = @user_id
+  `),
+  getSavedJournalsByUser: db.prepare<[string]>(`
+    SELECT *
+    FROM saved_journals
+    WHERE user_id = ?
+    ORDER BY updated_at DESC, date_created DESC
+  `),
+  getSavedJournalById: db.prepare<[string, string]>(`
+    SELECT *
+    FROM saved_journals
+    WHERE id = ? AND user_id = ?
+  `),
+  deleteSavedJournal: db.prepare<[string, string]>(`
+    DELETE FROM saved_journals
+    WHERE id = ? AND user_id = ?
+  `),
+
+  // Shared museums
+  insertSharedMuseum: db.prepare<{
+    id: string;
+    owner_user_id: string;
+    name: string;
+    description: string;
+    invite_code: string;
+    invite_enabled: number;
+    status: string;
+    anniversary_date: string;
+    theme: string;
+    quiet_mode: number;
+    cover_image_path: string;
+  }>(`
+    INSERT INTO shared_museums (
+      id,
+      owner_user_id,
+      name,
+      description,
+      invite_code,
+      invite_enabled,
+      status,
+      anniversary_date,
+      theme,
+      quiet_mode,
+      cover_image_path,
+      updated_at
+    )
+    VALUES (
+      @id,
+      @owner_user_id,
+      @name,
+      @description,
+      @invite_code,
+      @invite_enabled,
+      @status,
+      @anniversary_date,
+      @theme,
+      @quiet_mode,
+      @cover_image_path,
+      datetime('now')
+    )
+  `),
+  getSharedMuseumById: db.prepare<[string]>(`
+    SELECT *
+    FROM shared_museums
+    WHERE id = ?
+  `),
+  getSharedMuseumByInviteCode: db.prepare<[string]>(`
+    SELECT *
+    FROM shared_museums
+    WHERE upper(invite_code) = upper(?)
+  `),
+  getSharedMuseumsByUser: db.prepare<[string]>(`
+    SELECT DISTINCT sm.*
+    FROM shared_museums sm
+    INNER JOIN shared_museum_members smm
+      ON smm.museum_id = sm.id
+    WHERE smm.user_id = ?
+    ORDER BY sm.updated_at DESC, sm.created_at DESC
+  `),
+  updateSharedMuseum: db.prepare<{
+    id: string;
+    owner_user_id: string;
+    name: string;
+    description: string;
+    invite_code: string;
+    invite_enabled: number;
+    status: string;
+    anniversary_date: string;
+    theme: string;
+    quiet_mode: number;
+    cover_image_path: string;
+  }>(`
+    UPDATE shared_museums
+    SET name = @name,
+        description = @description,
+        invite_code = @invite_code,
+        invite_enabled = @invite_enabled,
+        status = @status,
+        anniversary_date = @anniversary_date,
+        theme = @theme,
+        quiet_mode = @quiet_mode,
+        cover_image_path = @cover_image_path,
+        updated_at = datetime('now')
+    WHERE id = @id AND owner_user_id = @owner_user_id
+  `),
+  touchSharedMuseumActivity: db.prepare<{
+    id: string;
+    cover_image_path: string;
+  }>(`
+    UPDATE shared_museums
+    SET updated_at = datetime('now'),
+        cover_image_path = CASE
+          WHEN @cover_image_path != '' AND (cover_image_path = '' OR cover_image_path IS NULL)
+            THEN @cover_image_path
+          ELSE cover_image_path
+        END
+    WHERE id = @id
+  `),
+  insertSharedMuseumMember: db.prepare<{
+    id: string;
+    museum_id: string;
+    user_id: string;
+    role: string;
+    notification_enabled: number;
+    quiet_mode: number;
+    joined_at: string;
+  }>(`
+    INSERT OR IGNORE INTO shared_museum_members (
+      id,
+      museum_id,
+      user_id,
+      role,
+      notification_enabled,
+      quiet_mode,
+      joined_at
+    )
+    VALUES (
+      @id,
+      @museum_id,
+      @user_id,
+      @role,
+      @notification_enabled,
+      @quiet_mode,
+      @joined_at
+    )
+  `),
+  getSharedMuseumMembersByMuseumId: db.prepare<[string]>(`
+    SELECT
+      smm.*,
+      u.nickname AS nickname
+    FROM shared_museum_members smm
+    INNER JOIN users u
+      ON u.id = smm.user_id
+    WHERE smm.museum_id = ?
+    ORDER BY CASE WHEN smm.role = 'creator' THEN 0 ELSE 1 END, smm.joined_at ASC
+  `),
+  getSharedMuseumMemberCount: db.prepare<[string]>(`
+    SELECT COUNT(*) as count
+    FROM shared_museum_members
+    WHERE museum_id = ?
+  `),
+  getSharedMuseumMembership: db.prepare<[string, string]>(`
+    SELECT smm.*, u.nickname AS nickname
+    FROM shared_museum_members smm
+    INNER JOIN users u
+      ON u.id = smm.user_id
+    WHERE smm.museum_id = ? AND smm.user_id = ?
+  `),
+  deleteSharedMuseumMember: db.prepare<[string, string]>(`
+    DELETE FROM shared_museum_members
+    WHERE museum_id = ? AND user_id = ?
+  `),
+  getSharedMuseumReportsByMuseumId: db.prepare<[string]>(`
+    SELECT *
+    FROM shared_museum_reports
+    WHERE museum_id = ?
+    ORDER BY updated_at DESC, created_at DESC
+  `),
+  getSharedMuseumReportByMonth: db.prepare<[string, string]>(`
+    SELECT *
+    FROM shared_museum_reports
+    WHERE museum_id = ? AND month_key = ?
+  `),
+  insertSharedMuseumReport: db.prepare<{
+    id: string;
+    museum_id: string;
+    month_key: string;
+    month_label: string;
+    snapshot_json: string;
+  }>(`
+    INSERT INTO shared_museum_reports (
+      id,
+      museum_id,
+      month_key,
+      month_label,
+      snapshot_json,
+      updated_at
+    )
+    VALUES (
+      @id,
+      @museum_id,
+      @month_key,
+      @month_label,
+      @snapshot_json,
+      datetime('now')
+    )
+  `),
+  updateSharedMuseumReport: db.prepare<{
+    id: string;
+    museum_id: string;
+    month_label: string;
+    snapshot_json: string;
+  }>(`
+    UPDATE shared_museum_reports
+    SET month_label = @month_label,
+        snapshot_json = @snapshot_json,
+        updated_at = datetime('now')
+    WHERE id = @id AND museum_id = @museum_id
+  `),
+  insertSharedMuseumItem: db.prepare<{
+    id: string;
+    museum_id: string;
+    source_item_id: string;
+    source_user_id: string;
+    shared_by_user_id: string;
+    name: string;
+    hall_id: string;
+    category: string;
+    material: string;
+    description: string;
+    image_path: string;
+    cover_image_path: string;
+    audio_path: string;
+    story: string;
+    tags_json: string;
+    shared_note: string;
+    relation_label: string;
+    date_collected: string;
+    date_shared: string;
+  }>(`
+    INSERT INTO shared_museum_items (
+      id,
+      museum_id,
+      source_item_id,
+      source_user_id,
+      shared_by_user_id,
+      name,
+      hall_id,
+      category,
+      material,
+      description,
+      image_path,
+      cover_image_path,
+      audio_path,
+      story,
+      tags_json,
+      shared_note,
+      relation_label,
+      date_collected,
+      date_shared
+    )
+    VALUES (
+      @id,
+      @museum_id,
+      @source_item_id,
+      @source_user_id,
+      @shared_by_user_id,
+      @name,
+      @hall_id,
+      @category,
+      @material,
+      @description,
+      @image_path,
+      @cover_image_path,
+      @audio_path,
+      @story,
+      @tags_json,
+      @shared_note,
+      @relation_label,
+      @date_collected,
+      @date_shared
+    )
+  `),
+  getSharedMuseumItemsByMuseumId: db.prepare<[string]>(`
+    SELECT *
+    FROM shared_museum_items
+    WHERE museum_id = ?
+    ORDER BY date_shared DESC, created_at DESC
+  `),
+  getSharedMuseumItemById: db.prepare<[string, string]>(`
+    SELECT *
+    FROM shared_museum_items
+    WHERE id = ? AND museum_id = ?
+  `),
+  getSharedMuseumItemBySource: db.prepare<[string, string]>(`
+    SELECT *
+    FROM shared_museum_items
+    WHERE museum_id = ? AND source_item_id = ?
+  `),
+  updateSharedMuseumItem: db.prepare<{
+    id: string;
+    museum_id: string;
+    shared_note: string;
+    relation_label: string;
+  }>(`
+    UPDATE shared_museum_items
+    SET shared_note = @shared_note,
+        relation_label = @relation_label
+    WHERE id = @id AND museum_id = @museum_id
+  `),
+  deleteSharedMuseumItem: db.prepare<[string, string]>(`
+    DELETE FROM shared_museum_items
+    WHERE id = ? AND museum_id = ?
+  `),
+  getSharedMuseumItemCountByMuseumId: db.prepare<[string]>(`
+    SELECT COUNT(*) AS count
+    FROM shared_museum_items
+    WHERE museum_id = ?
   `),
 
   // Exhibition Halls
@@ -556,6 +1187,20 @@ export function updateUserPreferences(
   });
 
   return getUserById(id);
+}
+
+export function updateUserRole(id: string, role: UserRole): UserRow | undefined {
+  stmts.updateUserRole.run({ id, role });
+  return getUserById(id);
+}
+
+export function setUserRoleByEmail(email: string, role: UserRole): UserRow | undefined {
+  const user = getUserByEmail(email);
+  if (!user) {
+    return undefined;
+  }
+
+  return updateUserRole(user.id, role);
 }
 
 // --- Items ---
@@ -702,6 +1347,7 @@ export function createSticker(sticker: {
   image_path?: string;
   drama_text?: string;
   category?: string;
+  metadata_json?: string;
   date_created?: string;
 }) {
   stmts.insertSticker.run({
@@ -711,6 +1357,7 @@ export function createSticker(sticker: {
     image_path: sticker.image_path || '',
     drama_text: sticker.drama_text || '',
     category: sticker.category || '其他',
+    metadata_json: sticker.metadata_json || '{}',
     date_created: sticker.date_created || new Date().toISOString(),
   });
 }
@@ -775,6 +1422,347 @@ export function getTransformationGuideById(id: string, userId: string) {
 
 export function deleteTransformationGuide(id: string, userId: string) {
   return stmts.deleteTransformationGuide.run(id, userId);
+}
+
+// --- Saved journals ---
+export function createSavedJournal(journal: {
+  id: string;
+  user_id: string;
+  title: string;
+  preview_image_path?: string;
+  background_image_path?: string;
+  template_id?: string;
+  year: number;
+  month: number;
+  header_note?: string;
+  background_color?: string;
+  background_overlay?: number;
+  selectedStickerIds?: string[];
+  layoutItems?: unknown[];
+  date_created?: string;
+}) {
+  stmts.insertSavedJournal.run({
+    id: journal.id,
+    user_id: journal.user_id,
+    title: journal.title,
+    preview_image_path: journal.preview_image_path || '',
+    background_image_path: journal.background_image_path || '',
+    template_id: journal.template_id || 'calendar-journal',
+    year: journal.year,
+    month: journal.month,
+    header_note: journal.header_note || '',
+    background_color: journal.background_color || '#fffdf7',
+    background_overlay: journal.background_overlay ?? 0.74,
+    selected_sticker_ids_json: JSON.stringify(journal.selectedStickerIds || []),
+    layout_items_json: JSON.stringify(journal.layoutItems || []),
+    date_created: journal.date_created || new Date().toISOString(),
+  });
+
+  const row = stmts.getSavedJournalById.get(journal.id, journal.user_id) as SavedJournalRow | undefined;
+  return row ? rowToSavedJournal(row) : null;
+}
+
+export function updateSavedJournal(journal: {
+  id: string;
+  user_id: string;
+  title: string;
+  preview_image_path?: string;
+  background_image_path?: string;
+  template_id?: string;
+  year: number;
+  month: number;
+  header_note?: string;
+  background_color?: string;
+  background_overlay?: number;
+  selectedStickerIds?: string[];
+  layoutItems?: unknown[];
+}) {
+  stmts.updateSavedJournal.run({
+    id: journal.id,
+    user_id: journal.user_id,
+    title: journal.title,
+    preview_image_path: journal.preview_image_path || '',
+    background_image_path: journal.background_image_path || '',
+    template_id: journal.template_id || 'calendar-journal',
+    year: journal.year,
+    month: journal.month,
+    header_note: journal.header_note || '',
+    background_color: journal.background_color || '#fffdf7',
+    background_overlay: journal.background_overlay ?? 0.74,
+    selected_sticker_ids_json: JSON.stringify(journal.selectedStickerIds || []),
+    layout_items_json: JSON.stringify(journal.layoutItems || []),
+  });
+
+  const row = stmts.getSavedJournalById.get(journal.id, journal.user_id) as SavedJournalRow | undefined;
+  return row ? rowToSavedJournal(row) : null;
+}
+
+export function getSavedJournalsByUser(userId: string) {
+  const rows = stmts.getSavedJournalsByUser.all(userId) as SavedJournalRow[];
+  return rows.map(rowToSavedJournal);
+}
+
+export function getSavedJournalById(id: string, userId: string) {
+  const row = stmts.getSavedJournalById.get(id, userId) as SavedJournalRow | undefined;
+  return row ? rowToSavedJournal(row) : null;
+}
+
+export function deleteSavedJournal(id: string, userId: string) {
+  return stmts.deleteSavedJournal.run(id, userId);
+}
+
+// --- Shared museums ---
+export function createSharedMuseum(museum: {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  description?: string;
+  invite_code: string;
+  invite_enabled?: boolean;
+  status?: string;
+  anniversary_date?: string;
+  theme?: string;
+  quiet_mode?: boolean;
+  cover_image_path?: string;
+  owner_member_id: string;
+}) {
+  const create = db.transaction(() => {
+    stmts.insertSharedMuseum.run({
+      id: museum.id,
+      owner_user_id: museum.owner_user_id,
+      name: museum.name,
+      description: museum.description || '',
+      invite_code: museum.invite_code,
+      invite_enabled: museum.invite_enabled === false ? 0 : 1,
+      status: museum.status || 'active',
+      anniversary_date: museum.anniversary_date || '',
+      theme: museum.theme || 'shared-memory',
+      quiet_mode: museum.quiet_mode ? 1 : 0,
+      cover_image_path: museum.cover_image_path || '',
+    });
+
+    stmts.insertSharedMuseumMember.run({
+      id: museum.owner_member_id,
+      museum_id: museum.id,
+      user_id: museum.owner_user_id,
+      role: 'creator',
+      notification_enabled: 1,
+      quiet_mode: museum.quiet_mode ? 1 : 0,
+      joined_at: new Date().toISOString(),
+    });
+  });
+
+  create();
+  return getSharedMuseumById(museum.id, museum.owner_user_id);
+}
+
+export function getSharedMuseumsByUser(userId: string) {
+  const rows = stmts.getSharedMuseumsByUser.all(userId) as SharedMuseumRow[];
+  return rows.map((row) => buildSharedMuseumSummary(row));
+}
+
+export function getSharedMuseumById(id: string, userId: string) {
+  const membership = stmts.getSharedMuseumMembership.get(id, userId) as SharedMuseumMemberRow | undefined;
+  if (!membership) {
+    return null;
+  }
+
+  const row = stmts.getSharedMuseumById.get(id) as SharedMuseumRow | undefined;
+  return row ? buildSharedMuseumDetail(row) : null;
+}
+
+export function getSharedMuseumByInviteCode(inviteCode: string) {
+  const row = stmts.getSharedMuseumByInviteCode.get(inviteCode.trim().toUpperCase()) as SharedMuseumRow | undefined;
+  return row ? buildSharedMuseumDetail(row) : null;
+}
+
+export function joinSharedMuseumByInviteCode({
+  museum_id,
+  user_id,
+  member_id,
+}: {
+  museum_id: string;
+  user_id: string;
+  member_id: string;
+}) {
+  const join = db.transaction(() => {
+    const existingMembership = stmts.getSharedMuseumMembership.get(museum_id, user_id) as SharedMuseumMemberRow | undefined;
+    if (!existingMembership) {
+      const memberCountRow = stmts.getSharedMuseumMemberCount.get(museum_id) as { count: number } | undefined;
+      const memberCount = Number(memberCountRow?.count || 0);
+      if (memberCount >= 2) {
+        throw new Error('SHARED_MUSEUM_FULL');
+      }
+
+      stmts.insertSharedMuseumMember.run({
+        id: member_id,
+        museum_id,
+        user_id,
+        role: 'partner',
+        notification_enabled: 1,
+        quiet_mode: 0,
+        joined_at: new Date().toISOString(),
+      });
+    }
+
+    const row = stmts.getSharedMuseumById.get(museum_id) as SharedMuseumRow | undefined;
+    return row ? buildSharedMuseumDetail(row) : null;
+  });
+
+  return join();
+}
+
+export function updateSharedMuseum(museum: {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  description?: string;
+  invite_code?: string;
+  invite_enabled?: boolean;
+  status?: string;
+  anniversary_date?: string;
+  theme?: string;
+  quiet_mode?: boolean;
+  cover_image_path?: string;
+}) {
+  stmts.updateSharedMuseum.run({
+    id: museum.id,
+    owner_user_id: museum.owner_user_id,
+    name: museum.name,
+    description: museum.description || '',
+    invite_code: museum.invite_code || '',
+    invite_enabled: museum.invite_enabled === false ? 0 : 1,
+    status: museum.status || 'active',
+    anniversary_date: museum.anniversary_date || '',
+    theme: museum.theme || 'shared-memory',
+    quiet_mode: museum.quiet_mode ? 1 : 0,
+    cover_image_path: museum.cover_image_path || '',
+  });
+
+  return getSharedMuseumById(museum.id, museum.owner_user_id);
+}
+
+export function addItemToSharedMuseum(sharedItem: {
+  id: string;
+  museum_id: string;
+  source_item_id: string;
+  source_user_id: string;
+  shared_by_user_id: string;
+  name: string;
+  hall_id?: string;
+  category?: string;
+  material?: string;
+  description?: string;
+  image_path?: string;
+  cover_image_path?: string;
+  audio_path?: string;
+  story?: string;
+  tags?: string[];
+  shared_note?: string;
+  relation_label?: string;
+  date_collected?: string;
+  date_shared?: string;
+}) {
+  const existing = stmts.getSharedMuseumItemBySource.get(sharedItem.museum_id, sharedItem.source_item_id) as SharedMuseumItemRow | undefined;
+  if (existing) {
+    return rowToSharedMuseumItem(existing);
+  }
+
+  stmts.insertSharedMuseumItem.run({
+    id: sharedItem.id,
+    museum_id: sharedItem.museum_id,
+    source_item_id: sharedItem.source_item_id,
+    source_user_id: sharedItem.source_user_id,
+    shared_by_user_id: sharedItem.shared_by_user_id,
+    name: sharedItem.name,
+    hall_id: sharedItem.hall_id || sharedItem.category || '其他',
+    category: sharedItem.category || '其他',
+    material: sharedItem.material || '',
+    description: sharedItem.description || '',
+    image_path: sharedItem.image_path || '',
+    cover_image_path: sharedItem.cover_image_path || '',
+    audio_path: sharedItem.audio_path || '',
+    story: sharedItem.story || '',
+    tags_json: JSON.stringify(sharedItem.tags || []),
+    shared_note: sharedItem.shared_note || '',
+    relation_label: sharedItem.relation_label || '',
+    date_collected: sharedItem.date_collected || new Date().toISOString(),
+    date_shared: sharedItem.date_shared || new Date().toISOString(),
+  });
+
+  const row = stmts.getSharedMuseumItemBySource.get(sharedItem.museum_id, sharedItem.source_item_id) as SharedMuseumItemRow | undefined;
+  return row ? rowToSharedMuseumItem(row) : null;
+}
+
+export function getSharedMuseumItemById(itemId: string, museumId: string) {
+  const row = stmts.getSharedMuseumItemById.get(itemId, museumId) as SharedMuseumItemRow | undefined;
+  return row ? rowToSharedMuseumItem(row) : null;
+}
+
+export function updateSharedMuseumItem(sharedItem: {
+  id: string;
+  museum_id: string;
+  shared_note?: string;
+  relation_label?: string;
+}) {
+  stmts.updateSharedMuseumItem.run({
+    id: sharedItem.id,
+    museum_id: sharedItem.museum_id,
+    shared_note: sharedItem.shared_note || '',
+    relation_label: sharedItem.relation_label || '',
+  });
+
+  const row = stmts.getSharedMuseumItemById.get(sharedItem.id, sharedItem.museum_id) as SharedMuseumItemRow | undefined;
+  return row ? rowToSharedMuseumItem(row) : null;
+}
+
+export function touchSharedMuseumActivity(museumId: string, coverImagePath = '') {
+  stmts.touchSharedMuseumActivity.run({
+    id: museumId,
+    cover_image_path: coverImagePath,
+  });
+}
+
+export function removeSharedMuseumItem(itemId: string, museumId: string) {
+  return stmts.deleteSharedMuseumItem.run(itemId, museumId);
+}
+
+export function removeSharedMuseumMember(museumId: string, userId: string) {
+  return stmts.deleteSharedMuseumMember.run(museumId, userId);
+}
+
+export function upsertSharedMuseumMonthlyReport(report: {
+  id: string;
+  museum_id: string;
+  month_key: string;
+  month_label: string;
+  snapshot_json: string;
+}) {
+  const upsert = db.transaction(() => {
+    const existing = stmts.getSharedMuseumReportByMonth.get(report.museum_id, report.month_key) as SharedMuseumReportRow | undefined;
+    if (existing) {
+      stmts.updateSharedMuseumReport.run({
+        id: existing.id,
+        museum_id: report.museum_id,
+        month_label: report.month_label,
+        snapshot_json: report.snapshot_json,
+      });
+      return existing.id;
+    }
+
+    stmts.insertSharedMuseumReport.run({
+      id: report.id,
+      museum_id: report.museum_id,
+      month_key: report.month_key,
+      month_label: report.month_label,
+      snapshot_json: report.snapshot_json,
+    });
+    return report.id;
+  });
+
+  upsert();
+  const row = stmts.getSharedMuseumById.get(report.museum_id) as SharedMuseumRow | undefined;
+  return row ? buildSharedMuseumDetail(row) : null;
 }
 
 // --- Exhibition Halls ---
@@ -929,6 +1917,7 @@ function rowToSticker(row: StickerRow) {
     image_path: row.image_path,
     dramaText: row.drama_text,
     category: row.category,
+    metadata: safeJsonParse(row.metadata_json || '{}', {}),
     dateCreated: row.date_created,
   };
 }
@@ -948,6 +1937,170 @@ function rowToTransformationGuide(row: TransformationGuideRow) {
     imageUrl: row.image_path,
     image_path: row.image_path,
     dateCreated: row.date_created,
+  };
+}
+
+function rowToSavedJournal(row: SavedJournalRow) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    previewImageUrl: row.preview_image_path,
+    preview_image_path: row.preview_image_path,
+    backgroundImageUrl: row.background_image_path || '',
+    background_image_path: row.background_image_path || '',
+    templateId: row.template_id,
+    year: row.year,
+    month: row.month,
+    headerNote: row.header_note || '',
+    backgroundColor: row.background_color || '#fffdf7',
+    backgroundOverlay: row.background_overlay ?? 0.74,
+    selectedStickerIds: safeJsonParse(row.selected_sticker_ids_json, []),
+    layoutItems: safeJsonParse(row.layout_items_json, []),
+    dateCreated: row.date_created,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToSharedMuseumMember(row: SharedMuseumMemberRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    nickname: row.nickname,
+    role: row.role,
+    joinedAt: row.joined_at,
+    notificationEnabled: !!row.notification_enabled,
+    quietMode: !!row.quiet_mode,
+  };
+}
+
+function rowToSharedMuseumItem(row: SharedMuseumItemRow) {
+  return {
+    id: row.id,
+    museumId: row.museum_id,
+    sourceItemId: row.source_item_id,
+    sourceUserId: row.source_user_id,
+    sharedByUserId: row.shared_by_user_id,
+    name: row.name,
+    hallId: row.hall_id || row.category,
+    category: row.category,
+    material: row.material,
+    description: row.description || '',
+    imageUrl: row.image_path,
+    image_path: row.image_path,
+    coverImageUrl: row.cover_image_path || '',
+    cover_image_path: row.cover_image_path || '',
+    audioUrl: row.audio_path || '',
+    audio_path: row.audio_path || '',
+    story: row.story || '',
+    tags: safeJsonParse(row.tags_json, []),
+    sharedNote: row.shared_note || '',
+    relationLabel: row.relation_label || '',
+    dateCollected: row.date_collected,
+    dateShared: row.date_shared,
+  };
+}
+
+function rowToSharedMuseumReport(row: SharedMuseumReportRow) {
+  const snapshot = safeJsonParse<Record<string, unknown>>(row.snapshot_json, {});
+  return {
+    id: row.id,
+    museumId: row.museum_id,
+    monthKey: row.month_key,
+    monthLabel: row.month_label,
+    snapshot: {
+      monthKey: typeof snapshot.monthKey === 'string' ? snapshot.monthKey : row.month_key,
+      monthLabel: typeof snapshot.monthLabel === 'string' ? snapshot.monthLabel : row.month_label,
+      itemCount: Number(snapshot.itemCount || 0),
+      categoryCount: Number(snapshot.categoryCount || 0),
+      topCategories: Array.isArray(snapshot.topCategories) ? snapshot.topCategories.filter((value: unknown) => typeof value === 'string') : [],
+      topTags: Array.isArray(snapshot.topTags) ? snapshot.topTags.filter((value: unknown) => typeof value === 'string') : [],
+      relationLabels: Array.isArray(snapshot.relationLabels) ? snapshot.relationLabels.filter((value: unknown) => typeof value === 'string') : [],
+      highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights.filter((value: unknown) => typeof value === 'string') : [],
+      narrative: typeof snapshot.narrative === 'string' ? snapshot.narrative : '',
+      timeline: Array.isArray(snapshot.timeline) ? snapshot.timeline
+        .filter((value: unknown) => typeof value === 'object' && value !== null)
+        .map((value: any) => ({
+          id: typeof value.id === 'string' ? value.id : '',
+          name: typeof value.name === 'string' ? value.name : '',
+          dateLabel: typeof value.dateLabel === 'string' ? value.dateLabel : '',
+          sharedNote: typeof value.sharedNote === 'string' ? value.sharedNote : '',
+          relationLabel: typeof value.relationLabel === 'string' ? value.relationLabel : '',
+          coverImageUrl: typeof value.coverImageUrl === 'string' ? value.coverImageUrl : '',
+          imageUrl: typeof value.imageUrl === 'string' ? value.imageUrl : '',
+        }))
+        .filter((value: { id: string; name: string }) => value.id && value.name) : [],
+      milestoneMessage: typeof snapshot.milestoneMessage === 'string' ? snapshot.milestoneMessage : null,
+    },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function buildSharedMuseumSummary(row: SharedMuseumRow) {
+  const members = (stmts.getSharedMuseumMembersByMuseumId.all(row.id) as SharedMuseumMemberRow[]).map(rowToSharedMuseumMember);
+  const itemCountRow = stmts.getSharedMuseumItemCountByMuseumId.get(row.id) as { count: number } | undefined;
+  const itemCount = Number(itemCountRow?.count || 0);
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    inviteCode: row.invite_code,
+    inviteEnabled: !!row.invite_enabled,
+    status: row.status,
+    anniversaryDate: row.anniversary_date || '',
+    theme: row.theme || 'shared-memory',
+    quietMode: !!row.quiet_mode,
+    coverImageUrl: row.cover_image_path || '',
+    cover_image_path: row.cover_image_path || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    members,
+    itemCount,
+    milestoneCount: itemCount >= 50 ? 4 : itemCount >= 30 ? 3 : itemCount >= 10 ? 2 : itemCount >= 1 ? 1 : 0,
+  };
+}
+
+function buildSharedMuseumDetail(row: SharedMuseumRow) {
+  const summary = buildSharedMuseumSummary(row);
+  const items = (stmts.getSharedMuseumItemsByMuseumId.all(row.id) as SharedMuseumItemRow[]).map(rowToSharedMuseumItem);
+  const reports = (stmts.getSharedMuseumReportsByMuseumId.all(row.id) as SharedMuseumReportRow[]).map(rowToSharedMuseumReport);
+
+  return {
+    ...summary,
+    items,
+    reports,
+    momentCards: [
+      {
+        id: `${row.id}-report`,
+        type: 'report',
+        title: '月度回顾',
+        description: '后续这里会根据共享藏品生成月度地图和时间轴回顾。',
+        status: 'placeholder',
+      },
+      {
+        id: `${row.id}-story`,
+        type: 'story',
+        title: '故事弹窗',
+        description: '后续这里会在纪念日或特定藏品组合时触发小叙事。',
+        status: 'placeholder',
+      },
+      {
+        id: `${row.id}-milestone`,
+        type: 'milestone',
+        title: '里程碑解锁',
+        description: '共享藏品数量达到 10 / 30 / 50 时可解锁新的馆样式与报告。',
+        status: 'placeholder',
+      },
+      {
+        id: `${row.id}-anniversary`,
+        type: 'anniversary',
+        title: '静默与纪念日',
+        description: '后续这里会提供纪念日设置、静默模式与关系状态处理。',
+        status: 'placeholder',
+      },
+    ],
   };
 }
 
@@ -977,7 +2130,7 @@ function normalizeStoredUserEmails() {
 
   if (duplicateRows.length > 0) {
     console.warn(
-      'Skipping case-insensitive email migration because duplicate emails already exist:',
+      '检测到已存在大小写仅不同的重复邮箱，已跳过不区分大小写的邮箱归一化迁移：',
       duplicateRows.map((row) => `${row.normalized_email} (${row.count})`).join(', '),
     );
     return;

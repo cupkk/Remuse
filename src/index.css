@@ -28,6 +28,30 @@ body {
   height: 100%;
 }
 
+/* Gift 站点需要自然滚动，不能继承主应用的 body 锁滚动 */
+.gift-site-html {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.gift-site-body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gift-site-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
+}
+
 /* Tailwind h-dvh 在旧浏览器的降级补丁 */
 .h-dvh {
   height: 100vh;   /* fallback */

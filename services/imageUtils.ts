@@ -17,12 +17,24 @@ export interface CompressOptions {
   outputType?: string;
 }
 
+export interface ImageToBase64Options extends CompressOptions {
+  compress?: boolean;
+  useCache?: boolean;
+}
+
 const DEFAULT_OPTIONS: Required<CompressOptions> = {
   maxWidth: 1200,
   maxHeight: 1200,
   quality: 0.8,
   outputType: 'image/jpeg',
 };
+
+const DEFAULT_IMAGE_TO_BASE64_OPTIONS: Required<Pick<ImageToBase64Options, 'compress' | 'useCache'>> = {
+  compress: false,
+  useCache: true,
+};
+
+const imageBase64Cache = new Map<string, Promise<string>>();
 
 export function getImageFetchOptions(imageUrl: string): RequestInit {
   if (typeof window === 'undefined' || !window.location?.origin) {
@@ -41,7 +53,36 @@ export function getImageFetchOptions(imageUrl: string): RequestInit {
   return { credentials: 'omit' };
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex < 0) {
+    throw new Error('\u56fe\u50cf Data URL \u683c\u5f0f\u65e0\u6548');
+  }
+
+  const metadata = dataUrl.slice(5, commaIndex);
+  const payload = dataUrl.slice(commaIndex + 1);
+  const isBase64 = /;base64/i.test(metadata);
+  const mimeType = (metadata.split(';')[0] || 'text/plain;charset=US-ASCII').trim();
+
+  if (!isBase64) {
+    return new Blob([decodeURIComponent(payload)], { type: mimeType });
+  }
+
+  const normalized = payload.replace(/\s/g, '');
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+}
+
 export function fetchImageAsset(imageUrl: string): Promise<Response> {
+  if (imageUrl.startsWith('data:')) {
+    return Promise.resolve(new Response(dataUrlToBlob(imageUrl), { status: 200 }));
+  }
+
   return fetch(imageUrl, getImageFetchOptions(imageUrl));
 }
 
@@ -52,7 +93,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Failed to decode SVG image'));
+      img.onerror = () => reject(new Error('无法解析 SVG 图片内容'));
       img.src = objectUrl;
     });
 
@@ -64,7 +105,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      throw new Error('Canvas context is unavailable for SVG rasterization');
+      throw new Error('\u65e0\u6cd5\u521b\u5efa SVG \u6805\u683c\u5316\u6240\u9700\u7684 Canvas \u4e0a\u4e0b\u6587');
     }
 
     ctx.drawImage(image, 0, 0, width, height);
@@ -73,7 +114,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            reject(new Error('Failed to rasterize SVG image'));
+            reject(new Error('无法将 SVG 图片栅格化'));
             return;
           }
 
@@ -82,7 +123,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
             const result = reader.result as string;
             resolve(result.split(',')[1]);
           };
-          reader.onerror = () => reject(new Error('Failed to read rasterized SVG image'));
+          reader.onerror = () => reject(new Error('无法读取栅格化后的 SVG 图片'));
           reader.readAsDataURL(blob);
         },
         'image/png',
@@ -262,13 +303,55 @@ export async function compressBase64Image(
   }
 }
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1] || '');
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function maybeCompressBlobToBase64(
+  blob: Blob,
+  options: Required<CompressOptions>,
+): Promise<string> {
+  const file = new File([blob], 'image', {
+    type: blob.type || options.outputType,
+    lastModified: Date.now(),
+  });
+  const compressed = await compressImageFile(file, options);
+  return blobToBase64(compressed);
+}
+
+function buildImageBase64CacheKey(imageUrl: string, options: Required<ImageToBase64Options>) {
+  return `${imageUrl}::${JSON.stringify({
+    compress: options.compress,
+    maxWidth: options.maxWidth,
+    maxHeight: options.maxHeight,
+    quality: options.quality,
+    outputType: options.outputType,
+  })}`;
+}
+
 /**
  * 将任意图片 URL 转为 base64 字符串（不含 data: 前缀）
  * - data:image/... URL → 直接提取 base64
- * - http(s):// 或 /uploads/ 相对路径 → fetch 后转换
+ * - http(s):// 或 /api/uploads/ 相对路径 → fetch 后转换
  */
-export async function imageUrlToBase64(imageUrl: string): Promise<string> {
-  if (!imageUrl) throw new Error('imageUrl is empty');
+export async function imageUrlToBase64(
+  imageUrl: string,
+  options: ImageToBase64Options = {},
+): Promise<string> {
+  if (!imageUrl) throw new Error('??????');
+  const resolvedOptions: Required<ImageToBase64Options> = {
+    ...DEFAULT_OPTIONS,
+    ...DEFAULT_IMAGE_TO_BASE64_OPTIONS,
+    ...options,
+  };
 
   // 已经是 data URL，直接提取 base64 部分
   if (imageUrl.startsWith('data:')) {
@@ -277,26 +360,51 @@ export async function imageUrlToBase64(imageUrl: string): Promise<string> {
     }
 
     const parts = imageUrl.split(',');
-    if (parts.length < 2) throw new Error('Invalid data URL');
-    return parts[1];
+    if (parts.length < 2) throw new Error('\u56fe\u50cf Data URL \u683c\u5f0f\u65e0\u6548');
+    if (!resolvedOptions.compress) {
+      return parts[1];
+    }
+
+    const mimeType = imageUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)?.[1] || resolvedOptions.outputType;
+    return compressBase64Image(parts[1], mimeType, resolvedOptions);
   }
 
   // HTTP/HTTPS 或相对路径 → fetch 并转 base64
-  const response = await fetchImageAsset(imageUrl);
-  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
-  const blob = await response.blob();
-
-  if (blob.type === 'image/svg+xml') {
-    return svgSourceToPngBase64(blob);
+  const shouldUseCache = resolvedOptions.useCache && !imageUrl.startsWith('blob:');
+  const cacheKey = buildImageBase64CacheKey(imageUrl, resolvedOptions);
+  if (shouldUseCache) {
+    const cached = imageBase64Cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      resolve(result.split(',')[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  const loader = (async () => {
+    const response = await fetchImageAsset(imageUrl);
+    if (!response.ok) throw new Error(`读取图片失败：${response.status}`);
+    const blob = await response.blob();
+
+    if (blob.type === 'image/svg+xml') {
+      return svgSourceToPngBase64(blob);
+    }
+
+    if (resolvedOptions.compress) {
+      return maybeCompressBlobToBase64(blob, resolvedOptions);
+    }
+
+    return blobToBase64(blob);
+  })();
+
+  if (shouldUseCache) {
+    imageBase64Cache.set(cacheKey, loader);
+  }
+
+  try {
+    return await loader;
+  } catch (error) {
+    if (shouldUseCache) {
+      imageBase64Cache.delete(cacheKey);
+    }
+    throw error;
+  }
 }

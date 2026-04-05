@@ -533,32 +533,32 @@ function getHeaderMeta(mode: AuthMode, isGuestUpgrade: boolean) {
   switch (mode) {
     case 'register':
       return {
-        kicker: 'Create Account',
+        kicker: '创建账号',
         title: '注册',
         subtitle: '创建你的再生博物馆账户。',
       };
     case 'forgotPassword':
       return {
-        kicker: 'Password Reset',
+        kicker: '密码重置',
         title: '找回密码',
         subtitle: '输入注册邮箱，我们会发送重置链接。',
       };
     case 'resetPassword':
       return {
-        kicker: 'New Password',
+        kicker: '新密码',
         title: '重置密码',
         subtitle: '设置一个新的登录密码。',
       };
     case 'verifyEmail':
       return {
-        kicker: 'Verify Email',
+        kicker: '邮箱验证',
         title: '验证邮箱',
         subtitle: '正在确认你的邮箱状态。',
       };
     case 'login':
     default:
       return {
-        kicker: 'Welcome Back',
+        kicker: '欢迎回来',
         title: '登录',
         subtitle: '进入你的馆藏、贴纸与记忆工作区。',
       };

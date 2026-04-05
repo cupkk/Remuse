@@ -12,9 +12,13 @@ node_modules/
 dist/
 dist-ssr/
 build/
+release/
+artifacts/
 
 # Local environment and secrets
 .env
+.env.*
+!.env.example
 .env.local
 .env.production
 .env.*.local
@@ -22,6 +26,29 @@ build/
 # Persistent runtime data
 data/
 uploads/
+
+# Test output and debug artifacts
+.tmp/
+.logs/
+.playwright-cli/
+/dist-gift/
+/output-gift-preview.log
+/--exclude=node_modules
+/.tmp-dev-*
+test-results/
+output/playwright/
+/*.bak-*
+/*.tgz
+/*.tar.gz
+/*.zip
+/*.7z
+/playwright-*.png
+/scanner-result-debug.png
+/emoji-regression-failure.png
+/2.mp4
+/debug-*.png
+/debug-*.webm
+/debug-*.mp4
 
 # Editor directories and files
 .vscode/*

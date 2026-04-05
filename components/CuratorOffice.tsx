@@ -859,7 +859,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                   <div className="h-px flex-1 bg-gradient-to-r from-transparent to-neutral-700"></div>
                   <h2 className="flex items-center gap-2 text-xl font-display text-white">
                       <History className="text-remuse-accent" size={20} />
-                      MEMORY RAG
+                      记忆问答
                   </h2>
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
               </div>
@@ -872,7 +872,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                               <div className="max-w-3xl">
                                   <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-remuse-accent/30 bg-remuse-accent/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-accent">
                                       <Sparkles size={14} />
-                                      Memory Curator
+                                      记忆策展
                                   </div>
                                   <h3 className="text-2xl font-display font-bold text-white">把旧物记忆放进独立对话界面</h3>
                                   <p className="mt-2 text-sm leading-7 text-neutral-300">
@@ -881,7 +881,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                               </div>
 
                               <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 px-4 py-3 md:w-[188px] md:flex-shrink-0">
-                                  <span className="block text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Story Archive</span>
+                                  <span className="block text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">故事档案</span>
                                   <span className="mt-2 block text-2xl font-display font-bold text-remuse-secondary">{storyItems.length}</span>
                                   <span className="text-xs text-neutral-500">件藏品带有故事记录</span>
                               </div>
@@ -910,7 +910,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
 
                   <div className="grid gap-4">
                       <div className="rounded-xl border border-remuse-border bg-remuse-panel p-5">
-                          <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Conversation Ready</p>
+                          <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">对话就绪</p>
                           <div className="mt-4 grid grid-cols-2 gap-3">
                               <div className="rounded-2xl border border-remuse-accent/20 bg-black/20 p-4">
                                   <p className="text-xs text-neutral-500">最近故事线索</p>
@@ -927,7 +927,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                           <div className="mb-4 flex items-center justify-between gap-3">
                               <h4 className="text-lg font-display font-bold text-white">最近录入的故事</h4>
                               <span className="rounded-full border border-remuse-border bg-black/20 px-3 py-1 text-[11px] font-mono text-neutral-400">
-                                  {recentMemoryItems.length} recent
+                                  最近 {recentMemoryItems.length} 条
                               </span>
                           </div>
 
@@ -967,7 +967,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                   <div className="h-px flex-1 bg-gradient-to-r from-transparent to-neutral-700"></div>
                   <h2 className="flex items-center gap-2 text-xl font-display text-white">
                       <MessageCircle className="text-remuse-secondary" size={20} />
-                      CONTACT
+                      联系入口
                   </h2>
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent to-neutral-700"></div>
               </div>
@@ -980,7 +980,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                               <div className="max-w-xl">
                                   <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-remuse-secondary/30 bg-remuse-secondary/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-remuse-secondary">
                                       <MessageCircle size={14} />
-                                      Remuse Support
+                                      Remuse 支持
                                   </div>
                                   <h3 className="text-2xl font-display font-bold text-white">联系我们</h3>
                                   <p className="mt-2 text-sm leading-7 text-neutral-300">
@@ -989,7 +989,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                               </div>
 
                               <div className="rounded-2xl border border-remuse-accent/25 bg-black/25 px-5 py-4">
-                                  <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-neutral-500">WeChat</span>
+                                  <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-neutral-500">微信</span>
                                   <p className="mt-2 font-mono text-2xl font-bold text-remuse-accent">{CONTACT_WECHAT_ID}</p>
                               </div>
                           </div>
@@ -1016,7 +1016,7 @@ const CuratorOffice: React.FC<CuratorOfficeProps> = ({
                   </div>
 
                   <div className="rounded-xl border border-remuse-border bg-remuse-panel p-5 md:p-6">
-                      <p className="text-xs font-mono uppercase tracking-[0.28em] text-neutral-500">Support Scope</p>
+                      <p className="text-xs font-mono uppercase tracking-[0.28em] text-neutral-500">支持范围</p>
                       <ul className="mt-4 space-y-3 text-sm leading-7 text-neutral-300">
                           <li>Bug 反馈与移动端体验问题</li>
                           <li>新功能建议与产品共创</li>

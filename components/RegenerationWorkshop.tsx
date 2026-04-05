@@ -16,7 +16,7 @@ import { CollectedItem, ExhibitionHall, Sticker } from '../types';
 import { getHallNameById } from '../services/halls';
 import { isSourceSticker } from '../shared/stickerCategories';
 
-export type WorkshopToolId = 'EMOJI_PACK' | 'PERLER_PATTERN' | 'PRINT' | 'GUIDE';
+export type WorkshopToolId = 'STICKER' | 'EMOJI_PACK' | 'PERLER_PATTERN' | 'PRINT' | 'GUIDE';
 
 export interface WorkshopLaunchRequest {
   tool: WorkshopToolId;
@@ -80,22 +80,43 @@ const collectionDateFormatter = new Intl.DateTimeFormat('zh-CN', {
 });
 
 const TOOL_CONFIGS: Record<WorkshopToolId, WorkshopToolConfig> = {
+  STICKER: {
+    id: 'STICKER',
+    lane: 'PLAYFUL',
+    title: '贴纸',
+    subtitle: '妙趣灵感社',
+    description: '从藏品里直接提取角色感和轮廓，生成更适合收藏、打印和继续再生的专属贴纸。',
+    cta: '并行生成贴纸',
+    selectionLimit: 6,
+    selectionMode: 'ITEM',
+    selectionUnit: '件藏品',
+    pickerTitle: '选择想直接生成贴纸的藏品',
+    pickerDescription: '这里会优先使用藏品原图生成贴纸，并在完成后直接存入再生成果库。',
+    pickerHint: '支持一次勾选多件藏品并行生成，系统会把生成结果陆续存回成果库。',
+    emptyTitle: '当前没有可生成贴纸的藏品',
+    emptyDescription: '先去扫描仪补充藏品，或者把已经生成过贴纸的藏品留给表情包、拼豆和改造玩法。',
+    entryLabel: '从藏品进入',
+    icon: <StickerIcon size={18} />,
+    accentClassName: 'text-remuse-accent',
+    panelClassName:
+      'border-remuse-accent/20 bg-[radial-gradient(circle_at_top_right,rgba(204,255,0,0.14),transparent_36%),linear-gradient(180deg,rgba(24,26,16,0.94),rgba(10,12,9,0.96))]',
+  },
   EMOJI_PACK: {
     id: 'EMOJI_PACK',
     lane: 'PLAYFUL',
     title: '表情包',
     subtitle: '妙趣灵感社',
-    description: '收集可爱与创意，把已经生成的贴纸继续整理成更适合分享和表达心情的表情包。',
-    cta: '选贴纸做表情包',
+    description: '直接从藏品开始，把原图里的物品神态整理成更适合分享和表达心情的表情包。',
+    cta: '选藏品做表情包',
     selectionLimit: 6,
-    selectionMode: 'STICKER',
-    selectionUnit: '张贴纸',
-    pickerTitle: '选择想进入表情包的贴纸',
-    pickerDescription: '只从已经生成好的贴纸里继续创作，让表情表达更直接。',
-    pickerHint: '先去藏品档案生成贴纸，生成后的贴纸才会出现在这里可选。',
-    emptyTitle: '还没有可用贴纸',
-    emptyDescription: '先在藏品档案里生成贴纸，再回来继续做表情包。',
-    entryLabel: '从贴纸进入',
+    selectionMode: 'ITEM',
+    selectionUnit: '件藏品',
+    pickerTitle: '选择想直接生成表情包的藏品',
+    pickerDescription: '这里会优先使用藏品原图生成表情包；如果原图不可用，才会回退到藏品封面图。',
+    pickerHint: '不需要先生成贴纸，选中藏品后就能直接进入表情包工坊。',
+    emptyTitle: '还没有可用藏品',
+    emptyDescription: '先去扫描仪或藏品馆补充内容，再回来继续生成表情包。',
+    entryLabel: '从藏品进入',
     icon: <Smile size={18} />,
     accentClassName: 'text-amber-300',
     panelClassName:
@@ -106,17 +127,17 @@ const TOOL_CONFIGS: Record<WorkshopToolId, WorkshopToolConfig> = {
     lane: 'PLAYFUL',
     title: '拼豆图纸',
     subtitle: '妙趣灵感社',
-    description: '把喜欢的贴纸继续转成可制作、可导出的拼豆像素图纸。',
-    cta: '选 1 张贴纸做拼豆图纸',
+    description: '从藏品直接生成更适合落地制作的拼豆图纸，后台会自动做抠图和保真处理。',
+    cta: '选 1 件藏品做拼豆图纸',
     selectionLimit: 1,
-    selectionMode: 'STICKER',
-    selectionUnit: '张贴纸',
-    pickerTitle: '选择想进入拼豆图纸的贴纸',
-    pickerDescription: '单张贴纸进入，继续转成更适合落地制作的拼豆图纸。',
-    pickerHint: '只有已经生成好的贴纸会出现在这里，便于直接进入图纸工坊。',
-    emptyTitle: '还没有可用贴纸',
-    emptyDescription: '先在藏品档案里生成贴纸，再回来做拼豆图纸。',
-    entryLabel: '从贴纸进入',
+    selectionMode: 'ITEM',
+    selectionUnit: '件藏品',
+    pickerTitle: '选择想直接生成拼豆图纸的藏品',
+    pickerDescription: '系统会优先使用原图做本地抠图，再尝试 AI 抠图，最后才回退原图直转，尽量保留细节。',
+    pickerHint: '不需要先生成贴纸，选中藏品后就会直接进入拼豆图纸工坊。',
+    emptyTitle: '当前还没有藏品',
+    emptyDescription: '先去扫描仪或藏品馆补充内容，再回来生成拼豆图纸。',
+    entryLabel: '从藏品进入',
     icon: <Box size={18} />,
     accentClassName: 'text-cyan-300',
     panelClassName:
@@ -136,7 +157,7 @@ const TOOL_CONFIGS: Record<WorkshopToolId, WorkshopToolConfig> = {
     pickerDescription: '多张贴纸一起进入，更适合继续排版、拼贴和导出。',
     pickerHint: '这里显示的是已经生成好的贴纸，选中后会直接进入手账拼贴工坊。',
     emptyTitle: '还没有可用贴纸',
-    emptyDescription: '先在藏品档案里生成贴纸，再回来做手账拼贴。',
+    emptyDescription: '先在再生工坊生成贴纸，再回来做手账拼贴。',
     entryLabel: '从贴纸进入',
     icon: <Scissors size={18} />,
     accentClassName: 'text-sky-300',
@@ -150,10 +171,10 @@ const TOOL_CONFIGS: Record<WorkshopToolId, WorkshopToolConfig> = {
     subtitle: '旧物新生局',
     description: '让旧物重获新生，换种形式陪伴你。',
     cta: '生成综合改造指南',
-    selectionLimit: 4,
+    selectionLimit: Number.MAX_SAFE_INTEGER,
     selectionMode: 'ITEM',
     selectionUnit: '件藏品',
-    pickerTitle: '选择 1-4 件想联合改造的藏品',
+    pickerTitle: '选择想联合改造的藏品',
     pickerDescription: '这里会把多件藏品组合成一份综合改造指南，而不是重复生成单件协议。',
     pickerHint: '选中的藏品越明确，生成出来的综合方案和 AI 示意图就越直观。',
     emptyTitle: '当前还没有藏品',
@@ -216,6 +237,11 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
     [safeStickers],
   );
 
+  const sourceStickerItemIds = useMemo(
+    () => new Set(sourceStickers.map((sticker) => sticker.originalItemId).filter(Boolean)),
+    [sourceStickers],
+  );
+
   const itemMap = useMemo(
     () => new Map(sortedItems.map((item) => [item.id, item])),
     [sortedItems],
@@ -249,13 +275,21 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
 
   const activeTool = activeToolId ? TOOL_CONFIGS[activeToolId] : null;
 
-  const filteredItems = useMemo(() => {
-    if (!selectedHallId) {
-      return sortedItems;
+  const toolItems = useMemo(() => {
+    if (activeTool?.id === 'STICKER') {
+      return sortedItems.filter((item) => !sourceStickerItemIds.has(item.id));
     }
 
-    return sortedItems.filter((item) => item.hallId === selectedHallId);
-  }, [selectedHallId, sortedItems]);
+    return sortedItems;
+  }, [activeTool?.id, sortedItems, sourceStickerItemIds]);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedHallId) {
+      return toolItems;
+    }
+
+    return toolItems.filter((item) => item.hallId === selectedHallId);
+  }, [selectedHallId, toolItems]);
 
   const filteredStickerCards = useMemo(() => {
     if (!selectedHallId) {
@@ -291,25 +325,25 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
     const counts = new Map<string, number>();
     const records = activeTool?.selectionMode === 'STICKER'
       ? stickerCards.map((sticker) => ({ hallId: sticker.hallId }))
-      : sortedItems.map((item) => ({ hallId: item.hallId }));
+      : toolItems.map((item) => ({ hallId: item.hallId }));
 
     records.forEach((record) => {
       counts.set(record.hallId, (counts.get(record.hallId) || 0) + 1);
     });
 
     return [
-      {
-        id: null as string | null,
-        label: '全部',
-        count: activeTool?.selectionMode === 'STICKER' ? stickerCards.length : sortedItems.length,
-      },
+        {
+          id: null as string | null,
+          label: '全部',
+          count: activeTool?.selectionMode === 'STICKER' ? stickerCards.length : toolItems.length,
+        },
       ...safeHalls.map((hall) => ({
         id: hall.id,
         label: hall.name,
         count: counts.get(hall.id) || 0,
       })),
     ];
-  }, [activeTool?.selectionMode, safeHalls, sortedItems, stickerCards]);
+  }, [activeTool?.selectionMode, safeHalls, stickerCards, toolItems]);
 
   const openPicker = (toolId: WorkshopToolId) => {
     setActiveToolId(toolId);
@@ -378,12 +412,21 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
     const isStickerMode = activeTool.selectionMode === 'STICKER';
     const visibleCount = isStickerMode ? filteredStickerCards.length : filteredItems.length;
     const selectionCount = isStickerMode ? selectedStickers.length : selectedItems.length;
+    const itemBadgeLabel = activeTool.id === 'GUIDE'
+      ? '可联合改造'
+      : activeTool.id === 'STICKER'
+        ? '可生成贴纸'
+      : activeTool.id === 'EMOJI_PACK'
+        ? '可直接生成表情包'
+        : activeTool.id === 'PERLER_PATTERN'
+          ? '可直接生成拼豆图纸'
+          : activeTool.entryLabel;
 
     return (
-      <div className="h-full overflow-y-auto bg-remuse-dark p-4 pb-28 md:p-8">
+      <div data-testid={`workshop-picker-${activeTool.id.toLowerCase()}`} className="h-full overflow-y-auto bg-remuse-dark p-4 pb-28 md:p-8">
         <div className="mx-auto max-w-[1480px] space-y-6">
           <section className="rounded-[30px] border border-remuse-border bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_32%),linear-gradient(180deg,rgba(18,21,26,0.98),rgba(8,10,13,0.98))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.26)] md:p-6">
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-4">
                 <button
                   type="button"
@@ -398,7 +441,20 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                     {activeTool.icon}
                     {activeTool.subtitle}
                   </div>
+                  <h1 className="font-display text-3xl font-black tracking-[-0.04em] text-white md:text-4xl">
+                    {activeTool.pickerTitle}
+                  </h1>
                 </div>
+              </div>
+
+              <div className="max-w-md rounded-[24px] border border-white/10 bg-black/20 px-5 py-4 text-sm text-neutral-300">
+                <p>
+                  当前工具 <span className="font-mono text-white">{activeTool.title}</span>
+                  {' · '}
+                  最多选择 <span className="font-mono text-white">{activeTool.selectionLimit}</span> {activeTool.selectionUnit}
+                </p>
+                <p className="mt-2 leading-6 text-neutral-400">{activeTool.pickerDescription}</p>
+                <p className="mt-2 text-xs leading-6 text-neutral-500">{activeTool.pickerHint}</p>
               </div>
             </div>
           </section>
@@ -530,7 +586,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                           {hallLabel}
                         </span>
                         <span className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-[11px] text-neutral-300">
-                          可联合改造
+                          {itemBadgeLabel}
                         </span>
                       </div>
                       {selected ? (
@@ -565,12 +621,16 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                 {selectionCount > 0 ? (
                   <div className="inline-flex items-center justify-center rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-neutral-300">
                     已选 <span className="ml-1 font-mono text-white">{selectionCount}</span>
+                    {Number.isFinite(activeTool.selectionLimit) && activeTool.selectionLimit !== Number.MAX_SAFE_INTEGER ? (
+                      <span className="ml-1 text-neutral-500">/ {activeTool.selectionLimit}</span>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
                     onClick={closePicker}
+                    data-testid="workshop-picker-cancel"
                     className="inline-flex min-h-[46px] items-center justify-center rounded-full border border-neutral-700 px-5 text-sm text-neutral-300 transition-colors hover:border-white hover:text-white"
                   >
                     取消
@@ -579,9 +639,14 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                     type="button"
                     onClick={handleLaunch}
                     disabled={selectionCount === 0 || isLaunching}
+                    data-testid="workshop-picker-confirm"
                     className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-full bg-remuse-accent px-5 text-sm font-display font-bold text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
                   >
-                    {isLaunching ? '正在进入工坊...' : activeTool.cta}
+                    {isLaunching
+                      ? (activeTool.id === 'STICKER'
+                        ? (selectionCount > 1 ? '正在提交批量贴纸任务...' : '正在生成贴纸...')
+                        : '正在进入工坊...')
+                      : activeTool.cta}
                     <ArrowRight size={16} />
                   </button>
                 </div>
@@ -595,7 +660,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-remuse-dark p-4 pb-24 md:p-8">
+    <div data-testid="workshop-home" className="h-full overflow-y-auto bg-remuse-dark p-4 pb-24 md:p-8">
       <div className="mx-auto max-w-[1480px] space-y-6">
         <section className="overflow-hidden rounded-[32px] border border-remuse-border bg-[radial-gradient(circle_at_top_left,rgba(204,255,0,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_28%),linear-gradient(180deg,rgba(18,20,25,0.98),rgba(9,11,15,0.98))] p-6 shadow-[0_24px_72px_rgba(0,0,0,0.3)] md:p-8">
           <div className="flex flex-col gap-4">
@@ -631,10 +696,26 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => openPicker('STICKER')}
+                  data-testid="workshop-open-sticker"
+                  className="rounded-[24px] border border-white/10 bg-black/15 p-4 text-left transition-all hover:-translate-y-1 hover:border-remuse-accent/40 hover:bg-black/25"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-remuse-accent/18 text-remuse-accent">
+                      <StickerIcon size={20} />
+                    </div>
+                    <ArrowRight size={18} className="text-neutral-400" />
+                  </div>
+                  <h3 className="mt-4 font-display text-xl font-bold text-white">贴纸</h3>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => openPicker('EMOJI_PACK')}
+                  data-testid="workshop-open-emoji-pack"
                   className="rounded-[24px] border border-white/10 bg-black/15 p-4 text-left transition-all hover:-translate-y-1 hover:border-amber-300/40 hover:bg-black/25"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -649,6 +730,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
                 <button
                   type="button"
                   onClick={() => openPicker('PERLER_PATTERN')}
+                  data-testid="workshop-open-perler-pattern"
                   className="rounded-[24px] border border-white/10 bg-black/15 p-4 text-left transition-all hover:-translate-y-1 hover:border-cyan-300/40 hover:bg-black/25"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -683,6 +765,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
               <button
                 type="button"
                 onClick={() => openPicker('PRINT')}
+                data-testid="workshop-open-print"
                 className="mt-auto rounded-[24px] border border-white/10 bg-black/15 p-4 text-left transition-all hover:-translate-y-1 hover:border-sky-300/40 hover:bg-black/25"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -716,6 +799,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
               <button
                 type="button"
                 onClick={() => openPicker('GUIDE')}
+                data-testid="workshop-open-guide"
                 className="mt-auto rounded-[24px] border border-white/10 bg-black/15 p-4 text-left transition-all hover:-translate-y-1 hover:border-remuse-accent/40 hover:bg-black/25"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -750,6 +834,7 @@ const RegenerationWorkshop: React.FC<RegenerationWorkshopProps> = ({
               <button
                 type="button"
                 onClick={onOpenLibrary}
+                data-testid="workshop-open-results-library"
                 className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-full border border-neutral-700 px-5 text-sm text-neutral-200 transition-colors hover:border-white hover:text-white"
               >
                 打开成果库

@@ -9,12 +9,22 @@ interface PerlerPatternCanvasProps extends DrawPerlerPatternOptions {
   pattern: PerlerPatternResult | null;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   className?: string;
+  onClick?: React.MouseEventHandler<HTMLCanvasElement>;
+  onPointerDown?: React.PointerEventHandler<HTMLCanvasElement>;
+  onPointerMove?: React.PointerEventHandler<HTMLCanvasElement>;
+  onPointerUp?: React.PointerEventHandler<HTMLCanvasElement>;
+  onPointerLeave?: React.PointerEventHandler<HTMLCanvasElement>;
 }
 
 const PerlerPatternCanvas: React.FC<PerlerPatternCanvasProps> = ({
   pattern,
   canvasRef,
   className,
+  onClick,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerLeave,
   ...drawOptions
 }) => {
   useEffect(() => {
@@ -37,6 +47,11 @@ const PerlerPatternCanvas: React.FC<PerlerPatternCanvasProps> = ({
   return (
     <canvas
       ref={canvasRef}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
       className={className ?? 'block max-w-full h-auto rounded-xl bg-white shadow-xl'}
     />
   );

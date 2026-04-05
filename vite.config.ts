@@ -15,18 +15,12 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: backendTarget,
           changeOrigin: true,
-          timeout: 120_000,
-        },
-        '/uploads': {
-          target: backendTarget,
-          changeOrigin: true,
+          timeout: 600_000,
+          proxyTimeout: 600_000,
         },
       },
     },
     plugins: [react()],
-    define: {
-      'process.env.GEMINI_PROXY_URL': JSON.stringify(env.GEMINI_PROXY_URL || '/api/gemini'),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

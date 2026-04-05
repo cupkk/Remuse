@@ -40,7 +40,7 @@ const logger = {
 
     reportClientError({
       source: 'manual',
-      message: toMessage(args) || 'Unknown client error',
+      message: toMessage(args) || '客户端发生未知错误',
       stack: toStack(args),
       extra: {
         args: args.map((arg) => (arg instanceof Error ? { name: arg.name, message: arg.message } : String(arg))),

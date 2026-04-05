@@ -14,6 +14,7 @@ export type ProductUsageEventType =
   | 'collection_cover_generate'
   | 'sticker_generate'
   | 'emoji_pack_generate'
+  | 'perler_pattern_generate'
   | 'guide_generate'
   | 'memory_thread_create'
   | 'memory_query';
@@ -94,6 +95,7 @@ const stmts = {
     WHERE user_id = @user_id
       AND scope = @scope
       AND day_key = @day_key
+      AND success = 1
   `),
   insertUsageEvent: db.prepare<{
     id: string;

@@ -50,4 +50,4 @@ await fs.writeFile(
   'utf8',
 );
 
-console.log(`Backup created at ${snapshotDir}`);
+console.log(`备份已创建：${snapshotDir}`);

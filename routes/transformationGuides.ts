@@ -33,9 +33,9 @@ const createTransformationGuideSchema = z.object({
   materials: z.array(z.string().trim().min(1).max(160)).max(20),
   steps: z.array(z.string().trim().min(1).max(800)).min(1).max(20),
   tips: z.array(z.string().trim().min(1).max(400)).max(20).optional(),
-  imageBase64: z.string().min(1, 'Guide image is required.'),
-  itemIds: z.array(z.string().trim().min(1).max(120)).min(1).max(4),
-  sourceItems: z.array(guideSourceItemSchema).min(1).max(4),
+  imageBase64: z.string().min(1, '\u8bf7\u4e0a\u4f20\u6539\u9020\u6307\u5357\u5c01\u9762\u56fe\u3002'),
+  itemIds: z.array(z.string().trim().min(1).max(120)).min(1).max(24),
+  sourceItems: z.array(guideSourceItemSchema).min(1).max(24),
   dateCreated: z.string().optional(),
 });
 
@@ -46,8 +46,8 @@ router.get('/', (req: Request, res: Response) => {
       guides: guides.map((guide) => resolveGuideImageUrl(guide)),
     });
   } catch (error) {
-    console.error('Failed to load transformation guides:', error);
-    res.status(500).json({ error: 'Failed to load transformation guides' });
+    console.error('\u52a0\u8f7d\u6539\u9020\u6307\u5357\u5217\u8868\u5931\u8d25\uff1a', error);
+    res.status(500).json({ error: '\u52a0\u8f7d\u6539\u9020\u6307\u5357\u5217\u8868\u5931\u8d25\u3002' });
   }
 });
 
@@ -55,7 +55,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const parsed = createTransformationGuideSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
       return;
     }
 
@@ -97,7 +97,7 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
     if (!guide) {
-      res.status(500).json({ error: 'Failed to save transformation guide' });
+      res.status(500).json({ error: '\u4fdd\u5b58\u6539\u9020\u6307\u5357\u5931\u8d25\u3002' });
       return;
     }
 
@@ -106,7 +106,7 @@ router.post('/', async (req: Request, res: Response) => {
       guide: resolveGuideImageUrl(savedGuide || guide),
     });
   } catch (error) {
-    handleRouteError(res, error, 'Failed to save transformation guide');
+    handleRouteError(res, error, '\u4fdd\u5b58\u6539\u9020\u6307\u5357\u5931\u8d25\u3002');
   }
 });
 

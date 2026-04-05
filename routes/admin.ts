@@ -10,12 +10,18 @@ import {
 
 const router = Router();
 
+const ADMIN_MESSAGE_SEARCH_KEYWORD_REQUIRED = '请先输入搜索关键词。';
+const ADMIN_MESSAGE_FEEDBACK_UPDATE_INVALID = '反馈更新请求无效。';
+const ADMIN_MESSAGE_USER_SEARCH_INVALID = '用户搜索条件无效。';
+const ADMIN_MESSAGE_USER_NOT_FOUND = '未找到该用户。';
+const ADMIN_MESSAGE_USER_FLAG_INVALID = '用户标记更新请求无效。';
+
 const feedbackStatusSchema = z.object({
   status: z.enum(['open', 'in_review', 'closed']),
 });
 
 const userSearchSchema = z.object({
-  query: z.string().trim().min(1, 'Please provide a search keyword.').max(120),
+  query: z.string().trim().min(1, ADMIN_MESSAGE_SEARCH_KEYWORD_REQUIRED).max(120),
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
@@ -44,7 +50,7 @@ router.get('/feedback', (_req: Request, res: Response) => {
 router.patch('/feedback/:id', (req: Request, res: Response) => {
   const parsed = feedbackStatusSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid feedback update payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || ADMIN_MESSAGE_FEEDBACK_UPDATE_INVALID });
     return;
   }
 
@@ -57,7 +63,7 @@ router.patch('/feedback/:id', (req: Request, res: Response) => {
 router.get('/users', (req: Request, res: Response) => {
   const parsed = userSearchSchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid user search query.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || ADMIN_MESSAGE_USER_SEARCH_INVALID });
     return;
   }
 
@@ -69,7 +75,7 @@ router.get('/users', (req: Request, res: Response) => {
 router.get('/users/:id', (req: Request, res: Response) => {
   const detail = getAdminUserDetail(readRouteParam(req.params.id));
   if (!detail) {
-    res.status(404).json({ error: 'User not found.' });
+    res.status(404).json({ error: ADMIN_MESSAGE_USER_NOT_FOUND });
     return;
   }
 
@@ -79,7 +85,7 @@ router.get('/users/:id', (req: Request, res: Response) => {
 router.patch('/users/:id/flag', (req: Request, res: Response) => {
   const parsed = userFlagSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid flag update payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || ADMIN_MESSAGE_USER_FLAG_INVALID });
     return;
   }
 
@@ -91,7 +97,7 @@ router.patch('/users/:id/flag', (req: Request, res: Response) => {
       user: detail?.user || null,
     });
   } catch (error) {
-    res.status(404).json({ error: error instanceof Error ? error.message : 'User not found.' });
+    res.status(404).json({ error: error instanceof Error ? error.message : ADMIN_MESSAGE_USER_NOT_FOUND });
   }
 });
 

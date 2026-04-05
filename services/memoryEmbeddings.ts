@@ -117,7 +117,7 @@ export async function searchMemoryVectors(userId: string, query: string, limit =
 
 async function generateEmbedding(text: string, textType: EmbeddingTextType) {
   if (!DASHSCOPE_API_KEY) {
-    throw new Error('DASHSCOPE_API_KEY is not configured.');
+    throw new Error('未配置 DASHSCOPE_API_KEY，无法生成记忆向量。');
   }
 
   const response = await fetch(DASHSCOPE_EMBEDDING_URL, {
@@ -141,12 +141,12 @@ async function generateEmbedding(text: string, textType: EmbeddingTextType) {
 
   const payload = (await response.json()) as DashScopeEmbeddingResponse;
   if (!response.ok) {
-    throw new Error(payload.message || payload.code || `DashScope embedding failed with ${response.status}`);
+    throw new Error(payload.message || payload.code || `DashScope 向量请求失败，状态码 ${response.status}`);
   }
 
   const vector = payload.output?.embeddings?.[0]?.embedding;
   if (!vector || vector.length === 0) {
-    throw new Error('DashScope embedding response did not include a dense vector.');
+    throw new Error('DashScope 向量响应中未返回有效的 dense vector。');
   }
 
   return vector;

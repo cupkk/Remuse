@@ -30,7 +30,7 @@ export interface CollectionCoverTheme {
 const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   {
     id: 'packaging-polaroid',
-    label: 'Packaging Archive',
+    label: '包装档案',
     accent: '#ffd38f',
     accentSoft: '#fff3d8',
     glow: '#ffb36e',
@@ -49,7 +49,7 @@ const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   },
   {
     id: 'container-glass',
-    label: 'Container Archive',
+    label: '容器档案',
     accent: '#8df1ff',
     accentSoft: '#dffcff',
     glow: '#4ad9ff',
@@ -68,7 +68,7 @@ const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   },
   {
     id: 'paper-scrapbook',
-    label: 'Paper Archive',
+    label: '纸品档案',
     accent: '#e6d3a2',
     accentSoft: '#fff7dc',
     glow: '#ffc96b',
@@ -87,7 +87,7 @@ const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   },
   {
     id: 'electronic-holo',
-    label: 'Electronic Archive',
+    label: '电子档案',
     accent: '#aef85b',
     accentSoft: '#f1ffd8',
     glow: '#63dfff',
@@ -106,7 +106,7 @@ const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   },
   {
     id: 'textile-velvet',
-    label: 'Textile Archive',
+    label: '织物档案',
     accent: '#ffb3d8',
     accentSoft: '#ffe8f5',
     glow: '#f09cff',
@@ -125,7 +125,7 @@ const COVER_THEME_PRESETS: CollectionCoverTheme[] = [
   },
   {
     id: 'other-archive',
-    label: 'Archive Edition',
+    label: '档案典藏',
     accent: '#c0d7e6',
     accentSoft: '#f0f7fb',
     glow: '#dce7ef',

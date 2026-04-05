@@ -20,7 +20,6 @@ process.env.DISABLE_LIVE_AI = 'true';
 process.env.AI_MOCK_MODE = 'true';
 process.env.EMAIL_DELIVERY_MODE = 'log';
 process.env.APP_BASE_URL = process.env.APP_BASE_URL || 'http://127.0.0.1:4317';
-process.env.ADMIN_EMAIL_ALLOWLIST = process.env.ADMIN_EMAIL_ALLOWLIST || 'admin@example.com';
 process.env.PORT = process.env.PORT || '4300';
 process.env.HOST = process.env.HOST || '127.0.0.1';
 

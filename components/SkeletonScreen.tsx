@@ -136,8 +136,10 @@ const CardListSkeleton: React.FC = () => (
 
 const SkeletonScreen: React.FC<SkeletonScreenProps> = ({ view }) => {
   const skeletonMap: Record<ViewState, React.ReactNode> = {
+    ADMIN: <CardListSkeleton />,
     SCANNER: <ScannerSkeleton />,
     MUSEUM: <GallerySkeleton />,
+    SHARED_MUSEUMS: <GallerySkeleton />,
     ITEM_DETAIL: <DetailSkeleton />,
     LOGIN: <CardListSkeleton />,
     STICKER_LIBRARY: <WorkshopSkeleton />,

@@ -11,6 +11,11 @@ const MAX_UPLOAD_BYTES = parseIntegerEnv(process.env.MAX_UPLOAD_BYTES, 6 * 1024 
 const MAX_IMAGE_DIMENSION = parseIntegerEnv(process.env.MAX_IMAGE_DIMENSION, 4096);
 const MAX_INPUT_PIXELS = parseIntegerEnv(process.env.MAX_INPUT_PIXELS, 4096 * 4096);
 const MAX_BASE64_LENGTH = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 4096;
+const MANAGED_UPLOAD_DELETE_GRACE_MS = parseNonNegativeIntegerEnv(
+  process.env.MANAGED_UPLOAD_DELETE_GRACE_MS,
+  60_000,
+);
+const pendingUploadDeletions = new Map<string, NodeJS.Timeout>();
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_AUDIO_MIME_TYPES = new Set([
@@ -65,6 +70,7 @@ export async function saveBase64Image(
 
   const fileName = `${entityId}.webp`;
   const filePath = path.join(userDir, fileName);
+  cancelPendingUploadDeletion(filePath);
   await fsPromises.writeFile(filePath, normalized.buffer);
 
   return `/uploads/${type}/${userId}/${fileName}`;
@@ -79,7 +85,7 @@ export async function saveBase64Audio(
   const parsed = parseIncomingData(base64Data);
   const mimeType = normalizeAudioMimeType(parsed.mimeType);
   if (!mimeType || !ALLOWED_AUDIO_MIME_TYPES.has(mimeType)) {
-    throw new ManagedUploadError('Unsupported audio format. Allowed: WEBM, OGG, M4A, MP3, WAV');
+    throw new ManagedUploadError('不支持的音频格式。仅支持 WEBM、OGG、M4A、MP3、WAV。');
   }
 
   const extension = extensionFromMimeType(mimeType);
@@ -88,29 +94,32 @@ export async function saveBase64Audio(
 
   const fileName = `${entityId}.${extension}`;
   const filePath = path.join(userDir, fileName);
+  cancelPendingUploadDeletion(filePath);
   await fsPromises.writeFile(filePath, parsed.buffer);
 
   return `/uploads/${type}/${userId}/${fileName}`;
 }
 
 export function toClientAssetUrl(uploadPath: string): string {
-  if (!isManagedUploadPath(uploadPath)) {
-    return uploadPath;
+  const normalizedPath = normalizeManagedUploadPath(uploadPath);
+  if (!isManagedUploadPath(normalizedPath)) {
+    return normalizedPath;
   }
 
-  return `/api${uploadPath}`;
+  return normalizedPath.startsWith('/api/uploads/') ? normalizedPath : `/api${normalizedPath}`;
 }
 
 export function isManagedUploadPath(uploadPath: string): boolean {
-  return typeof uploadPath === 'string' && uploadPath.startsWith('/uploads/');
+  return normalizeManagedUploadPath(uploadPath).startsWith('/uploads/');
 }
 
 export function getManagedUploadInfo(uploadPath: string): ManagedUploadInfo | null {
-  if (!isManagedUploadPath(uploadPath)) {
+  const normalizedPath = normalizeManagedUploadPath(uploadPath);
+  if (!isManagedUploadPath(normalizedPath)) {
     return null;
   }
 
-  const relativeParts = uploadPath
+  const relativeParts = normalizedPath
     .slice('/uploads/'.length)
     .split('/')
     .map((part) => part.trim())
@@ -143,20 +152,58 @@ export function deleteManagedUpload(uploadPath: string): boolean {
     return false;
   }
 
-  const stat = fs.statSync(info.absolutePath);
+  cancelPendingUploadDeletion(info.absolutePath);
+  if (MANAGED_UPLOAD_DELETE_GRACE_MS === 0) {
+    return removeManagedUploadNow(info.absolutePath);
+  }
+
+  const deletionTimer = setTimeout(() => {
+    pendingUploadDeletions.delete(info.absolutePath);
+    removeManagedUploadNow(info.absolutePath);
+  }, MANAGED_UPLOAD_DELETE_GRACE_MS);
+  deletionTimer.unref?.();
+  pendingUploadDeletions.set(info.absolutePath, deletionTimer);
+  return true;
+}
+
+function normalizeManagedUploadPath(uploadPath: string): string {
+  const trimmed = typeof uploadPath === 'string' ? uploadPath.trim() : '';
+  if (!trimmed) {
+    return '';
+  }
+
+  return trimmed.startsWith('/api/uploads/') ? trimmed.slice('/api'.length) : trimmed;
+}
+
+function cancelPendingUploadDeletion(absolutePath: string) {
+  const existingTimer = pendingUploadDeletions.get(absolutePath);
+  if (!existingTimer) {
+    return;
+  }
+
+  clearTimeout(existingTimer);
+  pendingUploadDeletions.delete(absolutePath);
+}
+
+function removeManagedUploadNow(absolutePath: string): boolean {
+  if (!fs.existsSync(absolutePath)) {
+    return false;
+  }
+
+  const stat = fs.statSync(absolutePath);
   if (!stat.isFile()) {
     return false;
   }
 
-  fs.unlinkSync(info.absolutePath);
-  removeEmptyParentDirs(path.dirname(info.absolutePath));
+  fs.unlinkSync(absolutePath);
+  removeEmptyParentDirs(path.dirname(absolutePath));
   return true;
 }
 
 function parseIncomingData(base64Data: string): ParsedIncomingData {
   const trimmed = base64Data.trim();
   if (!trimmed) {
-    throw new ManagedUploadError('Upload payload is empty');
+    throw new ManagedUploadError('上传内容为空。');
   }
 
   let mimeType: string | null = null;
@@ -169,22 +216,22 @@ function parseIncomingData(base64Data: string): ParsedIncomingData {
   }
 
   if (payload.length > MAX_BASE64_LENGTH) {
-    throw new ManagedUploadError(`Upload payload is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
+    throw new ManagedUploadError(`上传内容过大，最大允许 ${MAX_UPLOAD_BYTES} 字节。`, 413, 'UPLOAD_TOO_LARGE');
   }
 
   let buffer: Buffer;
   try {
     buffer = Buffer.from(payload, 'base64');
   } catch {
-    throw new ManagedUploadError('Upload payload is not valid base64');
+    throw new ManagedUploadError('上传内容不是合法的 base64 数据。');
   }
 
   if (!buffer.length) {
-    throw new ManagedUploadError('Upload payload is empty after decoding');
+    throw new ManagedUploadError('上传内容解码后为空。');
   }
 
   if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new ManagedUploadError(`Decoded upload is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
+    throw new ManagedUploadError(`解码后的上传内容过大，最大允许 ${MAX_UPLOAD_BYTES} 字节。`, 413, 'UPLOAD_TOO_LARGE');
   }
 
   return { buffer, mimeType };
@@ -197,11 +244,11 @@ async function normalizeImage(buffer: Buffer, mimeType: string | null): Promise<
 
   const detectedMimeType = resolveMimeType(mimeType, metadata.format);
   if (!detectedMimeType || !ALLOWED_IMAGE_MIME_TYPES.has(detectedMimeType)) {
-    throw new ManagedUploadError('Unsupported image format. Allowed: JPEG, PNG, WEBP');
+    throw new ManagedUploadError('不支持的图片格式。仅支持 JPEG、PNG、WEBP。');
   }
 
   if (!metadata.width || !metadata.height) {
-    throw new ManagedUploadError('Could not read image dimensions');
+    throw new ManagedUploadError('无法读取图片尺寸。');
   }
 
   const outputBuffer = await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS })
@@ -221,7 +268,7 @@ async function normalizeImage(buffer: Buffer, mimeType: string | null): Promise<
     .toBuffer();
 
   if (outputBuffer.length > MAX_UPLOAD_BYTES) {
-    throw new ManagedUploadError(`Processed image is too large. Max ${MAX_UPLOAD_BYTES} bytes`, 413, 'UPLOAD_TOO_LARGE');
+    throw new ManagedUploadError(`处理后的图片过大，最大允许 ${MAX_UPLOAD_BYTES} 字节。`, 413, 'UPLOAD_TOO_LARGE');
   }
 
   return { buffer: outputBuffer };
@@ -293,4 +340,9 @@ function removeEmptyParentDirs(startDir: string) {
 function parseIntegerEnv(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseNonNegativeIntegerEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

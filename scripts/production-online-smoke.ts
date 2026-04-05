@@ -105,12 +105,11 @@ function resolveOptions(argv: string[]): ScriptOptions {
   const adminEmail = normalizeEmailAddress(
     args['admin-email']
       || process.env.SMOKE_ADMIN_EMAIL
-      || process.env.ADMIN_EMAIL_ALLOWLIST?.split(',')[0]
       || '',
   );
 
   if (!adminEmail) {
-    throw new Error('Admin email is required. Use --admin-email or SMOKE_ADMIN_EMAIL.');
+    throw new Error('缺少管理员邮箱，请使用 --admin-email 或设置 SMOKE_ADMIN_EMAIL。');
   }
 
   const baseUrl = normalizeBaseUrl(args['base-url'] || process.env.SMOKE_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`);
@@ -151,7 +150,11 @@ function normalizeBaseUrl(value: string) {
 function issueSession(email: string): SessionContext {
   const user = getUserByEmail(email);
   if (!user || !user.email) {
-    throw new Error(`Unable to find admin user for ${email}.`);
+    throw new Error(`找不到管理员用户：${email}`);
+  }
+
+  if (user.role !== 'admin') {
+    throw new Error(`用户 ${email} 不是管理员，请先运行 scripts/set-user-role.ts 设置角色。`);
   }
 
   const refreshTokenId = randomUUID();
@@ -214,7 +217,7 @@ async function runAdminChecks(options: ScriptOptions, session: SessionContext) {
     : null;
 
   if (!matchedUser?.userId) {
-    throw new Error(`Admin search result did not include ${options.adminEmail}.`);
+    throw new Error(`管理员搜索结果中未包含 ${options.adminEmail}。`);
   }
 
   const detail = await fetchJson(`${options.baseUrl}/api/admin/users/${matchedUser.userId}`, {
@@ -256,7 +259,7 @@ async function runAdminChecks(options: ScriptOptions, session: SessionContext) {
 async function runMailChecks(options: ScriptOptions, session: SessionContext) {
   const user = getUserByEmail(options.adminEmail);
   if (!user) {
-    throw new Error(`Unable to find user ${options.adminEmail} for mail check.`);
+    throw new Error(`找不到用于邮件验收的用户：${options.adminEmail}`);
   }
 
   const original = {
@@ -279,7 +282,7 @@ async function runMailChecks(options: ScriptOptions, session: SessionContext) {
     });
 
     if ((verification.body?.emailDelivery as JsonRecord | undefined)?.mode !== 'resend') {
-      throw new Error('Verification mail did not use resend delivery mode.');
+      throw new Error('验证邮件未使用 resend 投递模式。');
     }
 
     restoredEmailVerification = true;
@@ -355,7 +358,7 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
 
   const analysisBody = analysis.body?.analysis as JsonRecord | undefined;
   if (!analysisBody?.name || !analysisBody?.category) {
-    throw new Error('AI analysis did not return a valid item payload.');
+    throw new Error('AI 识别未返回有效的藏品数据。');
   }
 
   const createdItem = await fetchJson(`${options.baseUrl}/api/items`, {
@@ -375,18 +378,17 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
 
   const itemId = (createdItem.body?.item as JsonRecord | undefined)?.id as string | undefined;
   if (!itemId) {
-    throw new Error('Item archive smoke step did not return an item id.');
+    throw new Error('归档验收步骤未返回藏品 ID。');
   }
   const coverImageUrl = (createdItem.body?.item as JsonRecord | undefined)?.coverImageUrl as string | undefined;
   const hasGeneratedCover = typeof coverImageUrl === 'string'
     && (
       coverImageUrl.startsWith('data:image/')
       || coverImageUrl.startsWith('/api/uploads/item-covers/')
-      || coverImageUrl.startsWith('/uploads/item-covers/')
       || /^https?:\/\/.+\/api\/uploads\/item-covers\//.test(coverImageUrl)
     );
   if (!hasGeneratedCover) {
-    throw new Error('Item archive smoke step did not return a generated cover image.');
+    throw new Error('归档验收步骤未返回已生成的封面图。');
   }
 
   const sticker = await fetchJson(`${options.baseUrl}/api/ai/generate-sticker`, {
@@ -401,7 +403,7 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
   const stickerBody = sticker.body as JsonRecord | undefined;
   const stickerImageUrl = stickerBody?.stickerImageUrl as string | undefined;
   if (!stickerImageUrl?.startsWith('data:image/')) {
-    throw new Error('AI sticker generation did not return an inline image.');
+    throw new Error('AI 贴纸生成未返回内联图片。');
   }
 
   const createdSticker = await fetchJson(`${options.baseUrl}/api/stickers`, {
@@ -417,7 +419,7 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
 
   const stickerId = (createdSticker.body?.sticker as JsonRecord | undefined)?.id as string | undefined;
   if (!stickerId) {
-    throw new Error('Sticker save smoke step did not return a sticker id.');
+    throw new Error('贴纸保存验收步骤未返回贴纸 ID。');
   }
 
   return {
@@ -465,7 +467,7 @@ async function fetchImageAsBase64(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Unable to download sample image: ${response.status} ${response.statusText}`);
+      throw new Error(`下载验收样例图片失败：${response.status} ${response.statusText}`);
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
@@ -500,7 +502,7 @@ function resolveSampleImageSource(userId: string, requestedSource: string | null
 
   const fallback = DEFAULT_HALLS[0]?.imageUrl;
   if (!fallback) {
-    throw new Error('No sample image source is available for the production smoke test.');
+    throw new Error('生产烟雾测试缺少可用的样例图片来源。');
   }
 
   return fallback;
@@ -519,7 +521,7 @@ async function fetchJson(url: string, init?: RequestInit) {
   const body = text ? safeJsonParse(text) : null;
 
   if (!response.ok) {
-    throw new Error(`Request failed for ${url}: ${response.status} ${response.statusText} ${text}`);
+    throw new Error(`请求失败：${url}，状态 ${response.status} ${response.statusText}，响应 ${text}`);
   }
 
   return {

@@ -1,0 +1,49 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" rx="64" fill="#091014"/>
+  <rect width="800" height="1000" rx="64" fill="url(#bg)"/>
+  <circle cx="170" cy="170" r="180" fill="#FFB366" fill-opacity="0.18"/>
+  <circle cx="628" cy="884" r="170" fill="#00F0FF" fill-opacity="0.08"/>
+  <rect x="56" y="60" width="688" height="880" rx="42" fill="#121A1F" stroke="rgba(255,255,255,0.1)"/>
+  <rect x="96" y="108" width="220" height="40" rx="20" fill="#CCFF00" fill-opacity="0.12" stroke="#CCFF00" stroke-opacity="0.4"/>
+  <text x="132" y="134" fill="#CCFF00" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="3">NFC GIFT</text>
+  <text x="96" y="196" fill="#F8FBFF" font-family="Noto Sans SC, sans-serif" font-size="48" font-weight="700">晚自习奶茶杯</text>
+  <text x="96" y="232" fill="#90A1AD" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="2">REMUSE PACKAGING ARCHIVE</text>
+  <ellipse cx="404" cy="840" rx="188" ry="36" fill="#000000" fill-opacity="0.34"/>
+  <g transform="translate(228 266)">
+    <path d="M94 24H250L278 566C279.8 601.2 251.8 630 216.6 630H127.4C92.2 630 64.2 601.2 66 566L94 24Z" fill="url(#cupBody)"/>
+    <path d="M82 24C82 11.8 91.8 2 104 2H240C252.2 2 262 11.8 262 24V62H82V24Z" fill="#F3D5B0"/>
+    <path d="M52 66C52 41.7 71.7 22 96 22H248C272.3 22 292 41.7 292 66V90H52V66Z" fill="#F6EFE8" fill-opacity="0.9"/>
+    <path d="M80 90H264L248 126H96L80 90Z" fill="#FFF6EB" fill-opacity="0.72"/>
+    <path d="M168 4L214 126" stroke="#A7B5BC" stroke-width="20" stroke-linecap="round"/>
+    <ellipse cx="172" cy="90" rx="128" ry="22" fill="#F4A55A" fill-opacity="0.58"/>
+    <g fill="#1E0C1B" fill-opacity="0.88">
+      <circle cx="126" cy="220" r="10"/>
+      <circle cx="168" cy="210" r="10"/>
+      <circle cx="208" cy="230" r="10"/>
+      <circle cx="240" cy="214" r="10"/>
+      <circle cx="144" cy="258" r="11"/>
+      <circle cx="194" cy="270" r="11"/>
+      <circle cx="234" cy="258" r="10"/>
+      <circle cx="120" cy="520" r="16"/>
+      <circle cx="160" cy="540" r="17"/>
+      <circle cx="206" cy="526" r="16"/>
+      <circle cx="244" cy="552" r="16"/>
+      <circle cx="142" cy="586" r="18"/>
+      <circle cx="194" cy="602" r="19"/>
+      <circle cx="236" cy="586" r="17"/>
+    </g>
+    <path d="M96 124C112 140 135 150 160 150H188C220 150 250 138 270 118" stroke="#FFECD2" stroke-opacity="0.8" stroke-width="12" stroke-linecap="round"/>
+  </g>
+  <text x="96" y="914" fill="#D7E0E6" font-family="Noto Sans SC, sans-serif" font-size="28" font-weight="600">轻触标签，回到那张靠窗的桌子前。</text>
+  <defs>
+    <linearGradient id="bg" x1="400" y1="0" x2="400" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#152127"/>
+      <stop offset="1" stop-color="#090D10"/>
+    </linearGradient>
+    <linearGradient id="cupBody" x1="172" y1="24" x2="172" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0C68D"/>
+      <stop offset="0.48" stop-color="#EAA45F"/>
+      <stop offset="1" stop-color="#F7E7CC"/>
+    </linearGradient>
+  </defs>
+</svg>

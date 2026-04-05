@@ -20,6 +20,7 @@ const createStickerSchema = z.object({
   dramaText: z.string().trim().max(500).optional(),
   category: z.string().trim().min(1).max(100).optional(),
   dateCreated: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 router.get('/', (req: Request, res: Response) => {
@@ -27,8 +28,8 @@ router.get('/', (req: Request, res: Response) => {
     const stickers = getStickersByUser(req.userId!);
     res.json({ stickers: stickers.map((sticker) => resolveImageUrl(sticker)) });
   } catch (error) {
-    console.error('Failed to load stickers:', error);
-    res.status(500).json({ error: 'Failed to load stickers' });
+    console.error('\u52a0\u8f7d\u8d34\u7eb8\u5217\u8868\u5931\u8d25\uff1a', error);
+    res.status(500).json({ error: '\u52a0\u8f7d\u8d34\u7eb8\u5217\u8868\u5931\u8d25\u3002' });
   }
 });
 
@@ -36,11 +37,11 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const parsed = createStickerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
       return;
     }
 
-    const { originalItemId, imageBase64, dramaText, category, dateCreated } = parsed.data;
+    const { originalItemId, imageBase64, dramaText, category, dateCreated, metadata } = parsed.data;
     const id = uuidv4();
 
     let safeOriginalItemId: string | null = originalItemId || null;
@@ -60,6 +61,7 @@ router.post('/', async (req: Request, res: Response) => {
       drama_text: dramaText || '',
       category: category || FALLBACK_CATEGORY,
       date_created: dateCreated || new Date().toISOString(),
+      metadata_json: JSON.stringify(metadata || {}),
     });
     recordProductUsageEvent({
       userId: req.userId!,
@@ -78,10 +80,11 @@ router.post('/', async (req: Request, res: Response) => {
         dramaText: dramaText || '',
         category: category || FALLBACK_CATEGORY,
         dateCreated: dateCreated || new Date().toISOString(),
+        metadata: metadata || {},
       },
     });
   } catch (error) {
-    handleRouteError(res, error, 'Failed to create sticker');
+    handleRouteError(res, error, '\u521b\u5efa\u8d34\u7eb8\u5931\u8d25\u3002');
   }
 });
 
@@ -89,13 +92,13 @@ router.delete('/:id', (req: Request, res: Response) => {
   try {
     const existing = getStickerById(req.params.id as string, req.userId!);
     if (!existing) {
-      res.status(404).json({ error: 'Sticker not found' });
+      res.status(404).json({ error: '\u8d34\u7eb8\u4e0d\u5b58\u5728\u3002' });
       return;
     }
 
     const result = deleteSticker(req.params.id as string, req.userId!);
     if (result.changes === 0) {
-      res.status(404).json({ error: 'Sticker not found' });
+      res.status(404).json({ error: '\u8d34\u7eb8\u4e0d\u5b58\u5728\u3002' });
       return;
     }
 
@@ -105,8 +108,8 @@ router.delete('/:id', (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete sticker:', error);
-    res.status(500).json({ error: 'Failed to delete sticker' });
+    console.error('\u5220\u9664\u8d34\u7eb8\u5931\u8d25\uff1a', error);
+    res.status(500).json({ error: '\u5220\u9664\u8d34\u7eb8\u5931\u8d25\u3002' });
   }
 });
 

@@ -20,6 +20,7 @@
     "middleware/authMiddleware.ts",
     "routes/auth.ts",
     "routes/items.ts",
+    "routes/journals.ts",
     "routes/stickers.ts",
     "routes/halls.ts"
   ]

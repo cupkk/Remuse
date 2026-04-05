@@ -1,0 +1,42 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" rx="64" fill="#0B1112"/>
+  <rect width="800" height="1000" rx="64" fill="url(#bg)"/>
+  <circle cx="164" cy="164" r="188" fill="#CCFF00" fill-opacity="0.15"/>
+  <circle cx="636" cy="860" r="180" fill="#00F0FF" fill-opacity="0.08"/>
+  <rect x="56" y="60" width="688" height="880" rx="42" fill="#121A1F" stroke="rgba(255,255,255,0.1)"/>
+  <rect x="96" y="108" width="216" height="40" rx="20" fill="#CCFF00" fill-opacity="0.12" stroke="#CCFF00" stroke-opacity="0.4"/>
+  <text x="130" y="134" fill="#CCFF00" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="3">PAPER GIFT</text>
+  <text x="96" y="196" fill="#F8FBFF" font-family="Noto Sans SC, sans-serif" font-size="48" font-weight="700">星夜车票</text>
+  <text x="96" y="232" fill="#90A1AD" font-family="JetBrains Mono, monospace" font-size="20" letter-spacing="2">REMUSE PAPER ARCHIVE</text>
+  <ellipse cx="406" cy="824" rx="204" ry="34" fill="#000000" fill-opacity="0.3"/>
+  <g transform="translate(138 268)">
+    <rect x="44" y="78" width="436" height="520" rx="36" fill="#122229" stroke="#E7F4B2" stroke-opacity="0.24" stroke-width="2"/>
+    <path d="M44 178C20 178 0 158 0 134C0 110 20 90 44 90V178Z" fill="#122229"/>
+    <path d="M480 178C504 178 524 158 524 134C524 110 504 90 480 90V178Z" fill="#122229"/>
+    <path d="M44 586C20 586 0 606 0 630C0 654 20 674 44 674V586Z" fill="#122229"/>
+    <path d="M480 586C504 586 524 606 524 630C524 654 504 674 480 674V586Z" fill="#122229"/>
+    <rect x="82" y="116" width="360" height="444" rx="28" fill="url(#ticket)"/>
+    <path d="M262 188L278 236H330L288 264L304 314L262 284L220 314L236 264L194 236H246L262 188Z" fill="#CCFF00"/>
+    <path d="M136 404C188 356 238 330 336 284" stroke="#F5F9FF" stroke-opacity="0.9" stroke-width="10" stroke-linecap="round"/>
+    <path d="M164 438C218 390 286 356 392 312" stroke="#00F0FF" stroke-opacity="0.7" stroke-width="8" stroke-linecap="round"/>
+    <rect x="118" y="468" width="288" height="18" rx="9" fill="#122229" fill-opacity="0.6"/>
+    <rect x="118" y="502" width="220" height="18" rx="9" fill="#122229" fill-opacity="0.45"/>
+    <path d="M98 98L426 540" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+    <circle cx="130" cy="166" r="8" fill="#E7F4B2"/>
+    <circle cx="398" cy="150" r="6" fill="#E7F4B2"/>
+    <circle cx="364" cy="214" r="4" fill="#E7F4B2"/>
+    <circle cx="174" cy="250" r="4" fill="#E7F4B2"/>
+  </g>
+  <text x="96" y="914" fill="#D7E0E6" font-family="Noto Sans SC, sans-serif" font-size="28" font-weight="600">让一次抵达，被做成可以反复触碰的重逢礼物。</text>
+  <defs>
+    <linearGradient id="bg" x1="400" y1="0" x2="400" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10181B"/>
+      <stop offset="1" stop-color="#080D10"/>
+    </linearGradient>
+    <linearGradient id="ticket" x1="262" y1="116" x2="262" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2F8D4"/>
+      <stop offset="0.48" stop-color="#D8E9A7"/>
+      <stop offset="1" stop-color="#D7F1FF"/>
+    </linearGradient>
+  </defs>
+</svg>

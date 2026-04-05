@@ -12,7 +12,7 @@ const mailboxQuerySchema = z.object({
 router.get('/mailbox', (req, res) => {
   const parsed = mailboxQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid mailbox query.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '\u6d4b\u8bd5\u90ae\u7bb1\u67e5\u8be2\u53c2\u6570\u65e0\u6548\u3002' });
     return;
   }
 

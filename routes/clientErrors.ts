@@ -18,7 +18,7 @@ const clientErrorSchema = z.object({
 router.post('/', optionalAuth, (req: Request, res: Response) => {
   const parsed = clientErrorSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid client error payload.' });
+    res.status(400).json({ error: parsed.error.issues[0]?.message || '客户端错误上报参数无效。' });
     return;
   }
 

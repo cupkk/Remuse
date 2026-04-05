@@ -19,7 +19,7 @@ function sanitizeClientValue(value: unknown): unknown {
   }
 
   if (typeof value === 'string') {
-    return value.length > 1500 ? `${value.slice(0, 1500)}…` : value;
+    return value.length > 1500 ? `${value.slice(0, 1500)}...` : value;
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -116,7 +116,7 @@ export function registerGlobalClientErrorHandlers() {
   window.addEventListener('error', (event) => {
     const message = event.error instanceof Error
       ? event.error.message
-      : event.message || 'Unknown browser error';
+      : event.message || '\u6d4f\u89c8\u5668\u8fd0\u884c\u65f6\u51fa\u73b0\u672a\u77e5\u9519\u8bef';
 
     reportClientError({
       source: 'window.error',
@@ -136,7 +136,7 @@ export function registerGlobalClientErrorHandlers() {
       ? reason.message
       : typeof reason === 'string'
         ? reason
-        : 'Unhandled promise rejection';
+        : '\u672a\u5904\u7406\u7684 Promise \u5f02\u5e38';
 
     reportClientError({
       source: 'unhandledrejection',

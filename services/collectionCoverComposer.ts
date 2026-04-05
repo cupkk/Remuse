@@ -79,7 +79,7 @@ async function resolveTemplatePath(templateAsset: string) {
     }
   }
 
-  throw new Error(`Collection cover template is missing: ${templateAsset}`);
+  throw new Error(`缺少藏品封面模板资源：${templateAsset}`);
 }
 
 function renderCollectionCoverSvg(input: {
@@ -165,7 +165,7 @@ async function prepareSubjectAsset(
 function decodeDataUrl(dataUrl: string): DecodedDataUrl {
   const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
   if (!match) {
-    throw new Error('Invalid image payload for collection cover.');
+    throw new Error('藏品封面合成收到的图片数据无效。');
   }
 
   return {

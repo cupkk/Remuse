@@ -150,7 +150,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
             <section className="rounded-[24px] border border-remuse-border bg-remuse-panel p-5">
               <div className="flex items-center gap-2 text-remuse-secondary">
                 <MessageCircle size={16} />
-                <p className="text-[11px] font-mono uppercase tracking-[0.24em]">Support</p>
+                <p className="text-[11px] font-mono uppercase tracking-[0.24em]">联系支持</p>
               </div>
               <h4 className="mt-3 text-xl font-display font-bold text-white">联系与数据问题反馈</h4>
               <div className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4 text-sm leading-7 text-neutral-300">
@@ -162,7 +162,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
             <section className="rounded-[24px] border border-red-500/20 bg-red-950/10 p-5">
               <div className="flex items-center gap-2 text-red-300">
                 <AlertTriangle size={16} />
-                <p className="text-[11px] font-mono uppercase tracking-[0.24em]">Danger Zone</p>
+                <p className="text-[11px] font-mono uppercase tracking-[0.24em]">高风险操作</p>
               </div>
               <h4 className="mt-3 text-xl font-display font-bold text-white">账号注销</h4>
               <p className="mt-2 text-sm leading-7 text-neutral-300">

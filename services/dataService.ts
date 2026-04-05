@@ -4,7 +4,21 @@
 
 import { apiFetch } from './apiClient';
 import { imageUrlToBase64 } from './imageUtils';
-import { CollectedItem, ExhibitionHall, SavedTransformationGuide, Sticker, TransformationGuideSourceItem } from '../types';
+import {
+  AddSharedMuseumItemInput,
+  CollectedItem,
+  CreateSharedMuseumInput,
+  ExhibitionHall,
+  SavedJournal,
+  SavedTransformationGuide,
+  SaveJournalInput,
+  SharedMuseumDetail,
+  SharedMuseumMonthlyReportSnapshot,
+  SharedMuseumSummary,
+  StickerMetadata,
+  Sticker,
+  TransformationGuideSourceItem,
+} from '../types';
 
 // ---- Items ----
 
@@ -92,6 +106,7 @@ export async function createStickerOnServer(sticker: {
   dramaText?: string;
   category?: string;
   dateCreated?: string;
+  metadata?: StickerMetadata;
 }): Promise<Sticker> {
   const imageBase64 = await resolveImageBase64(sticker.imageBase64, sticker.imageUrl);
   const data = await apiFetch<{ sticker: Sticker }>('/api/stickers', {
@@ -106,6 +121,168 @@ export async function createStickerOnServer(sticker: {
 
 export async function deleteStickerOnServer(id: string): Promise<void> {
   await apiFetch(`/api/stickers/${id}`, { method: 'DELETE' });
+}
+
+// ---- Journals ----
+
+export async function fetchJournals(): Promise<SavedJournal[]> {
+  const data = await apiFetch<{ journals: SavedJournal[] }>('/api/journals');
+  return data.journals;
+}
+
+export async function createJournalOnServer(journal: SaveJournalInput): Promise<SavedJournal> {
+  const previewImageBase64 = await resolveImageBase64(journal.previewImageBase64, journal.previewImageUrl);
+  const backgroundImageBase64 = await resolveImageBase64(journal.backgroundImageBase64, journal.backgroundImageUrl);
+  const data = await apiFetch<{ journal: SavedJournal }>('/api/journals', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...journal,
+      previewImageBase64,
+      backgroundImageBase64,
+    }),
+  });
+  return data.journal;
+}
+
+export async function updateJournalOnServer(id: string, journal: SaveJournalInput): Promise<SavedJournal> {
+  const previewImageBase64 = await resolveImageBase64(journal.previewImageBase64, journal.previewImageUrl);
+  const backgroundImageBase64 = await resolveImageBase64(journal.backgroundImageBase64, journal.backgroundImageUrl);
+  const data = await apiFetch<{ journal: SavedJournal }>(`/api/journals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...journal,
+      previewImageBase64,
+      backgroundImageBase64,
+    }),
+  });
+  return data.journal;
+}
+
+export async function deleteJournalOnServer(id: string): Promise<void> {
+  await apiFetch(`/api/journals/${id}`, { method: 'DELETE' });
+}
+
+// ---- Shared museums ----
+
+export async function fetchSharedMuseums(): Promise<SharedMuseumSummary[]> {
+  const data = await apiFetch<{ museums: SharedMuseumSummary[] }>('/api/shared-museums');
+  return data.museums;
+}
+
+export async function fetchSharedMuseumDetail(id: string): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${id}`);
+  return data.museum;
+}
+
+export async function updateSharedMuseumOnServer(
+  museumId: string,
+  updates: {
+    anniversaryDate?: string;
+    quietMode?: boolean;
+  },
+): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+  return data.museum;
+}
+
+export async function createSharedMuseumOnServer(input: CreateSharedMuseumInput): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>('/api/shared-museums', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data.museum;
+}
+
+export async function joinSharedMuseumOnServer(inviteCode: string): Promise<{ museum: SharedMuseumDetail; alreadyJoined: boolean }> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail; alreadyJoined?: boolean }>('/api/shared-museums/join', {
+    method: 'POST',
+    body: JSON.stringify({ inviteCode }),
+  });
+  return {
+    museum: data.museum,
+    alreadyJoined: Boolean(data.alreadyJoined),
+  };
+}
+
+export async function resetSharedMuseumInviteOnServer(museumId: string): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/invite/reset`, {
+    method: 'POST',
+  });
+  return data.museum;
+}
+
+export async function revokeSharedMuseumInviteOnServer(museumId: string): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/invite/revoke`, {
+    method: 'POST',
+  });
+  return data.museum;
+}
+
+export async function leaveSharedMuseumOnServer(museumId: string): Promise<void> {
+  await apiFetch(`/api/shared-museums/${museumId}/leave`, {
+    method: 'POST',
+  });
+}
+
+export async function updateSharedMuseumStatusOnServer(
+  museumId: string,
+  status: 'archived' | 'ended',
+): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+  return data.museum;
+}
+
+export async function saveSharedMuseumMonthlyReportOnServer(
+  museumId: string,
+  snapshot: SharedMuseumMonthlyReportSnapshot,
+): Promise<SharedMuseumDetail> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/reports`, {
+    method: 'POST',
+    body: JSON.stringify(snapshot),
+  });
+  return data.museum;
+}
+
+export async function addItemToSharedMuseumOnServer(
+  museumId: string,
+  input: AddSharedMuseumItemInput,
+): Promise<{ museum: SharedMuseumDetail }> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return data;
+}
+
+export async function updateSharedMuseumItemOnServer(
+  museumId: string,
+  itemId: string,
+  updates: {
+    sharedNote?: string;
+    relationLabel?: string;
+  },
+): Promise<{ museum: SharedMuseumDetail }> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/items/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+  return data;
+}
+
+export async function removeSharedMuseumItemOnServer(
+  museumId: string,
+  itemId: string,
+): Promise<{ museum: SharedMuseumDetail }> {
+  const data = await apiFetch<{ museum: SharedMuseumDetail }>(`/api/shared-museums/${museumId}/items/${itemId}`, {
+    method: 'DELETE',
+  });
+  return data;
 }
 
 // ---- Transformation guides ----

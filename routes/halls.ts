@@ -33,8 +33,8 @@ router.get('/', (req: Request, res: Response) => {
     const halls = getResolvedHallsForUser(req.userId!);
     res.json({ halls: halls.map((hall) => resolveHallImage(hall)) });
   } catch (error) {
-    console.error('Failed to load halls:', error);
-    res.status(500).json({ error: 'Failed to load halls' });
+    console.error('\u52a0\u8f7d\u5c55\u9986\u5217\u8868\u5931\u8d25\uff1a', error);
+    res.status(500).json({ error: '加载展馆失败。' });
   }
 });
 
@@ -42,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const parsed = createHallSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
       return;
     }
 
@@ -62,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.json({ hall: resolveHallImage(hall) });
   } catch (error) {
-    handleRouteError(res, error, 'Failed to create hall');
+    handleRouteError(res, error, '创建展馆失败。');
   }
 });
 
@@ -70,7 +70,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   try {
     const parsed = updateHallSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+      res.status(400).json({ error: parsed.error.issues[0]?.message || '请求体参数无效。' });
       return;
     }
 
@@ -96,7 +96,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
 
       if (!hall) {
-        res.status(404).json({ error: 'Hall not found' });
+        res.status(404).json({ error: '未找到该展馆。' });
         return;
       }
 
@@ -106,7 +106,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
 
     if (!defaultHall) {
-      res.status(404).json({ error: 'Hall not found' });
+      res.status(404).json({ error: '未找到该展馆。' });
       return;
     }
 
@@ -141,13 +141,13 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const hall = getResolvedHallForUser(req.userId!, publicHallId);
     if (!hall) {
-      res.status(404).json({ error: 'Hall not found' });
+      res.status(404).json({ error: '未找到该展馆。' });
       return;
     }
 
     res.json({ hall: resolveHallImage(hall) });
   } catch (error) {
-    handleRouteError(res, error, 'Failed to update hall');
+    handleRouteError(res, error, '更新展馆失败。');
   }
 });
 
@@ -163,7 +163,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     if (customHallRecord && !customHallRecord.system_hall_id) {
       const result = deleteHall(customHallRecord.id, req.userId!);
       if (result.changes === 0) {
-        res.status(404).json({ error: 'Hall not found' });
+        res.status(404).json({ error: '未找到该展馆。' });
         return;
       }
 
@@ -179,7 +179,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 
     const defaultHall = getDefaultHallById(publicHallId);
     if (!defaultHall) {
-      res.status(404).json({ error: 'Hall not found' });
+      res.status(404).json({ error: '未找到该展馆。' });
       return;
     }
 
@@ -207,8 +207,8 @@ router.delete('/:id', (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete hall:', error);
-    res.status(500).json({ error: 'Failed to delete hall' });
+    console.error('\u5220\u9664\u5c55\u9986\u5931\u8d25\uff1a', error);
+    res.status(500).json({ error: '删除展馆失败。' });
   }
 });
 

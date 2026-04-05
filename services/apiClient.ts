@@ -62,7 +62,15 @@ export async function apiFetch<T = any>(
     ...((requestOptions.headers as Record<string, string> | undefined) || {}),
   };
 
-  const token = getAccessToken();
+  let token = getAccessToken();
+  if (!token && !skipAuthRefresh) {
+    const refreshed = await refreshAccessToken();
+    token = getAccessToken();
+    if (!refreshed || !token) {
+      throw new ApiError(401, '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\u3002', { error: '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\u3002' });
+    }
+  }
+
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

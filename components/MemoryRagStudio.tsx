@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowUpRight,
   History,
   Loader2,
   MessageCircle,
@@ -28,9 +29,17 @@ interface MemoryRagStudioProps {
   items: CollectedItem[];
   user?: User | null;
   onBack?: () => void;
+  onOpenItem?: (itemId: string) => void;
+  onOpenMuseum?: () => void;
 }
 
-const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }) => {
+const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({
+  items,
+  user,
+  onBack,
+  onOpenItem,
+  onOpenMuseum,
+}) => {
   const [threads, setThreads] = useState<MemoryThreadSummary[]>([]);
   const [activeThread, setActiveThread] = useState<MemoryConversationSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +53,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const storyItemCount = useMemo(() => items.filter((item) => item.story?.trim()).length, [items]);
+  const hasArchivedItems = items.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -259,14 +269,14 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
         <div className="flex flex-col gap-6 xl:min-h-0 xl:flex-1 xl:grid xl:grid-cols-[minmax(280px,300px)_minmax(0,1fr)_minmax(320px,390px)] xl:gap-6 xl:overflow-hidden">
           <aside className="flex max-h-[420px] flex-col overflow-hidden rounded-[28px] border border-remuse-border bg-remuse-panel xl:min-h-0 xl:max-h-none">
             <div className="border-b border-remuse-border px-5 py-4">
-              <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Conversation Archive</p>
+              <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">会话档案</p>
               <div className="mt-3 flex items-center justify-between">
                 <div>
                   <p className="text-3xl font-display font-bold text-remuse-secondary">{threads.length}</p>
                   <p className="text-xs text-neutral-500">服务端同步会话</p>
                 </div>
                 <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 px-3 py-2">
-                  <p className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Story Sources</p>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">故事来源</p>
                   <p className="text-lg font-display font-bold text-white">{storyItemCount}</p>
                 </div>
               </div>
@@ -355,7 +365,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                             </div>
                             <div className="mt-3 flex items-center justify-between text-[11px] font-mono text-neutral-500">
                               <span>{new Date(thread.updatedAt).toLocaleDateString('zh-CN')}</span>
-                              <span>{thread.sourceCount} sources</span>
+                              <span>{thread.sourceCount} 条来源</span>
                             </div>
                           </button>
                         </>
@@ -371,13 +381,13 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
             <div className="border-b border-remuse-border px-5 py-4 md:px-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-remuse-accent">Active Conversation</p>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-remuse-accent">当前对话</p>
                   <h3 className="mt-2 truncate text-2xl font-display font-bold text-white">
                     {activeThread?.title || '记忆工作室'}
                   </h3>
                 </div>
                 <div className="rounded-full border border-remuse-border bg-black/20 px-3 py-1.5 text-[11px] font-mono text-neutral-400">
-                  {activeThread?.usedFallback ? 'fallback answer' : 'grounded answer'}
+                  {activeThread?.usedFallback ? '降级回答' : '档案回答'}
                 </div>
               </div>
             </div>
@@ -456,7 +466,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
             <div className="border-b border-remuse-border px-5 py-4 md:px-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">Retrieved Memories</p>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-neutral-500">检索结果</p>
                   <h3 className="mt-2 text-xl font-display font-bold text-white">
                     {activeThread?.matches.length ? '本次检索结果' : '最近可检索的故事'}
                   </h3>
@@ -465,7 +475,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                   </p>
                 </div>
                 <div className="rounded-full border border-remuse-border bg-black/20 px-3 py-1.5 text-[11px] font-mono text-neutral-400">
-                  {activeThread?.matches.length ? `${activeThread.matches.length} matches` : '0 matches'}
+                  {activeThread?.matches.length ? `${activeThread.matches.length} 条匹配` : '0 条匹配'}
                 </div>
               </div>
             </div>
@@ -473,17 +483,47 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
             <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6">
               <div className="mb-4 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-remuse-secondary/20 bg-black/20 p-4">
-                  <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Story Archive</span>
+                  <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">故事档案</span>
                   <p className="mt-2 text-2xl font-display font-bold text-remuse-secondary">{storyItemCount}</p>
                 </div>
                 <div className="rounded-2xl border border-neutral-800 bg-black/20 p-4">
-                  <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">Source Count</span>
+                  <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-neutral-500">来源数量</span>
                   <p className="mt-2 text-2xl font-display font-bold text-white">{activeThread?.sourceCount || 0}</p>
                 </div>
               </div>
 
               <div className="space-y-3">
                 {activeThread?.matches.map((match) => (
+                  onOpenItem ? (
+                    <button
+                      key={`${match.itemId}-${match.score}`}
+                      type="button"
+                      onClick={() => onOpenItem(match.itemId)}
+                      className="w-full overflow-hidden rounded-2xl border border-remuse-border bg-black/20 text-left transition-colors hover:border-remuse-accent/40 hover:bg-black/30"
+                    >
+                      <div className="flex min-w-0 gap-3 p-3">
+                        <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
+                          <img src={match.imageUrl} alt={match.itemName} className="h-full w-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="truncate font-display text-base font-bold text-white">{match.itemName}</h4>
+                            <span className="rounded-full border border-remuse-accent/20 bg-remuse-accent/10 px-2 py-0.5 text-[10px] font-mono text-remuse-accent">
+                              {match.hallName}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] font-mono uppercase tracking-[0.18em] text-neutral-500">
+                            {match.material} 路 {new Date(match.dateCollected).toLocaleDateString('zh-CN')}
+                          </p>
+                          <p className="mt-2 line-clamp-3 text-sm leading-6 text-neutral-300">{match.storySnippet}</p>
+                          <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-remuse-secondary">
+                            打开对应藏品
+                            <ArrowUpRight size={14} />
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ) : (
                   <div key={`${match.itemId}-${match.score}`} className="overflow-hidden rounded-2xl border border-remuse-border bg-black/20">
                     <div className="flex min-w-0 gap-3 p-3">
                       <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
@@ -503,8 +543,21 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({ items, user, onBack }
                       </div>
                     </div>
                   </div>
+                  )
                 ))}
 
+                {!activeThread?.matches.length && onOpenMuseum && (
+                  <div className="pt-1 text-center">
+                    <button
+                      type="button"
+                      onClick={onOpenMuseum}
+                      className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full border border-remuse-secondary/30 bg-remuse-secondary/10 px-4 py-2 text-sm text-remuse-secondary transition-colors hover:border-remuse-secondary hover:bg-remuse-secondary/15"
+                    >
+                      {hasArchivedItems ? '打开藏品馆' : '先去归档第一件藏品'}
+                      <ArrowUpRight size={15} />
+                    </button>
+                  </div>
+                )}
                 {!activeThread?.matches.length && (
                   <div className="rounded-2xl border border-dashed border-neutral-800 bg-black/20 px-4 py-8 text-center text-sm leading-7 text-neutral-500">
                     输入一个更具体的问题后，系统会在你的故事馆藏中进行检索并展示对应的结果。

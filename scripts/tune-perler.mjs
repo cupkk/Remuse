@@ -23,11 +23,12 @@ const palette = Object.entries(mapping)
     };
   });
 
+const uploadsRoot = path.resolve(process.env.UPLOADS_DIR || 'uploads');
 const sampleFiles = [
-  'uploads/stickers/64eca5e7-a755-486c-897c-0199ec21ebb5/9aac616c-dfc6-4c31-b239-38e6f5709ab4.png',
-  'uploads/stickers/64eca5e7-a755-486c-897c-0199ec21ebb5/f8e8a55a-94e0-4ed1-9bf3-d7aa3b74797d.png',
-  'uploads/stickers/bd36466d-8936-400d-9eb9-709f3e692e4f/00f249aa-89df-4cc1-9f74-ad8d258f8f9a.webp',
-];
+  'stickers/64eca5e7-a755-486c-897c-0199ec21ebb5/9aac616c-dfc6-4c31-b239-38e6f5709ab4.png',
+  'stickers/64eca5e7-a755-486c-897c-0199ec21ebb5/f8e8a55a-94e0-4ed1-9bf3-d7aa3b74797d.png',
+  'stickers/bd36466d-8936-400d-9eb9-709f3e692e4f/00f249aa-89df-4cc1-9f74-ad8d258f8f9a.webp',
+].map((relativePath) => path.join(uploadsRoot, relativePath));
 
 const CONFIG = {
   columns: 32,

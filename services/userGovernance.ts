@@ -1,7 +1,6 @@
 import db from './database.ts';
 import { LEGAL_VERSION_SNAPSHOT } from './legalDocuments.ts';
 
-ensureColumn('users', 'role', `TEXT NOT NULL DEFAULT 'user'`);
 ensureColumn('users', 'terms_accepted_version', `TEXT`);
 ensureColumn('users', 'privacy_accepted_version', `TEXT`);
 ensureColumn('users', 'ai_notice_accepted_version', `TEXT`);

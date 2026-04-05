@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Box,
   FileAudio,
+  Heart,
   Loader2,
   Mic,
   Pause,
@@ -15,17 +16,24 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { CollectedItem, ExhibitionHall } from '../types';
+import { CollectedItem, ExhibitionHall, SharedMuseumSummary } from '../types';
 import { getHallNameById } from '../services/halls';
 import { AudioRecordingSession, isAudioRecordingSupported, startAudioRecording } from '../services/audioRecorder';
 
 interface ItemArchiveDetailProps {
   item: CollectedItem;
   halls?: ExhibitionHall[];
+  sharedMuseums?: SharedMuseumSummary[];
   onBack: () => void;
   onUpdateItem?: (updatedItem: CollectedItem) => Promise<CollectedItem | void> | CollectedItem | void;
   onDeleteItem?: (itemId: string) => Promise<void> | void;
   onGenerateStickerRequest?: (item: CollectedItem) => void;
+  onAddToSharedMuseum?: (
+    museumId: string,
+    item: CollectedItem,
+    extras?: { sharedNote?: string; relationLabel?: string },
+  ) => Promise<void> | void;
+  onOpenSharedMuseums?: () => void;
   hasExistingSticker?: boolean;
   isGeneratingStickerGlobal?: boolean;
 }
@@ -33,23 +41,34 @@ interface ItemArchiveDetailProps {
 const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
   item,
   halls = [],
+  sharedMuseums = [],
   onBack,
   onUpdateItem,
   onDeleteItem,
   onGenerateStickerRequest,
+  onAddToSharedMuseum,
+  onOpenSharedMuseums,
   hasExistingSticker = false,
   isGeneratingStickerGlobal = false,
 }) => {
   const safeHalls = Array.isArray(halls) ? halls : [];
+  const safeSharedMuseums = Array.isArray(sharedMuseums) ? sharedMuseums : [];
+  const addableSharedMuseums = safeSharedMuseums.filter((museum) => museum.status === 'active' || museum.status === 'quiet');
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const recordingRef = useRef<AudioRecordingSession | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddingToSharedMuseum, setIsAddingToSharedMuseum] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [sharedMuseumError, setSharedMuseumError] = useState<string | null>(null);
+  const [showSharedMuseumPicker, setShowSharedMuseumPicker] = useState(false);
+  const [selectedSharedMuseumId, setSelectedSharedMuseumId] = useState('');
+  const [sharedNote, setSharedNote] = useState('');
+  const [relationLabel, setRelationLabel] = useState('');
 
   const [draftName, setDraftName] = useState(item.name);
   const [draftHallId, setDraftHallId] = useState(item.hallId);
@@ -67,6 +86,11 @@ const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
     setDraftAudioUrl(item.audioUrl || '');
     setIsEditing(false);
     setAudioError(null);
+    setSharedMuseumError(null);
+    setShowSharedMuseumPicker(false);
+    setSelectedSharedMuseumId('');
+    setSharedNote('');
+    setRelationLabel('');
   }, [item]);
 
   useEffect(() => () => {
@@ -81,6 +105,16 @@ const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
   );
   const audioPreviewUrl = draftAudioUrl || item.audioUrl || '';
   const displayImageUrl = item.coverImageUrl || item.imageUrl;
+
+  useEffect(() => {
+    if (!showSharedMuseumPicker) {
+      return;
+    }
+
+    if (!selectedSharedMuseumId && addableSharedMuseums[0]?.id) {
+      setSelectedSharedMuseumId(addableSharedMuseums[0].id);
+    }
+  }, [addableSharedMuseums, selectedSharedMuseumId, showSharedMuseumPicker]);
 
   const handleToggleAudioPlayback = async () => {
     if (!audioPreviewUrl) {
@@ -185,8 +219,30 @@ const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
     }
   };
 
+  const handleAddSharedMuseumItem = async () => {
+    if (!onAddToSharedMuseum || !selectedSharedMuseumId) {
+      return;
+    }
+
+    setSharedMuseumError(null);
+    setIsAddingToSharedMuseum(true);
+    try {
+      await onAddToSharedMuseum(selectedSharedMuseumId, item, {
+        sharedNote: sharedNote.trim(),
+        relationLabel: relationLabel.trim(),
+      });
+      setShowSharedMuseumPicker(false);
+      setSharedNote('');
+      setRelationLabel('');
+    } catch (error) {
+      setSharedMuseumError(error instanceof Error ? error.message : '加入共建藏馆失败。');
+    } finally {
+      setIsAddingToSharedMuseum(false);
+    }
+  };
+
   return (
-    <div className="h-full overflow-y-auto bg-remuse-dark px-4 py-5 md:px-8 md:py-8">
+    <div data-testid="item-archive-detail" className="h-full overflow-y-auto bg-remuse-dark px-4 py-5 md:px-8 md:py-8">
       <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
         <section className="rounded-[32px] border border-remuse-border bg-[radial-gradient(circle_at_top_left,rgba(204,255,0,0.14),transparent_30%),linear-gradient(180deg,rgba(18,22,26,0.98),rgba(8,10,13,0.98))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.3)] md:p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -221,6 +277,27 @@ const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
                 </button>
               ) : null}
 
+              {onAddToSharedMuseum ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (addableSharedMuseums.length === 0) {
+                      onOpenSharedMuseums?.();
+                      return;
+                    }
+                    setShowSharedMuseumPicker((value) => !value);
+                  }}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-emerald-300/30 px-4 text-sm text-emerald-200 transition-colors hover:border-emerald-200 hover:bg-emerald-300/10"
+                >
+                  <Heart size={16} />
+                  {safeSharedMuseums.length === 0
+                    ? '创建共建藏馆'
+                    : addableSharedMuseums.length === 0
+                      ? '查看共建馆'
+                      : '加入共建藏馆'}
+                </button>
+              ) : null}
+
               {onUpdateItem ? (
                 <button
                   type="button"
@@ -246,6 +323,113 @@ const ItemArchiveDetail: React.FC<ItemArchiveDetailProps> = ({
             </div>
           </div>
         </section>
+
+        {showSharedMuseumPicker ? (
+          <section className="rounded-[28px] border border-emerald-300/15 bg-remuse-panel p-5 shadow-[0_20px_56px_rgba(0,0,0,0.18)] md:p-6">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-2xl space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.28em] text-emerald-200">
+                  <Heart size={14} />
+                  共建藏馆
+                </div>
+                <h2 className="font-display text-2xl font-black text-white">把这件藏品加入共享记忆空间</h2>
+                <p className="text-sm leading-7 text-neutral-300">
+                  这里生成的是一份共享副本，不会修改你的原始藏品。后续双方都能在共建馆里继续补充故事与纪念节点。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onOpenSharedMuseums}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 px-4 text-sm text-neutral-300 transition hover:border-white hover:text-white"
+              >
+                进入共建藏馆
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+              <div className="grid gap-4 md:grid-cols-2">
+                {addableSharedMuseums.map((museum) => {
+                  const active = selectedSharedMuseumId === museum.id;
+                  return (
+                    <button
+                      key={museum.id}
+                      type="button"
+                      onClick={() => setSelectedSharedMuseumId(museum.id)}
+                      className={`overflow-hidden rounded-[24px] border text-left transition ${
+                        active
+                          ? 'border-remuse-accent bg-remuse-accent/10'
+                          : 'border-white/8 bg-black/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="aspect-[16/10] overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(88,255,188,0.16),transparent_30%),linear-gradient(180deg,rgba(17,21,26,1),rgba(9,11,15,1))]">
+                        {museum.coverImageUrl ? (
+                          <img src={museum.coverImageUrl} alt={museum.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-emerald-200/70">
+                            <Heart size={34} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2 p-4">
+                        <h3 className="font-display text-xl font-bold text-white">{museum.name}</h3>
+                        <p className="line-clamp-2 text-sm text-neutral-400">
+                          {museum.description || '把共同经历和物件汇聚到一座共享记忆馆。'}
+                        </p>
+                        <div className="flex flex-wrap gap-2 text-xs text-neutral-400">
+                          <span className="rounded-full bg-white/8 px-2 py-1">{museum.members.length} 位成员</span>
+                          <span className="rounded-full bg-white/8 px-2 py-1">{museum.itemCount} 件藏品</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-[24px] border border-white/8 bg-black/10 p-5">
+                <div className="space-y-4">
+                  <label className="block space-y-2">
+                    <span className="text-sm text-neutral-300">共同标签</span>
+                    <input
+                      value={relationLabel}
+                      onChange={(event) => setRelationLabel(event.target.value)}
+                      placeholder="比如：第一次一起旅行 / 纪念日 / 我送你的礼物"
+                      className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-remuse-accent"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm text-neutral-300">共享备注</span>
+                    <textarea
+                      value={sharedNote}
+                      onChange={(event) => setSharedNote(event.target.value)}
+                      rows={5}
+                      placeholder="给这件共享藏品补一句两个人都看得懂的备注。"
+                      className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-remuse-accent"
+                    />
+                  </label>
+                  {sharedMuseumError ? (
+                    <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                      {sharedMuseumError}
+                    </div>
+                  ) : null}
+                  {addableSharedMuseums.length === 0 ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-sm text-neutral-400">
+                      当前没有可继续加入藏品的共建馆。已归档或已结束的共建馆会自动变成只读。
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!selectedSharedMuseumId || isAddingToSharedMuseum}
+                    onClick={handleAddSharedMuseumItem}
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-remuse-accent px-5 font-display text-black transition hover:bg-white disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                  >
+                    {isAddingToSharedMuseum ? '加入中...' : '确认加入这座共建馆'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid gap-6 xl:grid-cols-[minmax(360px,0.88fr)_minmax(0,1.12fr)]">
           <article className="overflow-hidden rounded-[30px] border border-remuse-border bg-remuse-panel shadow-[0_20px_56px_rgba(0,0,0,0.22)]">

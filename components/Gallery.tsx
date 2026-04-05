@@ -297,7 +297,7 @@ const Gallery: React.FC<GalleryProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-remuse-dark p-4 pb-24 md:p-8">
+    <div data-testid="museum-gallery" className="h-full overflow-y-auto bg-remuse-dark p-4 pb-24 md:p-8">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
         <section className="overflow-hidden rounded-[32px] border border-remuse-border bg-[radial-gradient(circle_at_top_left,rgba(204,255,0,0.15),transparent_38%),linear-gradient(180deg,rgba(19,22,27,0.98),rgba(10,11,15,0.98))] shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
           <div className="p-5 md:p-7">

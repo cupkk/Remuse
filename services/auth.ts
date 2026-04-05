@@ -16,7 +16,7 @@ export const REFRESH_COOKIE_NAME = 'remuse_refresh';
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 16) {
-    throw new Error('JWT_SECRET is required and must be at least 16 characters long');
+    throw new Error('\u7f3a\u5c11 JWT_SECRET\uff0c\u4e14\u957f\u5ea6\u81f3\u5c11\u4e3a 16 \u4e2a\u5b57\u7b26');
   }
   return secret;
 }
