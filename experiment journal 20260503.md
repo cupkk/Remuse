@@ -139,3 +139,69 @@
 
 - 后续如果需要修改 GitHub 仓库 description、homepage 或 release 中文内容，不要在 PowerShell 命令字面量里直接写中文；优先使用 Node.js 文件或 Unicode 转义，避免再次写出问号。
 - 当前工作区发现若干图片文件处于 deleted 状态，这不是本次 metadata 修复操作产生的；后续代理不要在不确认来源的情况下恢复或提交这些删除。
+
+## 2026-05-03 仓库整洁度清理
+
+### 目标
+
+用户要求删除仓库中多余、冗杂的文件和缓存文件，让公开仓库更适合评委浏览。
+
+### 清理判断
+
+本次只清理会出现在 GitHub 仓库、且不参与构建或运行的杂物；保留真实产品资产、运行数据边界和展示子站素材。
+
+保留内容：
+
+- `public/nfc-showcase/`：被 `shared/nfcGiftDemos.generated.json` 和 NFC / 礼物子站引用，是展示资产，不是缓存。
+- `assets/qr/poster-qr-remuse-top.png`：被 Playwright E2E 用作上传测试图。
+- `data/`、`uploads/`、`backups/`：真实运行数据目录，未纳入 Git 清理。
+- `.env*`：环境变量和密钥相关文件，未触碰。
+
+删除内容：
+
+- `.playwright-mcp/` 下的历史页面快照。
+- `.tmp-gift-preview.*` 临时预览输出。
+- `output/` 下的线上截图和调试截图。
+- 根目录 `image.png`、`image-1.png`、`image-2.png`、`image-4.png` 等设计参考图。
+- 已乱码且只引用这些参考图的 `今日好物NFC设计.md` 草稿。
+- 未被源码引用的 QR/海报辅助文件：
+  - `assets/qr/poster-qr-47.86.85.236-3000.png`
+  - `assets/qr/poster-qr-remuse-top.svg`
+  - `assets/qr/remuse-top-brochure-qr.png`
+  - `assets/qr/remuse-top-brochure-qr.svg`
+- 未被源码引用且含乱码/调试性质的辅助文件：
+  - `fetch_images.js`
+  - `fix_samples.sql`
+  - `preview-covers.html`
+  - `preview-images.html`
+
+### 防回流规则
+
+更新 `.gitignore`，新增忽略：
+
+- `.playwright-mcp/`
+- `/output/`
+- `/.tmp-*.out`
+- `/.tmp-*.err`
+- `/image*.png`
+- `/preview-*.html`
+
+### 本地缓存清理
+
+另外清理了本地 ignored 产物和临时文件，包括：
+
+- `.tmp/`
+- `.logs/`
+- `dist/`
+- `dist-gift/`
+- `build/`
+- 根目录历史部署压缩包 `*.tgz`
+- `.tmp-dev-*.out`
+
+这些本地缓存清理不应该进入 Git diff，但能让工作区更整洁。保留了 `node_modules/`，方便继续验证。
+
+### 后续验证计划
+
+- 运行 `npm run check:encoding`。
+- 运行 `npm run build`。
+- 检查 Git diff，确认只包含清理文件、`.gitignore` 和本日志。
