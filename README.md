@@ -1,49 +1,136 @@
 # Re-Museum
 
-Re-Museum 是一个全栈数字再生博物馆项目，主链路是：
+Re-Museum 是一个全栈数字再生博物馆项目，目标是把“旧物上传 -> AI 识别 -> 归档进展馆 -> 生成贴纸 / 拼豆图纸 / 表情包 / 改造指南 / 记忆内容”串成一条完整体验链路。
 
-- 用户上传旧物照片
-- AI 识别并生成归档信息、故事、封面与再生内容
-- 内容进入藏品馆 / 展馆
-- 继续生成贴纸、拼豆图纸、表情包、改造指南、记忆对话
+本项目为 #Flux南客松S2 黑客松参赛作品。
 
-这个仓库不是纯前端 Demo。多数核心能力都依赖：
+- GitHub 仓库：https://github.com/cupkk/Re-Museum
+- 主站部署实例：https://remuse.top
+- NFC / 礼物展示子站：https://gift.remuse.top
+- 参赛标签：#Flux南客松S2
 
-- Express API
-- SQLite 数据库
-- 上传文件目录
-- 服务端 AI 编排
-- 配额、权限、日志与错误告警
+## 项目亮点
 
-另外，仓库还包含一个独立的 NFC / 礼物展示子站：
+- 旧物扫描与 AI 识别：用户上传旧物照片后，系统生成物品信息、故事草稿、馆藏封面与再生方向。
+- 数字藏品归档：将旧物以“藏品”的方式保存到个人藏品馆或展馆。
+- 再生内容生成：围绕同一件旧物生成贴纸、拼豆图纸、表情包、改造指南等衍生内容。
+- 记忆对话与检索：围绕已归档物品建立记忆线程，支持后续继续补充故事。
+- 共建藏馆：支持共享展馆与多人共建的内容组织方式。
+- 管理后台：包含用户、反馈、用量、错误上报等运营治理能力。
+- 独立 NFC / 礼物子站：用于线下礼物、活动或 NFC 场景展示。
 
-- 线上地址：`https://gift.remuse.top`
-- 构建目录：`dist-gift/`
-- 入口组件：[components/NfcGiftExperience.tsx](./components/NfcGiftExperience.tsx)
-- 独立构建入口：[gift-site/main.tsx](./gift-site/main.tsx)
+## 开源与部署说明
+
+本仓库开源参赛版本的核心代码，包括前端、后端、数据层 schema、AI 编排、构建脚本和测试脚本。
+
+出于安全和隐私原因，以下内容不会提交到 GitHub：
+
+- `.env`、`.env.local` 等本地或生产环境密钥
+- `data/` 中的真实 SQLite 数据库
+- `uploads/` 中的用户上传文件与生成结果
+- `backups/` 中的备份快照
+- 服务器私有配置、邮件密钥、AI API Key、告警 Webhook 等生产凭据
+
+已部署实例：
+
+- 主站：https://remuse.top
+- NFC / 礼物展示子站：https://gift.remuse.top
 
 ## 技术栈
 
-- 前端：Vite + React 19 + TypeScript + Tailwind
-- 后端：Express 5 + TypeScript
-- 数据库：SQLite
-- 文本模型：StepFun
-- 图像生成：Gemini 兼容接口，经服务端 `/api/ai/*` 调用
-- 测试：Node test runner + TSX
+### 前端
+
+- React 19：主站交互界面与组件体系
+- TypeScript：前后端统一类型约束
+- Vite 6：前端开发服务器与构建工具
+- Tailwind CSS 3：界面样式系统
+- lucide-react：图标组件
+- Recharts：管理后台和数据概览图表
+
+### 后端
+
+- Node.js 20+
+- Express 5：API 服务与静态资源服务
+- TypeScript：服务端源码与构建
+- better-sqlite3：SQLite 持久化访问
+- Zod：输入与结构化数据校验
+- JSON Web Token：登录态与鉴权
+- express-rate-limit：接口限流
+- Multer：上传文件处理
+- Sharp：图片处理、封面组合、抠图辅助链路
+
+### AI 与内容生成
+
+- StepFun：文本生成、扫描分析中的文本与视觉问答能力
+- Gemini 兼容图像接口：封面图、贴纸、表情包、改造指南配图等图像生成
+- 服务端 AI 编排：统一经过 `/api/ai/*` 接口处理配额、失败兜底、日志和权限
+
+### 数据与存储
+
+- SQLite：用户、藏品、展馆、贴纸、记忆线程、管理员数据等核心业务数据
+- 本地文件系统：上传图、生成图、封面与临时处理文件
+- 备份脚本：支持数据与上传资源快照备份、恢复和生产 smoke 检查
+
+### 构建、测试与运维
+
+- Vite：主站和 NFC / 礼物子站构建
+- TypeScript Compiler：后端构建
+- Node test runner + TSX：API 与业务脚本测试
+- Playwright：端到端测试
+- PM2：生产 Node 进程管理
+- Nginx：生产反向代理与 TLS 终止
+- Alibaba Cloud ECS：当前生产部署环境
+
+## 系统结构
+
+```text
+index.tsx                         前端入口
+App.tsx                           主站页面与状态编排
+server.ts                         Express 服务入口
+components/                       前端页面与业务组件
+routes/                           API 路由
+services/                         数据库、AI、配额、记忆、告警等服务
+shared/                           前后端共享类型与生成数据
+scripts/                          构建、备份、校验、运维脚本
+tests/                            API、拼豆、E2E 测试
+gift-site/                        NFC / 礼物子站入口
+docs/                             部署与专项说明文档
+```
+
+关键模块：
+
+- `components/Scanner.tsx`：扫描、识别、归档、故事草稿、贴纸入口
+- `components/Gallery.tsx`：藏品馆与展馆浏览
+- `components/ItemArchiveDetail.tsx`：藏品详情页
+- `components/StickerLibrary.tsx`：贴纸库 / 成果库
+- `components/PerlerPatternStudio.tsx`：拼豆工坊
+- `components/EmojiPackStudio.tsx`：表情包工坊
+- `components/TransformationGuideStudio.tsx`：改造指南
+- `components/MemoryRagStudio.tsx`：记忆检索与对话
+- `components/AdminWorkspace.tsx`：管理员工作区
+- `routes/auth.ts`：注册、登录、刷新、验证、重置密码
+- `routes/ai.ts`：AI 能力聚合入口
+- `routes/items.ts`：藏品 CRUD 与归档内容
+- `routes/stickers.ts`：贴纸与生成结果
+- `routes/memory.ts`：记忆线程与消息
+- `services/database.ts`：SQLite schema 与兼容迁移
+- `services/aiService.ts`：服务端 AI 业务编排
+- `services/usageQuota.ts`：AI 配额与调用统计
 
 ## 本地开发
 
 ### 环境要求
 
 - Node.js 20+
+- npm
 
-### 安装
+### 安装依赖
 
 ```bash
 npm install
 ```
 
-### 环境变量
+### 配置环境变量
 
 复制 `.env.example` 为 `.env`，至少配置：
 
@@ -53,7 +140,7 @@ STEPFUN_API_KEY=your_stepfun_key
 JWT_SECRET=a_random_secret_with_at_least_16_characters
 ```
 
-可选项示例：
+常用配置项：
 
 ```bash
 PORT=3000
@@ -69,51 +156,26 @@ APP_BASE_URL=http://127.0.0.1:5173
 EMAIL_DELIVERY_MODE=log
 DAILY_GEMINI_CALL_LIMIT=40
 DAILY_MEMORY_QUERY_LIMIT=24
-MANAGED_UPLOAD_DELETE_GRACE_MS=60000
 BACKUP_DIR=./backups
-BACKUP_ALERT_EMAILS=ops@example.com
-ERROR_ALERT_WEBHOOK_URL=https://example.com/hooks/remuse-errors
-ERROR_ALERT_INCLUDE_WARN=false
-ERROR_ALERT_COOLDOWN_MS=60000
-ALERT_ENVIRONMENT=production
-SMOKE_ADMIN_EMAIL=admin@example.com
-# 生产邮件发送示例：
-# EMAIL_DELIVERY_MODE=resend
-# RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
-# MAIL_FROM_EMAIL=no-reply@example.com
-# MAIL_FROM_NAME=Re-Museum
 ```
 
 说明：
 
-- `STEPFUN_API_KEY` 负责文本生成，也承担扫描分析里的视觉问答。
-- `GEMINI_API_KEY` 仍负责封面图、贴纸、表情包、改造指南配图等图像生成。
-- `EMAIL_DELIVERY_MODE=log` 适合本地开发，会把验证链接和重置链接直接打印到服务端日志。
-- 生产环境如需真实邮件发送，需配置 `APP_BASE_URL`、`EMAIL_DELIVERY_MODE=resend`、`RESEND_API_KEY`、`MAIL_FROM_EMAIL`。
-- 当前项目默认走原有 `12ai` 代理链路，生产环境若继续使用，必须保留 `ALLOW_THIRD_PARTY_GEMINI_PROXY=true`。
-- `ERROR_ALERT_WEBHOOK_URL` 用于把服务端异常和前端崩溃上报到 Slack / Discord / 飞书等外部告警系统。
-- `SMOKE_ADMIN_EMAIL` 仅供线上 smoke 脚本使用，本身不授予管理员权限。
+- `STEPFUN_API_KEY` 用于文本生成与扫描分析链路。
+- `GEMINI_API_KEY` 用于封面、贴纸、表情包、改造指南配图等图像生成。
+- `EMAIL_DELIVERY_MODE=log` 适合本地开发，会把验证链接和重置链接输出到服务端日志。
+- 生产环境需要独立配置真实邮件发送、域名、备份、告警和 AI 配额。
 
-### 管理员权限
-
-管理员权限只由 SQLite 中的 `users.role` 控制。提升现有用户为管理员：
-
-```bash
-npm run user:set-role -- --email admin@example.com --role admin
-```
-
-### 启动
+### 启动开发环境
 
 ```bash
 npm run dev
 ```
 
-会同时启动：
+该命令会同时启动：
 
-- 前端：`http://127.0.0.1:5173`
-- 后端：`http://127.0.0.1:3000`
-
-开发环境下，Vite 会把 `/api/*` 请求代理到后端，包括 `/api/uploads/*` 这种受保护资源。
+- 前端：http://127.0.0.1:5173
+- 后端：http://127.0.0.1:3000
 
 也可以分开启动：
 
@@ -130,15 +192,19 @@ npm run dev:server
 npm run build
 ```
 
-这个命令会先跑编码扫描，再构建前后端。
+该命令等价于：
 
-### NFC / gift 子站构建
+```bash
+npm run check:encoding
+npm run build:client
+npm run build:server
+```
+
+### NFC / 礼物子站构建
 
 ```bash
 npm run build:gift
 ```
-
-产物输出到 `dist-gift/`，用于部署到 `gift.remuse.top`。
 
 ### 测试
 
@@ -146,83 +212,56 @@ npm run build:gift
 npm test
 ```
 
-也可以按模块执行：
+按模块执行：
 
 ```bash
 npm run test:api
-npm run test:e2e
 npm run test:perler
-```
-
-### 备份与恢复
-
-创建备份快照：
-
-```bash
-npm run backup:data
-```
-
-执行带保留策略和失败告警的备份任务：
-
-```bash
-npm run backup:job
-```
-
-恢复到目标目录：
-
-```bash
-npm run restore:data -- ./backups/<snapshot-name> ./restore-target
+npm run test:e2e
 ```
 
 ## 生产运行
 
-启动生产服务：
+构建完成后启动生产服务：
 
 ```bash
 npm run server
 ```
 
-或使用 PM2：
+PM2 启动方式：
 
 ```bash
 pm2 start ecosystem.config.cjs
 ```
 
-## Alibaba Cloud ECS 部署说明
+当前主站部署形态：
 
-主站 `remuse.top` 的常规部署方式：
+- Alibaba Cloud ECS 单机部署
+- Nginx 反代到 Node / Express
+- Express 提供 `dist/` 静态文件、`/api/*` 路由和受保护的 `/api/uploads/*` 资源
+- `data/`、`uploads/`、`backups/` 保存在服务器持久化磁盘
+- 使用 `npm run backup:job` 做数据和上传资源备份
 
-1. Node 服务运行在 `PORT=3000`
-2. Nginx 监听 `80/443`
-3. 所有主站请求反代到 `http://127.0.0.1:3000`
-4. `uploads/` 与 `data/` 保存在持久磁盘
-5. 使用 cron 或 systemd timer 定时执行 `npm run backup:job`
-6. `.env` 只保留在服务器，不要把本地 `.env` 上传覆盖到线上
-
-Express 会直接提供：
-
-- `dist/` 中的前端静态文件
-- `/api/uploads/*` 保护下的上传资源
-- 全部 `/api/*` 路由
-
-所以主站 Nginx 只负责反代和 TLS 终止。
-
-## gift / NFC 子站说明
-
-`gift.remuse.top` 是独立静态站，不走主站 Express。
-
-常见命令：
+## 常用脚本
 
 ```bash
-npm run build:gift
+npm run validate:env
+npm run backup:data
+npm run backup:job
+npm run restore:data -- ./backups/<snapshot> ./restore-target
+npm run smoke:production
 ```
 
-更完整的 NFC 子站部署与回滚说明见：
+管理员账号角色由 SQLite 中的 `users.role` 控制。提升已有用户为管理员：
 
-- [docs/gift-site-deploy.md](./docs/gift-site-deploy.md)
+```bash
+npm run user:set-role -- --email admin@example.com --role admin
+```
 
-非常重要：
+## 提交与安全注意事项
 
-- 部署 gift 子站前，先在 ECS 上执行 `sudo nginx -T | grep -A 6 "server_name gift.remuse.top"`，确认线上 `root` 到底指向哪里
-- 不要默认以为线上一定使用 `/var/www/remuse-gift/current`
-- 如果浏览器仍显示旧页，先用 `curl` 看返回的 `<title>` 和静态资源 hash，再判断是不是缓存问题
+- 不要提交 `.env`、`.env.local`、生产密钥、邮件 key、代理 key 或告警 Webhook。
+- 不要提交 `data/`、`uploads/`、`backups/` 中的真实生产数据。
+- 不要通过修改 `dist/`、`build/` 里的构建产物来修功能，应修改源码后重新构建。
+- 修改中文文案后必须运行 `npm run check:encoding`，避免用户可见乱码。
+- 涉及 AI 生成、归档、贴纸、拼豆等链路时，服务端失败不能伪装成前端成功。
