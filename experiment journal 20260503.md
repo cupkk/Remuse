@@ -107,3 +107,35 @@
 ### 当前状态
 
 参赛提交要求已经完成：代码已公开、README 已清楚写明技术栈和技术选型、已附部署实例、已设置参赛 Git tag，并补充了 GitHub topics。
+
+## 2026-05-03 GitHub About 乱码修复
+
+### 问题
+
+用户反馈 GitHub 仓库 About 区域 description 显示为 `Re-Museum ???????,#Flux???S2 ???????`，截图确认乱码位于 GitHub 仓库元数据，不是 README 页面内容。
+
+### 原因判断
+
+上一轮通过 PowerShell 直接向 GitHub API 写入中文 description 时，当前 Windows 命令链路把中文字符转成了问号，导致 GitHub 侧存储的 description 本身已经损坏。
+
+### 修复操作
+
+- 使用 Node.js 脚本读取 Git credential manager 中的 GitHub token。
+- 通过 GitHub REST API 重新 PATCH 仓库 metadata。
+- 避免在 PowerShell 命令中直接写中文，改用 JavaScript 字符串中的 Unicode 转义构造正确 description。
+- 写回 description：
+  - `Re-Museum 数字再生博物馆，#Flux南客松S2 黑客松参赛作品`
+- 保持 homepage：
+  - `https://remuse.top`
+
+### 验证结果
+
+- 认证 API 读取返回正确中文 description。
+- 匿名公开 API 读取返回正确中文 description。
+- 本地 `README.md` 用 Node.js 按 UTF-8 读取，确认包含正确中文项目介绍和 `#Flux南客松S2`。
+- 本次未修改 README。
+
+### 注意事项
+
+- 后续如果需要修改 GitHub 仓库 description、homepage 或 release 中文内容，不要在 PowerShell 命令字面量里直接写中文；优先使用 Node.js 文件或 Unicode 转义，避免再次写出问号。
+- 当前工作区发现若干图片文件处于 deleted 状态，这不是本次 metadata 修复操作产生的；后续代理不要在不确认来源的情况下恢复或提交这些删除。
