@@ -1,5 +1,0 @@
-
-> remuse:-digital-regeneration-museum@0.0.0 preview:gift
-> vite preview --config vite.gift.config.ts --host 127.0.0.1
-
-  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4174[22m/[39m

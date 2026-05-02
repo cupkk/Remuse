@@ -31,10 +31,14 @@ uploads/
 .tmp/
 .logs/
 .playwright-cli/
+.playwright-mcp/
 /dist-gift/
 /output-gift-preview.log
+/output/
 /--exclude=node_modules
 /.tmp-dev-*
+/.tmp-*.out
+/.tmp-*.err
 test-results/
 output/playwright/
 /*.bak-*
@@ -45,6 +49,8 @@ output/playwright/
 /playwright-*.png
 /scanner-result-debug.png
 /emoji-regression-failure.png
+/image*.png
+/preview-*.html
 /2.mp4
 /debug-*.png
 /debug-*.webm
