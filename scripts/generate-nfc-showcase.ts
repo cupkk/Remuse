@@ -107,7 +107,7 @@ async function main() {
     await writeDataUrlAsWebp(cover.coverImageUrl, coverOutputPath);
     await writeDataUrlAsWebp(sticker.stickerImageUrl, stickerOutputPath);
 
-    const sourceStory = firstNonEmpty(item.story, item.description, analysis.story, '这件旧物被重新写进了一次可以公开展示的 NFC 礼物体验。');
+    const sourceStory = firstNonEmpty(item.story, item.description, analysis.story, '这件旧物被重新写进了一次可以公开展示的 NFC 好物体验。');
     const tags = uniqueStrings([
       ...analysis.tags,
       item.category,
@@ -268,7 +268,7 @@ async function analyzeWithFallback(base64Image: string, item: ItemRow) {
       story: firstNonEmpty(
         item.story,
         item.description,
-        '这件旧物被重新整理成了一次可公开展示的 NFC 礼物档案。',
+        '这件旧物被重新整理成了一次可公开展示的 NFC 好物档案。',
       ),
       tags: uniqueStrings([item.category, item.material]).slice(0, 5),
     };
@@ -308,7 +308,7 @@ async function generateStickerWithFallback(slug: string, base64Image: string, it
 
     return {
       stickerImageUrl: `data:image/jpeg;base64,${base64Image}`,
-      dramaText: `${itemName} 已经被重新整理成了一张可随时打开的 NFC 礼物贴纸。`,
+      dramaText: `${itemName} 已经被重新整理成了一张可随时打开的 NFC 好物贴纸。`,
     };
   }
 }

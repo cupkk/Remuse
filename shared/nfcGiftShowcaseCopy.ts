@@ -11,6 +11,7 @@ export interface NfcGiftShowcaseProcessStep {
 
 export interface NfcGiftShowcaseRecord {
   slug: string;
+  capsuleLabel?: string;
   title: string;
   subtitle: string;
   imageAlt: string;
@@ -89,7 +90,7 @@ export function buildShowcaseProcessTimeline({
       id: `${slug}-step-4`,
       label: '04',
       title: '输出贴纸结果',
-      description: '同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。',
+      description: '同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。',
     },
     {
       id: `${slug}-step-5`,
@@ -116,6 +117,7 @@ export function applyCuratedGiftCopy<T extends NfcGiftShowcaseRecord>(gift: T): 
 
   return {
     ...gift,
+    capsuleLabel: blueprint.capsuleLabel,
     title,
     subtitle,
     imageAlt: `${title} 的真实原图`,

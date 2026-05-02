@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import type {
   CollectedItem,
   MemoryAssistantMatch,
@@ -8,10 +7,11 @@ import type {
 import { APP_CONFIG } from './appConfig.ts';
 import { getItemsByUser } from './database.ts';
 import { searchMemoryVectors, syncUserMemoryEmbeddings } from './memoryEmbeddings.ts';
-
-const GEMINI_API_KEY = APP_CONFIG.geminiApiKey;
-const GEMINI_BASE_URL = APP_CONFIG.geminiBaseUrl;
-const GEMINI_MEMORY_MODEL = process.env.GEMINI_MEMORY_MODEL || process.env.GEMINI_TEXT_MODEL || 'gemini-3-pro-preview';
+import {
+  requestStepfunChatCompletion,
+  requestStepfunChatCompletionStream,
+  STEPFUN_MEMORY_MODEL_CANDIDATES,
+} from './stepfunTextService.ts';
 
 const GENERIC_QUERY_TOKENS = new Set([
   '回忆',
@@ -73,6 +73,8 @@ interface MemoryAssistantQueryInput {
   userId: string;
   query: string;
   history?: MemoryAssistantMessage[];
+  signal?: AbortSignal;
+  onDelta?: (delta: string) => void | Promise<void>;
 }
 
 interface RankedMemoryCandidate {
@@ -87,6 +89,8 @@ export async function queryUserMemories({
   userId,
   query,
   history = [],
+  signal,
+  onDelta,
 }: MemoryAssistantQueryInput): Promise<MemoryAssistantResponse> {
   const items = (getItemsByUser(userId) as CollectedItem[]) || [];
   const sourceItems = items.filter(hasMemorySignal);
@@ -108,53 +112,83 @@ export async function queryUserMemories({
   const candidates = mergeRetrievalScores(sourceItems, retrievalQuery, vectorHits).slice(0, 4);
   const matches = candidates.map(candidateToMatch);
   const suggestions = buildMemorySuggestions(matches);
+  const retrievalSummary = buildRetrievalSummary(sourceItems.length, matches.length, vectorHits.length > 0);
 
   if (matches.length === 0) {
+    const answer = '我暂时还没有在你的藏品故事里找到足够明确的线索。你可以换一种问法，比如加入时间、人物、地点或物品关键词，例如“和大学毕业有关的物件”或“妈妈送给我的东西”。';
+    if (onDelta) {
+      await streamFallbackText(answer, onDelta, signal);
+    }
+
     return {
-      answer:
-        '我暂时还没有在你的藏品故事里找到足够明确的线索。你可以换一种问法，比如加入时间、人物、地点或物品关键词，例如“和大学毕业有关的物件”或“妈妈送给我的东西”。',
+      answer,
       matches: [],
       suggestions,
-      retrievalSummary: `已检查 ${sourceItems.length} 件带有记忆线索的藏品，但当前问题没有召回明显匹配项。`,
+      retrievalSummary: `已检索 ${sourceItems.length} 件带有记忆线索的藏品，但当前问题没有召回明显匹配项。`,
       sourceCount: sourceItems.length,
       usedFallback: true,
     };
   }
 
-  if (APP_CONFIG.disableLiveAi || !GEMINI_API_KEY) {
+  if (APP_CONFIG.disableLiveAi || !APP_CONFIG.stepfunApiKey) {
+    const answer = buildFallbackAnswer(matches);
+    if (onDelta) {
+      await streamFallbackText(answer, onDelta, signal);
+    }
+
     return {
-      answer: buildFallbackAnswer(matches),
+      answer,
       matches,
       suggestions,
-      retrievalSummary: buildRetrievalSummary(sourceItems.length, matches.length, vectorHits.length > 0),
+      retrievalSummary,
       sourceCount: sourceItems.length,
       usedFallback: true,
     };
   }
 
   try {
-    const answer = await generateGroundedMemoryAnswer({
+    const prompt = buildGroundedMemoryPrompt({
       query,
       history,
       matches,
       sourceCount: sourceItems.length,
     });
 
+    const answer = onDelta
+      ? await generateGroundedMemoryAnswerStream({
+        prompt,
+        signal,
+        onDelta,
+      })
+      : await generateGroundedMemoryAnswer({
+        prompt,
+        signal,
+      });
+
     return {
       answer,
       matches,
       suggestions,
-      retrievalSummary: buildRetrievalSummary(sourceItems.length, matches.length, vectorHits.length > 0),
+      retrievalSummary,
       sourceCount: sourceItems.length,
       usedFallback: false,
     };
   } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+
     console.error('记忆问答生成失败，已回退到基础回答：', error);
+    const answer = buildFallbackAnswer(matches);
+    if (onDelta) {
+      await streamFallbackText(answer, onDelta, signal);
+    }
+
     return {
-      answer: buildFallbackAnswer(matches),
+      answer,
       matches,
       suggestions,
-      retrievalSummary: buildRetrievalSummary(sourceItems.length, matches.length, vectorHits.length > 0),
+      retrievalSummary,
       sourceCount: sourceItems.length,
       usedFallback: true,
     };
@@ -163,12 +197,12 @@ export async function queryUserMemories({
 
 function hasMemorySignal(item: CollectedItem) {
   return Boolean(
-    item.name?.trim() ||
-      item.description?.trim() ||
-      item.story?.trim() ||
-      item.tags?.length ||
-      item.material?.trim() ||
-      item.category?.trim(),
+    item.name?.trim()
+      || item.description?.trim()
+      || item.story?.trim()
+      || item.tags?.length
+      || item.material?.trim()
+      || item.category?.trim(),
   );
 }
 
@@ -338,7 +372,7 @@ function pickTopStoryFragment(story: string, query: string, tokens: string[]) {
 function splitStoryFragments(story: string) {
   return story
     .split(/[。！？?!\n]/)
-    .flatMap((part) => part.split(/[；;]/))
+    .flatMap((part) => part.split(/[，,]/))
     .map((part) => part.trim())
     .filter((part) => part.length >= 4);
 }
@@ -417,7 +451,7 @@ function buildMemorySuggestions(matches: MemoryAssistantMatch[]) {
   const suggestions = new Set<string>([
     '帮我找和学生时代有关的藏品',
     '有没有哪件物品让我想到家人',
-    '我收藏过哪些最有纪念意义的东西',
+    '我收录过哪些最有纪念意义的东西',
   ]);
 
   const topMatch = matches[0];
@@ -439,7 +473,7 @@ function buildRetrievalSummary(sourceCount: number, matchCount: number, usedVect
     : `已从 ${sourceCount} 件带有记忆线索的藏品中，通过关键词检索召回 ${matchCount} 条相关记忆。`;
 }
 
-async function generateGroundedMemoryAnswer({
+function buildGroundedMemoryPrompt({
   query,
   history,
   matches,
@@ -451,17 +485,12 @@ async function generateGroundedMemoryAnswer({
   sourceCount: number;
 }) {
   if (APP_CONFIG.disableLiveAi) {
-    throw new Error('\u5f53\u524d\u5df2\u5173\u95ed\u8bb0\u5fc6\u95ee\u7b54\u7684\u5b9e\u65f6 AI \u751f\u6210\u80fd\u529b\u3002');
+    throw new Error('当前已关闭记忆问答的实时 AI 生成能力。');
   }
 
-  if (!GEMINI_API_KEY) {
-    throw new Error('\u7f3a\u5c11 GEMINI_API_KEY \u914d\u7f6e');
+  if (!APP_CONFIG.stepfunApiKey) {
+    throw new Error('缺少 STEPFUN_API_KEY 配置');
   }
-
-  const ai = new GoogleGenAI({
-    apiKey: GEMINI_API_KEY,
-    httpOptions: GEMINI_BASE_URL ? { baseUrl: GEMINI_BASE_URL } : undefined,
-  });
 
   const recentHistory = history.slice(-6).map((message) => {
     const speaker = message.role === 'user' ? '用户' : '助手';
@@ -469,54 +498,85 @@ async function generateGroundedMemoryAnswer({
   });
 
   const context = matches
-    .map((match, index) => {
-      return [
-        `线索 ${index + 1}`,
-        `藏品: ${match.itemName}`,
-        `展馆: ${match.hallName}`,
-        `材质: ${match.material}`,
-        `日期: ${formatItemDate(match.dateCollected)}`,
-        `标签: ${match.tags.length ? match.tags.join('、') : '无'}`,
-        `故事片段: ${match.storySnippet}`,
-      ].join('\n');
-    })
+    .map((match, index) => ([
+      `线索 ${index + 1}`,
+      `藏品: ${match.itemName}`,
+      `展馆: ${match.hallName}`,
+      `材质: ${match.material}`,
+      `日期: ${formatItemDate(match.dateCollected)}`,
+      `标签: ${match.tags.length ? match.tags.join('、') : '无'}`,
+      `故事片段: ${match.storySnippet}`,
+    ].join('\n')))
     .join('\n\n');
 
-  const response = await ai.models.generateContent({
-    model: GEMINI_MEMORY_MODEL,
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: [
-              '你是“再生博物馆”的记忆馆长。你的任务是根据用户自己录入的旧物故事，帮助用户回忆过去，而不是编造故事。',
-              '回答要求：',
-              '1. 只能基于给定线索回答，不要编造未出现的事实。',
-              '2. 用中文回答，语气温柔、具体、有画面感，但不要过度煽情。',
-              '3. 优先提到具体藏品名称，并说明为什么会联想到它。',
-              '4. 如果线索不够充分，要明确说明“目前能确认的是……”。',
-              '5. 输出 120 到 220 字，不要使用列表。',
-              '',
-              `当前用户问题：${query}`,
-              `该用户目前共有 ${sourceCount} 件带有记忆线索的藏品，本次召回 ${matches.length} 条。`,
-              recentHistory.length ? `最近对话：\n${recentHistory.join('\n')}` : '最近对话：无',
-              '',
-              `检索到的真实线索：\n${context}`,
-            ].join('\n'),
-          },
-        ],
-      },
-    ],
-    config: {
-      temperature: 0.7,
-      topP: 0.9,
-    },
+  return [
+    '你是“再生博物馆”的记忆馆长。你的任务是根据用户自己录入的旧物故事，帮助用户回忆过去，而不是编造故事。',
+    '回答要求：',
+    '1. 只能基于给定线索回答，不要编造未出现的事实。',
+    '2. 用中文回答，语气温柔、具体、有画面感，但不要过度煽情。',
+    '3. 优先提到具体藏品名称，并说明为什么会联想到它。',
+    '4. 如果线索不够充分，要明确说明“目前能确认的是……”。',
+    '5. 输出 120 到 220 字，不要使用列表。',
+    '',
+    `当前用户问题：${query}`,
+    `该用户目前共有 ${sourceCount} 件带有记忆线索的藏品，本次召回 ${matches.length} 条。`,
+    recentHistory.length ? `最近对话：\n${recentHistory.join('\n')}` : '最近对话：无',
+    '',
+    `检索到的真实线索：\n${context}`,
+  ].join('\n');
+}
+
+async function generateGroundedMemoryAnswer({
+  prompt,
+  signal,
+}: {
+  prompt: string;
+  signal?: AbortSignal;
+}) {
+  const response = await requestStepfunChatCompletion({
+    feature: 'memory-query',
+    modelCandidates: STEPFUN_MEMORY_MODEL_CANDIDATES,
+    temperature: 0.7,
+    topP: 0.9,
+    maxTokens: 900,
+    userContent: prompt,
+    signal,
   });
 
   const answer = response.text?.trim();
   if (!answer) {
-    throw new Error('Gemini \u672a\u8fd4\u56de\u8bb0\u5fc6\u95ee\u7b54\u5185\u5bb9');
+    throw new Error('StepFun 未返回记忆问答内容。');
+  }
+
+  return answer;
+}
+
+async function generateGroundedMemoryAnswerStream({
+  prompt,
+  signal,
+  onDelta,
+}: {
+  prompt: string;
+  signal?: AbortSignal;
+  onDelta: (delta: string) => void | Promise<void>;
+}) {
+  const response = await requestStepfunChatCompletionStream({
+    feature: 'memory-query',
+    modelCandidates: STEPFUN_MEMORY_MODEL_CANDIDATES,
+    temperature: 0.7,
+    topP: 0.9,
+    maxTokens: 900,
+    userContent: prompt,
+    signal,
+  }, async (chunk) => {
+    if (chunk.delta) {
+      await onDelta(chunk.delta);
+    }
+  });
+
+  const answer = response.text?.trim();
+  if (!answer) {
+    throw new Error('StepFun 未返回记忆流式问答内容。');
   }
 
   return answer;
@@ -534,4 +594,53 @@ function buildFallbackAnswer(matches: MemoryAssistantMatch[]) {
   ]
     .filter(Boolean)
     .join('');
+}
+
+async function streamFallbackText(
+  text: string,
+  onDelta: (delta: string) => void | Promise<void>,
+  signal?: AbortSignal,
+) {
+  const chunks = splitTextForStreaming(text);
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (signal?.aborted) {
+      throw new Error('记忆流式输出已取消。');
+    }
+
+    await onDelta(chunks[index]);
+
+    if (index < chunks.length - 1) {
+      await sleep(24);
+    }
+  }
+}
+
+function splitTextForStreaming(text: string) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  while (cursor < normalized.length) {
+    const remaining = normalized.length - cursor;
+    const size = remaining > 36 ? 8 : remaining > 18 ? 6 : 4;
+    let chunk = normalized.slice(cursor, cursor + size);
+    const punctuationMatch = normalized.slice(cursor + size).match(/^[，。！？；：、,.!?]/);
+    if (punctuationMatch) {
+      chunk += punctuationMatch[0];
+    }
+
+    chunks.push(chunk);
+    cursor += chunk.length;
+  }
+
+  return chunks;
+}
+
+function sleep(delayMs: number) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }

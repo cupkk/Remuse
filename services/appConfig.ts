@@ -29,6 +29,10 @@ function parseCommaSeparatedList(value: string | undefined) {
     .filter(Boolean);
 }
 
+function normalizeEmailList(value: string | undefined) {
+  return parseCommaSeparatedList(value).map((entry) => entry.toLowerCase());
+}
+
 export const APP_ROOT = process.env.APP_ROOT ? path.resolve(process.env.APP_ROOT) : process.cwd();
 export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -41,9 +45,15 @@ export const APP_CONFIG = {
     || (IS_PRODUCTION ? null : 'https://cdn.12ai.org'),
   geminiFallbackBaseUrls: parseCommaSeparatedList(process.env.GEMINI_FALLBACK_BASE_URLS).map((url) => normalizeUrl(url) || '').filter(Boolean),
   allowThirdPartyGeminiProxy: parseBoolean(process.env.ALLOW_THIRD_PARTY_GEMINI_PROXY),
+  stepfunApiKey: process.env.STEPFUN_API_KEY?.trim() || '',
+  stepfunBaseUrl: normalizeUrl(process.env.STEPFUN_BASE_URL) || 'https://api.stepfun.com/v1',
+  stepfunTimeoutMs: parseInteger(process.env.STEPFUN_TIMEOUT_MS, 90_000),
   disableLiveAi: parseBoolean(process.env.DISABLE_LIVE_AI, process.env.NODE_ENV === 'test'),
   dailyGeminiCalls: parseInteger(process.env.DAILY_GEMINI_CALL_LIMIT, 40),
   dailyMemoryQueries: parseInteger(process.env.DAILY_MEMORY_QUERY_LIMIT, 24),
+  dailyGeminiImageCalls: parseInteger(process.env.DAILY_GEMINI_IMAGE_LIMIT, parseInteger(process.env.DAILY_GEMINI_CALL_LIMIT, 40)),
+  dailyStepfunTextCalls: parseInteger(process.env.DAILY_STEPFUN_TEXT_LIMIT, parseInteger(process.env.DAILY_MEMORY_QUERY_LIMIT, 24)),
+  dailyStepfunVisionCalls: parseInteger(process.env.DAILY_STEPFUN_VISION_LIMIT, parseInteger(process.env.DAILY_GEMINI_CALL_LIMIT, 40)),
   backupDir: path.resolve(process.env.BACKUP_DIR || path.join(APP_ROOT, 'backups')),
   errorAlertWebhookUrl: normalizeUrl(process.env.ERROR_ALERT_WEBHOOK_URL),
   errorAlertIncludeWarn: parseBoolean(process.env.ERROR_ALERT_INCLUDE_WARN),
@@ -57,6 +67,7 @@ export const APP_CONFIG = {
   rembgModelHome: process.env.REMBG_MODEL_HOME?.trim() || '',
   rembgTimeoutMs: parseInteger(process.env.REMBG_TIMEOUT_MS, 20_000),
   useAiEmojiCaptions: parseBoolean(process.env.REMUSE_USE_AI_EMOJI_CAPTIONS),
+  adminEmailAllowlist: normalizeEmailList(process.env.ADMIN_EMAIL_ALLOWLIST),
   legalVersions: LEGAL_VERSION_SNAPSHOT,
 } as const;
 
@@ -67,6 +78,10 @@ export function validateAppConfig() {
 
   if (!APP_CONFIG.geminiApiKey) {
     throw new Error('\u7f3a\u5c11 GEMINI_API_KEY \u914d\u7f6e\u3002');
+  }
+
+  if (!APP_CONFIG.stepfunApiKey && !APP_CONFIG.disableLiveAi) {
+    throw new Error('\u7f3a\u5c11 STEPFUN_API_KEY \u914d\u7f6e\u3002');
   }
 
   if (APP_CONFIG.isProduction) {

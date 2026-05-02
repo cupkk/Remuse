@@ -14,14 +14,14 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { CollectedItem, MemoryConversationSession, MemoryThreadSummary, User } from '../types';
+import { CollectedItem, MemoryAssistantMessage, MemoryConversationSession, MemoryThreadSummary, User } from '../types';
 import {
   createMemoryThread,
   deleteMemoryThread,
   getMemoryThread,
   listMemoryThreads,
-  queryMemoryThread,
   renameMemoryThread,
+  streamMemoryThreadQuery,
 } from '../services/memoryService';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -182,7 +182,8 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({
   }
 
   async function handleAsk() {
-    if (!activeThread || query.trim().length < 2 || isSubmitting) {
+    const currentThread = activeThread;
+    if (!currentThread || query.trim().length < 2 || isSubmitting) {
       return;
     }
 
@@ -190,15 +191,128 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({
     setIsSubmitting(true);
     const prompt = query.trim();
     setQuery('');
+    const threadId = currentThread.id;
+    const startedAt = Date.now();
+    let requestAccepted = false;
+
+    const userMessage: MemoryAssistantMessage = {
+      id: `memory-user-${startedAt}`,
+      role: 'user',
+      content: prompt,
+    };
+    const assistantMessageId = `memory-assistant-${startedAt}`;
+    const assistantMessage: MemoryAssistantMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+    };
+    const pendingDeltaQueue: string[] = [];
+    let playbackTimer: number | null = null;
+    let drainResolvers: Array<() => void> = [];
+
+    const resolveDrain = () => {
+      const resolvers = drainResolvers;
+      drainResolvers = [];
+      resolvers.forEach((resolve) => resolve());
+    };
+
+    const flushDeltaQueue = () => {
+      if (pendingDeltaQueue.length === 0) {
+        playbackTimer = null;
+        resolveDrain();
+        return;
+      }
+
+      const nextDelta = pendingDeltaQueue[0];
+      const step = nextDelta.length > 24 ? 6 : nextDelta.length > 12 ? 4 : 2;
+      const chunk = nextDelta.slice(0, step);
+
+      if (nextDelta.length <= step) {
+        pendingDeltaQueue.shift();
+      } else {
+        pendingDeltaQueue[0] = nextDelta.slice(step);
+      }
+
+      setActiveThread((prev) => {
+        if (!prev || prev.id !== threadId) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          messages: prev.messages.map((message) => (
+            message.id === assistantMessageId
+              ? { ...message, content: `${message.content}${chunk}` }
+              : message
+          )),
+        };
+      });
+
+      playbackTimer = window.setTimeout(flushDeltaQueue, 18);
+    };
+
+    const enqueueDelta = (delta: string) => {
+      if (!delta) {
+        return;
+      }
+
+      pendingDeltaQueue.push(delta);
+      if (playbackTimer === null) {
+        playbackTimer = window.setTimeout(flushDeltaQueue, 0);
+      }
+    };
+
+    const stopPlayback = () => {
+      pendingDeltaQueue.length = 0;
+      if (playbackTimer !== null) {
+        window.clearTimeout(playbackTimer);
+        playbackTimer = null;
+      }
+      resolveDrain();
+    };
+
+    const waitForPlaybackDrain = () => new Promise<void>((resolve) => {
+      if (pendingDeltaQueue.length === 0 && playbackTimer === null) {
+        resolve();
+        return;
+      }
+
+      drainResolvers.push(resolve);
+    });
+
+    setActiveThread({
+      ...currentThread,
+      messages: [...currentThread.messages, userMessage, assistantMessage],
+    });
 
     try {
-      const updatedThread = await queryMemoryThread(activeThread.id, prompt);
-      setActiveThread(updatedThread);
+      const updatedThread = await streamMemoryThreadQuery(threadId, prompt, {
+        onStarted: () => {
+          requestAccepted = true;
+        },
+        onDelta: (delta) => {
+          enqueueDelta(delta);
+        },
+      });
+
+      await waitForPlaybackDrain();
+      setActiveThread((prev) => (prev?.id === threadId ? updatedThread : prev));
       setThreads(await listMemoryThreads());
     } catch (queryError) {
+      stopPlayback();
       setError(queryError instanceof Error ? queryError.message : '记忆查询失败。');
-      setQuery(prompt);
+      if (!requestAccepted) {
+        setQuery(prompt);
+        setActiveThread(currentThread);
+      } else {
+        try {
+          await refreshThread(threadId);
+        } catch {
+          // Keep the optimistic UI if the sync-back request also fails.
+        }
+      }
     } finally {
+      stopPlayback();
       setIsSubmitting(false);
     }
   }

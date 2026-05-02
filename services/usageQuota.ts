@@ -3,7 +3,7 @@ import type { AdminUserActivity } from '../types.ts';
 import db from './database.ts';
 import { APP_CONFIG } from './appConfig.ts';
 
-export type AiUsageScope = 'gemini-proxy' | 'memory-query';
+export type AiUsageScope = 'stepfun-text' | 'stepfun-vision' | 'gemini-image';
 export type ProductUsageEventType =
   | 'guest_bootstrap'
   | 'register_success'
@@ -40,8 +40,9 @@ type UserActivityRow = {
   is_guest: number;
   total_events: number;
   ai_calls: number;
-  gemini_calls: number;
-  memory_ai_calls: number;
+  stepfun_text_calls: number;
+  stepfun_vision_calls: number;
+  gemini_image_calls: number;
   login_count: number;
   refresh_count: number;
   scan_count: number;
@@ -49,6 +50,36 @@ type UserActivityRow = {
   memory_query_count: number;
   last_seen: string | null;
 };
+
+const AI_USAGE_SCOPES: AiUsageScope[] = ['stepfun-text', 'stepfun-vision', 'gemini-image'];
+
+export function buildNormalizedAiScopeSql(
+  scopeColumn = 'scope',
+  detailsJsonColumn = 'details_json',
+  modelColumn = 'model',
+) {
+  return `
+    CASE
+      WHEN ${scopeColumn} = 'stepfun-text' THEN 'stepfun-text'
+      WHEN ${scopeColumn} = 'stepfun-vision' THEN 'stepfun-vision'
+      WHEN ${scopeColumn} = 'gemini-image' THEN 'gemini-image'
+      WHEN ${scopeColumn} = 'memory-query' THEN 'stepfun-text'
+      WHEN ${scopeColumn} = 'gemini-proxy'
+        AND lower(COALESCE(json_extract(${detailsJsonColumn}, '$.feature'), ${modelColumn}, '')) = 'scan-analysis'
+        THEN 'stepfun-vision'
+      WHEN ${scopeColumn} = 'gemini-proxy' THEN 'gemini-image'
+      ELSE ${scopeColumn}
+    END
+  `.trim();
+}
+
+const NORMALIZED_AI_SCOPE_SQL = buildNormalizedAiScopeSql();
+
+const AI_TOKEN_SELECT_SQL = `
+  COALESCE(CAST(json_extract(details_json, '$.usage.prompt_tokens') AS INTEGER), CAST(json_extract(details_json, '$.promptTokens') AS INTEGER), 0) AS prompt_tokens,
+  COALESCE(CAST(json_extract(details_json, '$.usage.completion_tokens') AS INTEGER), CAST(json_extract(details_json, '$.completionTokens') AS INTEGER), 0) AS completion_tokens,
+  COALESCE(CAST(json_extract(details_json, '$.usage.total_tokens') AS INTEGER), CAST(json_extract(details_json, '$.totalTokens') AS INTEGER), 0) AS total_tokens
+`.trim();
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS ai_usage_events (
@@ -93,7 +124,7 @@ const stmts = {
     SELECT COUNT(*) AS count
     FROM ai_usage_events
     WHERE user_id = @user_id
-      AND scope = @scope
+      AND ${NORMALIZED_AI_SCOPE_SQL} = @scope
       AND day_key = @day_key
       AND success = 1
   `),
@@ -169,16 +200,43 @@ const stmts = {
       SELECT user_id FROM product_usage_events WHERE day_key >= @day_key
     )
   `),
-  aiByScopeSince: db.prepare<{ day_key: string }>(`
+  userVolume: db.prepare(`
     SELECT
-      scope,
+      COUNT(*) AS total_users,
+      SUM(CASE WHEN is_guest = 0 THEN 1 ELSE 0 END) AS registered_users,
+      SUM(CASE WHEN is_guest = 1 THEN 1 ELSE 0 END) AS guest_users,
+      SUM(CASE WHEN email_verified = 1 THEN 1 ELSE 0 END) AS verified_users,
+      SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admin_users
+    FROM users
+  `),
+  aiByScopeSince: db.prepare<{ day_key: string }>(`
+    WITH normalized_ai_events AS (
+      SELECT
+        ${NORMALIZED_AI_SCOPE_SQL} AS normalized_scope,
+        success,
+        duration_ms,
+        ${AI_TOKEN_SELECT_SQL}
+      FROM ai_usage_events
+      WHERE day_key >= @day_key
+    )
+    SELECT
+      normalized_scope AS scope,
       COUNT(*) AS calls,
       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success_count,
-      AVG(duration_ms) AS avg_duration_ms
-    FROM ai_usage_events
-    WHERE day_key >= @day_key
-    GROUP BY scope
-    ORDER BY calls DESC, scope ASC
+      AVG(duration_ms) AS avg_duration_ms,
+      SUM(prompt_tokens) AS prompt_tokens,
+      SUM(completion_tokens) AS completion_tokens,
+      SUM(total_tokens) AS total_tokens,
+      SUM(CASE
+        WHEN total_tokens > 0 THEN total_tokens
+        WHEN normalized_scope = 'stepfun-text' THEN 1200
+        WHEN normalized_scope = 'stepfun-vision' THEN 2200
+        WHEN normalized_scope = 'gemini-image' THEN 1800
+        ELSE 1000
+      END) AS estimated_tokens
+    FROM normalized_ai_events
+    GROUP BY normalized_scope
+    ORDER BY calls DESC, normalized_scope ASC
   `),
   productByTypeSince: db.prepare<{ day_key: string }>(`
     SELECT
@@ -211,7 +269,11 @@ const stmts = {
   `),
   topUsersSince: db.prepare<{ day_key: string; limit: number }>(`
     WITH combined_events AS (
-      SELECT user_id, scope AS event_name, 'ai' AS source, created_at
+      SELECT
+        user_id,
+        ${NORMALIZED_AI_SCOPE_SQL} AS event_name,
+        'ai' AS source,
+        created_at
       FROM ai_usage_events
       WHERE day_key >= @day_key
 
@@ -226,8 +288,9 @@ const stmts = {
         user_id,
         COUNT(*) AS total_events,
         SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END) AS ai_calls,
-        SUM(CASE WHEN event_name = 'gemini-proxy' THEN 1 ELSE 0 END) AS gemini_calls,
-        SUM(CASE WHEN event_name = 'memory-query' THEN 1 ELSE 0 END) AS memory_ai_calls,
+        SUM(CASE WHEN event_name = 'stepfun-text' THEN 1 ELSE 0 END) AS stepfun_text_calls,
+        SUM(CASE WHEN event_name = 'stepfun-vision' THEN 1 ELSE 0 END) AS stepfun_vision_calls,
+        SUM(CASE WHEN event_name = 'gemini-image' THEN 1 ELSE 0 END) AS gemini_image_calls,
         SUM(CASE WHEN event_name = 'login_success' THEN 1 ELSE 0 END) AS login_count,
         SUM(CASE WHEN event_name = 'session_refresh' THEN 1 ELSE 0 END) AS refresh_count,
         SUM(CASE WHEN event_name = 'scan_archive' THEN 1 ELSE 0 END) AS scan_count,
@@ -249,7 +312,11 @@ const stmts = {
   `),
   recentUsersSince: db.prepare<{ day_key: string; limit: number }>(`
     WITH combined_events AS (
-      SELECT user_id, scope AS event_name, 'ai' AS source, created_at
+      SELECT
+        user_id,
+        ${NORMALIZED_AI_SCOPE_SQL} AS event_name,
+        'ai' AS source,
+        created_at
       FROM ai_usage_events
       WHERE day_key >= @day_key
 
@@ -264,8 +331,9 @@ const stmts = {
         user_id,
         COUNT(*) AS total_events,
         SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END) AS ai_calls,
-        SUM(CASE WHEN event_name = 'gemini-proxy' THEN 1 ELSE 0 END) AS gemini_calls,
-        SUM(CASE WHEN event_name = 'memory-query' THEN 1 ELSE 0 END) AS memory_ai_calls,
+        SUM(CASE WHEN event_name = 'stepfun-text' THEN 1 ELSE 0 END) AS stepfun_text_calls,
+        SUM(CASE WHEN event_name = 'stepfun-vision' THEN 1 ELSE 0 END) AS stepfun_vision_calls,
+        SUM(CASE WHEN event_name = 'gemini-image' THEN 1 ELSE 0 END) AS gemini_image_calls,
         SUM(CASE WHEN event_name = 'login_success' THEN 1 ELSE 0 END) AS login_count,
         SUM(CASE WHEN event_name = 'session_refresh' THEN 1 ELSE 0 END) AS refresh_count,
         SUM(CASE WHEN event_name = 'scan_archive' THEN 1 ELSE 0 END) AS scan_count,
@@ -289,17 +357,19 @@ const stmts = {
 
 export function getUsageLimit(scope: AiUsageScope) {
   switch (scope) {
-    case 'memory-query':
-      return APP_CONFIG.dailyMemoryQueries;
-    case 'gemini-proxy':
+    case 'stepfun-text':
+      return APP_CONFIG.dailyStepfunTextCalls;
+    case 'stepfun-vision':
+      return APP_CONFIG.dailyStepfunVisionCalls;
+    case 'gemini-image':
     default:
-      return APP_CONFIG.dailyGeminiCalls;
+      return APP_CONFIG.dailyGeminiImageCalls;
   }
 }
 
 export function getUsageSnapshotForUser(userId: string): UsageSnapshot[] {
   const dayKey = getCurrentDayKey();
-  return (['gemini-proxy', 'memory-query'] as AiUsageScope[]).map((scope) => {
+  return AI_USAGE_SCOPES.map((scope) => {
     const used = getUsageCountForDay(userId, scope, dayKey);
     const limit = getUsageLimit(scope);
     return {
@@ -364,17 +434,9 @@ export function recordProductUsageEvent(input: {
 export function getAdminUsageOverview() {
   const summary7d = buildUsageSummary(7);
   const summary30d = buildUsageSummary(30);
-  const aiScopes7d = (stmts.aiByScopeSince.all({ day_key: getDayKeyDaysAgo(6) }) as Array<{
-    scope: string;
-    calls: number;
-    success_count: number | null;
-    avg_duration_ms: number | null;
-  }>).map((row) => ({
-    scope: row.scope,
-    calls: row.calls || 0,
-    successCount: row.success_count || 0,
-    avgDurationMs: row.avg_duration_ms === null ? null : Math.round(row.avg_duration_ms),
-  }));
+  const userVolume = getUserVolumeSummary();
+  const aiScopes7d = getAiScopesSince(7);
+  const aiScopes30d = getAiScopesSince(30);
   const productEvents7d = (stmts.productByTypeSince.all({ day_key: getDayKeyDaysAgo(6) }) as Array<{
     event_type: string;
     count: number;
@@ -387,9 +449,11 @@ export function getAdminUsageOverview() {
   const flaggedUsers = topUsers.filter((user) => user.totalEvents >= 20 || user.aiCalls >= 10);
 
   return {
+    userVolume,
     summary7d,
     summary30d,
     aiScopes7d,
+    aiScopes30d,
     productEvents7d,
     trends7d: buildTrendWindow(7),
     trends30d: buildTrendWindow(30),
@@ -397,6 +461,46 @@ export function getAdminUsageOverview() {
     recentUsers,
     flaggedUsers,
   };
+}
+
+function getUserVolumeSummary() {
+  const row = stmts.userVolume.get() as {
+    total_users: number | null;
+    registered_users: number | null;
+    guest_users: number | null;
+    verified_users: number | null;
+    admin_users: number | null;
+  } | undefined;
+
+  return {
+    totalUsers: row?.total_users || 0,
+    registeredUsers: row?.registered_users || 0,
+    guestUsers: row?.guest_users || 0,
+    verifiedUsers: row?.verified_users || 0,
+    adminUsers: row?.admin_users || 0,
+  };
+}
+
+function getAiScopesSince(windowDays: number) {
+  return (stmts.aiByScopeSince.all({ day_key: getDayKeyDaysAgo(windowDays - 1) }) as Array<{
+    scope: string;
+    calls: number;
+    success_count: number | null;
+    avg_duration_ms: number | null;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    total_tokens: number | null;
+    estimated_tokens: number | null;
+  }>).map((row) => ({
+    scope: row.scope,
+    calls: row.calls || 0,
+    successCount: row.success_count || 0,
+    avgDurationMs: row.avg_duration_ms === null ? null : Math.round(row.avg_duration_ms),
+    promptTokens: row.prompt_tokens || 0,
+    completionTokens: row.completion_tokens || 0,
+    totalTokens: row.total_tokens || 0,
+    estimatedTokens: row.estimated_tokens || 0,
+  }));
 }
 
 function buildUsageSummary(windowDays: number) {
@@ -460,8 +564,9 @@ function mapUserActivityRows(rows: UserActivityRow[]): AdminUserActivity[] {
     isGuest: !!row.is_guest,
     totalEvents: row.total_events || 0,
     aiCalls: row.ai_calls || 0,
-    geminiCalls: row.gemini_calls || 0,
-    memoryAiCalls: row.memory_ai_calls || 0,
+    stepfunTextCalls: row.stepfun_text_calls || 0,
+    stepfunVisionCalls: row.stepfun_vision_calls || 0,
+    geminiImageCalls: row.gemini_image_calls || 0,
     loginCount: row.login_count || 0,
     refreshCount: row.refresh_count || 0,
     scanCount: row.scan_count || 0,

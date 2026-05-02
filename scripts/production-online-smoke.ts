@@ -26,6 +26,7 @@ interface SessionContext {
     id: string;
     email: string | null;
     nickname: string;
+    role?: string;
     email_verified?: number;
     email_verified_at?: string | null;
   };
@@ -102,11 +103,7 @@ try {
 
 function resolveOptions(argv: string[]): ScriptOptions {
   const args = parseArgs(argv);
-  const adminEmail = normalizeEmailAddress(
-    args['admin-email']
-      || process.env.SMOKE_ADMIN_EMAIL
-      || '',
-  );
+  const adminEmail = normalizeEmailAddress(args['admin-email'] || process.env.SMOKE_ADMIN_EMAIL || '');
 
   if (!adminEmail) {
     throw new Error('缺少管理员邮箱，请使用 --admin-email 或设置 SMOKE_ADMIN_EMAIL。');
@@ -203,12 +200,8 @@ async function runHealthChecks(options: ScriptOptions) {
 
 async function runAdminChecks(options: ScriptOptions, session: SessionContext) {
   const headers = authHeaders(session.accessToken);
-  const overview = await fetchJson(`${options.baseUrl}/api/admin/overview`, {
-    headers,
-  });
-  const search = await fetchJson(`${options.baseUrl}/api/admin/users?query=${encodeURIComponent(options.adminEmail)}`, {
-    headers,
-  });
+  const overview = await fetchJson(`${options.baseUrl}/api/admin/overview`, { headers });
+  const search = await fetchJson(`${options.baseUrl}/api/admin/users?query=${encodeURIComponent(options.adminEmail)}`, { headers });
 
   const matchedUser = Array.isArray(search.body?.users)
     ? (search.body.users as Array<{ userId?: string; email?: string | null }>).find(
@@ -220,32 +213,24 @@ async function runAdminChecks(options: ScriptOptions, session: SessionContext) {
     throw new Error(`管理员搜索结果中未包含 ${options.adminEmail}。`);
   }
 
-  const detail = await fetchJson(`${options.baseUrl}/api/admin/users/${matchedUser.userId}`, {
-    headers,
-  });
-
+  const detail = await fetchJson(`${options.baseUrl}/api/admin/users/${matchedUser.userId}`, { headers });
   const watchResult = await fetchJson(`${options.baseUrl}/api/admin/users/${matchedUser.userId}/flag`, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify({
-      status: 'watch',
-      note: 'production smoke check',
-    }),
+    body: JSON.stringify({ status: 'watch', note: 'production smoke check' }),
   });
-
   const clearResult = await fetchJson(`${options.baseUrl}/api/admin/users/${matchedUser.userId}/flag`, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify({
-      status: 'cleared',
-      note: 'production smoke check cleared',
-    }),
+    body: JSON.stringify({ status: 'cleared', note: 'production smoke check cleared' }),
   });
 
   return {
     overviewStatus: overview.status,
     totalAiCalls7d: overview.body?.totalAiCalls7d ?? null,
     activeUsers7d: overview.body?.activeUsers7d ?? null,
+    userVolume: overview.body?.userVolume ?? null,
+    aiScopes30d: overview.body?.aiScopes30d ?? null,
     flaggedUsers: Array.isArray(overview.body?.flaggedUsers) ? overview.body.flaggedUsers.length : 0,
     searchStatus: search.status,
     searchResults: Array.isArray(search.body?.users) ? search.body.users.length : 0,
@@ -340,7 +325,7 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
           name: '奶茶玻璃瓶',
           category: '瓶瓶罐罐',
           material: '玻璃',
-          description: '透明玻璃瓶，适合改造为收纳或展示器皿。',
+          description: '透明玻璃瓶，适合改造成收纳或展示器皿。',
           story: '保留了日常记忆的一只奶茶玻璃瓶。',
           tags: ['玻璃', '收纳', '再生'],
         },
@@ -351,9 +336,7 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
   const analysis = await fetchJson(`${options.baseUrl}/api/ai/analyze-item`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      imageBase64,
-    }),
+    body: JSON.stringify({ imageBase64 }),
   });
 
   const analysisBody = analysis.body?.analysis as JsonRecord | undefined;
@@ -376,19 +359,20 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
     }),
   });
 
-  const itemId = (createdItem.body?.item as JsonRecord | undefined)?.id as string | undefined;
+  const item = createdItem.body?.item as JsonRecord | undefined;
+  const itemId = item?.id as string | undefined;
   if (!itemId) {
     throw new Error('归档验收步骤未返回藏品 ID。');
   }
-  const coverImageUrl = (createdItem.body?.item as JsonRecord | undefined)?.coverImageUrl as string | undefined;
-  const hasGeneratedCover = typeof coverImageUrl === 'string'
-    && (
-      coverImageUrl.startsWith('data:image/')
-      || coverImageUrl.startsWith('/api/uploads/item-covers/')
-      || /^https?:\/\/.+\/api\/uploads\/item-covers\//.test(coverImageUrl)
-    );
-  if (!hasGeneratedCover) {
-    throw new Error('归档验收步骤未返回已生成的封面图。');
+
+  const coverResult = await waitForGeneratedCover(
+    options,
+    headers,
+    itemId,
+    item?.coverImageUrl as string | undefined,
+  );
+  if (!coverResult.generated) {
+    throw new Error('归档验收步骤未在等待时间内生成封面图。');
   }
 
   const sticker = await fetchJson(`${options.baseUrl}/api/ai/generate-sticker`, {
@@ -432,13 +416,68 @@ async function runAiChecks(options: ScriptOptions, session: SessionContext) {
       analysisName: analysisBody.name,
       analysisCategory: analysisBody.category,
       archiveStatus: createdItem.status,
-      archiveCoverGenerated: hasGeneratedCover,
-      archiveCoverImageUrl: coverImageUrl || null,
+      archiveCoverGenerated: coverResult.generated,
+      archiveCoverImageUrl: coverResult.coverImageUrl || null,
+      archiveCoverWaitAttempts: coverResult.attempts,
       stickerStatus: sticker.status,
       stickerSavedStatus: createdSticker.status,
       sampleImageSource,
     },
   };
+}
+
+async function waitForGeneratedCover(
+  options: ScriptOptions,
+  headers: ReturnType<typeof authHeaders>,
+  itemId: string,
+  initialCoverImageUrl: string | undefined,
+) {
+  if (isGeneratedCoverUrl(initialCoverImageUrl)) {
+    return {
+      generated: true,
+      coverImageUrl: initialCoverImageUrl,
+      attempts: 0,
+    };
+  }
+
+  const maxAttempts = Number(process.env.SMOKE_COVER_POLL_ATTEMPTS || 30);
+  const intervalMs = Number(process.env.SMOKE_COVER_POLL_INTERVAL_MS || 3000);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await sleep(intervalMs);
+    const list = await fetchJson(`${options.baseUrl}/api/items`, { headers });
+    const items = Array.isArray(list.body?.items) ? (list.body.items as JsonRecord[]) : [];
+    const matched = items.find((entry) => entry.id === itemId);
+    const coverImageUrl = matched?.coverImageUrl as string | undefined;
+    if (isGeneratedCoverUrl(coverImageUrl)) {
+      return {
+        generated: true,
+        coverImageUrl,
+        attempts: attempt,
+      };
+    }
+  }
+
+  return {
+    generated: false,
+    coverImageUrl: initialCoverImageUrl || null,
+    attempts: maxAttempts,
+  };
+}
+
+function isGeneratedCoverUrl(value: unknown) {
+  return typeof value === 'string'
+    && (
+      value.startsWith('data:image/')
+      || value.startsWith('/api/uploads/item-covers/')
+      || /^https?:\/\/.+\/api\/uploads\/item-covers\//.test(value)
+    );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function cleanupArtifacts(baseUrl: string, itemId: string | null, stickerId: string | null, accessToken: string | null) {

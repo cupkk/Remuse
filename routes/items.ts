@@ -61,7 +61,11 @@ router.get('/', (req: Request, res: Response) => {
     const items = getItemsByUser(req.userId!);
     res.json({ items: items.map((item) => resolveImageUrl(item, req.userId!)) });
   } catch (error) {
-    console.error('\u52a0\u8f7d\u85cf\u54c1\u5217\u8868\u5931\u8d25\uff1a', error);
+    serverLogger.error('items.list_failed', {
+      userId: req.userId || null,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack || null : null,
+    });
     res.status(500).json({ error: ITEM_MESSAGE_LOAD_FAILED });
   }
 });
@@ -101,16 +105,6 @@ router.post('/', async (req: Request, res: Response) => {
     const audioPath = audioBase64
       ? await saveBase64Audio(audioBase64, 'item-audio', req.userId!, id)
       : '';
-
-    if (!coverImagePath && imagePath) {
-      coverImagePath = await generateAndPersistCover({
-        userId: req.userId!,
-        itemId: id,
-        hallId: resolvedHallId,
-        itemName: name,
-        imagePath,
-      });
-    }
 
     const item = createItem({
       id,
@@ -485,13 +479,22 @@ function resolveImageUrl<T extends {
 }
 
 function handleRouteError(res: Response, error: unknown, fallbackMessage: string) {
-  console.error(fallbackMessage, error);
-
   if (error instanceof ManagedUploadError) {
+    serverLogger.warn('items.route_rejected', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      fallbackMessage,
+    });
     res.status(error.statusCode).json({ error: error.message, code: error.code });
     return;
   }
 
+  serverLogger.error('items.route_failed', {
+    fallbackMessage,
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack || null : null,
+  });
   res.status(500).json({ error: fallbackMessage });
 }
 
@@ -514,7 +517,7 @@ async function buildGeneratedCoverPayload(input: {
     );
     return coverImageUrl;
   } catch (error) {
-    console.error('\u751f\u6210\u85cf\u54c1\u5c01\u9762\u5931\u8d25\uff1a', {
+    serverLogger.error('item.cover_generation_failed', {
       userId: input.userId,
       itemId: input.itemId,
       hallId: input.hallId,

@@ -1,6 +1,6 @@
 import type { AdminUserActivity } from '../types.ts';
 import db from './database.ts';
-import { getAdminUsageOverview } from './usageQuota.ts';
+import { buildNormalizedAiScopeSql, getAdminUsageOverview } from './usageQuota.ts';
 
 type AdminFlagRow = {
   user_id: string;
@@ -16,8 +16,9 @@ type UserActivityRow = {
   is_guest: number;
   total_events: number;
   ai_calls: number;
-  gemini_calls: number;
-  memory_ai_calls: number;
+  stepfun_text_calls: number;
+  stepfun_vision_calls: number;
+  gemini_image_calls: number;
   login_count: number;
   refresh_count: number;
   scan_count: number;
@@ -25,6 +26,8 @@ type UserActivityRow = {
   memory_query_count: number;
   last_seen: string | null;
 };
+
+const NORMALIZED_AI_SCOPE_SQL = buildNormalizedAiScopeSql();
 
 type EventRow = {
   id: string;
@@ -82,7 +85,11 @@ const stmts = {
   `),
   searchUsers: db.prepare<{ day_key: string; query: string; limit: number }>(`
     WITH combined_events AS (
-      SELECT user_id, scope AS event_name, 'ai' AS source, created_at
+      SELECT
+        user_id,
+        ${NORMALIZED_AI_SCOPE_SQL} AS event_name,
+        'ai' AS source,
+        created_at
       FROM ai_usage_events
       WHERE day_key >= @day_key
 
@@ -99,8 +106,9 @@ const stmts = {
       users.is_guest,
       COALESCE(COUNT(combined_events.user_id), 0) AS total_events,
       COALESCE(SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END), 0) AS ai_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'gemini-proxy' THEN 1 ELSE 0 END), 0) AS gemini_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'memory-query' THEN 1 ELSE 0 END), 0) AS memory_ai_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-text' THEN 1 ELSE 0 END), 0) AS stepfun_text_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-vision' THEN 1 ELSE 0 END), 0) AS stepfun_vision_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'gemini-image' THEN 1 ELSE 0 END), 0) AS gemini_image_calls,
       COALESCE(SUM(CASE WHEN event_name = 'login_success' THEN 1 ELSE 0 END), 0) AS login_count,
       COALESCE(SUM(CASE WHEN event_name = 'session_refresh' THEN 1 ELSE 0 END), 0) AS refresh_count,
       COALESCE(SUM(CASE WHEN event_name = 'scan_archive' THEN 1 ELSE 0 END), 0) AS scan_count,
@@ -120,7 +128,11 @@ const stmts = {
   `),
   userActivityById: db.prepare<{ day_key: string; user_id: string }>(`
     WITH combined_events AS (
-      SELECT user_id, scope AS event_name, 'ai' AS source, created_at
+      SELECT
+        user_id,
+        ${NORMALIZED_AI_SCOPE_SQL} AS event_name,
+        'ai' AS source,
+        created_at
       FROM ai_usage_events
       WHERE day_key >= @day_key
         AND user_id = @user_id
@@ -139,8 +151,9 @@ const stmts = {
       users.is_guest,
       COALESCE(COUNT(combined_events.user_id), 0) AS total_events,
       COALESCE(SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END), 0) AS ai_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'gemini-proxy' THEN 1 ELSE 0 END), 0) AS gemini_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'memory-query' THEN 1 ELSE 0 END), 0) AS memory_ai_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-text' THEN 1 ELSE 0 END), 0) AS stepfun_text_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-vision' THEN 1 ELSE 0 END), 0) AS stepfun_vision_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'gemini-image' THEN 1 ELSE 0 END), 0) AS gemini_image_calls,
       COALESCE(SUM(CASE WHEN event_name = 'login_success' THEN 1 ELSE 0 END), 0) AS login_count,
       COALESCE(SUM(CASE WHEN event_name = 'session_refresh' THEN 1 ELSE 0 END), 0) AS refresh_count,
       COALESCE(SUM(CASE WHEN event_name = 'scan_archive' THEN 1 ELSE 0 END), 0) AS scan_count,
@@ -171,7 +184,7 @@ const stmts = {
     SELECT
       id,
       'ai' AS source,
-      scope AS name,
+      ${NORMALIZED_AI_SCOPE_SQL} AS name,
       created_at,
       success,
       duration_ms,
@@ -222,7 +235,11 @@ const stmts = {
   `),
   manualFlaggedUsers: db.prepare<{ day_key: string; limit: number }>(`
     WITH combined_events AS (
-      SELECT user_id, scope AS event_name, 'ai' AS source, created_at
+      SELECT
+        user_id,
+        ${NORMALIZED_AI_SCOPE_SQL} AS event_name,
+        'ai' AS source,
+        created_at
       FROM ai_usage_events
       WHERE day_key >= @day_key
 
@@ -239,8 +256,9 @@ const stmts = {
       users.is_guest,
       COALESCE(COUNT(combined_events.user_id), 0) AS total_events,
       COALESCE(SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END), 0) AS ai_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'gemini-proxy' THEN 1 ELSE 0 END), 0) AS gemini_calls,
-      COALESCE(SUM(CASE WHEN event_name = 'memory-query' THEN 1 ELSE 0 END), 0) AS memory_ai_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-text' THEN 1 ELSE 0 END), 0) AS stepfun_text_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'stepfun-vision' THEN 1 ELSE 0 END), 0) AS stepfun_vision_calls,
+      COALESCE(SUM(CASE WHEN event_name = 'gemini-image' THEN 1 ELSE 0 END), 0) AS gemini_image_calls,
       COALESCE(SUM(CASE WHEN event_name = 'login_success' THEN 1 ELSE 0 END), 0) AS login_count,
       COALESCE(SUM(CASE WHEN event_name = 'session_refresh' THEN 1 ELSE 0 END), 0) AS refresh_count,
       COALESCE(SUM(CASE WHEN event_name = 'scan_archive' THEN 1 ELSE 0 END), 0) AS scan_count,
@@ -459,8 +477,9 @@ function mapUserActivityRows(rows: UserActivityRow[]): AdminUserActivity[] {
     isGuest: !!row.is_guest,
     totalEvents: row.total_events || 0,
     aiCalls: row.ai_calls || 0,
-    geminiCalls: row.gemini_calls || 0,
-    memoryAiCalls: row.memory_ai_calls || 0,
+    stepfunTextCalls: row.stepfun_text_calls || 0,
+    stepfunVisionCalls: row.stepfun_vision_calls || 0,
+    geminiImageCalls: row.gemini_image_calls || 0,
     loginCount: row.login_count || 0,
     refreshCount: row.refresh_count || 0,
     scanCount: row.scan_count || 0,

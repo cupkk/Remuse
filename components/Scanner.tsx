@@ -652,32 +652,31 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
   };
 
   const processImage = async (file: File, directUrl?: string) => {
-    // Abort any previous in-flight request
     if (abortRef.current) {
       abortRef.current.abort();
     }
     const controller = new AbortController();
     abortRef.current = controller;
-    
+
     setIsAnalyzing(true);
-    setStatusText("正在扫描物质结构...");
+    setStatusText('\u6b63\u5728\u538b\u7f29\u56fe\u7247...');
     setAnalysisResult(null);
     setGeneratedSticker(null);
     setErrorInfo(null);
-    
-    // Use directly passed URL or fallback to state (though state might be stale if called immediately)
+
     const effectiveImageUrl = directUrl || previewUrl || '';
 
     try {
       const base64 = await fileToGenerativePart(file);
       if (controller.signal.aborted) return;
-      
-      setStatusText("视觉识别中...");
+
+      setStatusText('\u89c6\u89c9\u8bc6\u522b\u4e2d...');
       const analysis = await analyzeItemImage(base64);
       if (controller.signal.aborted) return;
-      
-      setStatusText("正在计算再生潜力...");
+
+      setStatusText('\u6b63\u5728\u6574\u7406\u85cf\u54c1\u4fe1\u606f...');
       const hallId = selectedHallId || analysis.category;
+      const initialStory = buildArchivedStory(memoryDraftRef.current, analysis.story || '');
 
       const newItem: CollectedItem = {
         id: self.crypto?.randomUUID?.() ?? (`${Date.now()}-${Math.random().toString(36).slice(2,11)}`),
@@ -686,18 +685,18 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
         category: getHallNameById(hallsSafe, hallId, analysis.category),
         material: analysis.material,
         description: analysis.description || analysis.story || '',
-        story: '',
+        story: initialStory,
         tags: analysis.tags,
-        // Store as data URL so blob URL can be safely revoked
         imageUrl: `data:${file.type || 'image/jpeg'};base64,${base64}`,
         dateCollected: new Date().toISOString(),
         status: 'raw',
       };
 
-      setStatusText('正在归档藏品...');
+      setStatusText('\u6b63\u5728\u4fdd\u5b58\u5230\u85cf\u54c1\u9986...');
       let nextAnalysisResult = await onItemAdded(newItem);
       const latestDraftStory = memoryDraftRef.current.trim();
       const latestAudioDraft = audioDraftRef.current;
+      const latestStory = buildArchivedStory(latestDraftStory, analysis.story || '');
 
       nextAnalysisResult = {
         ...nextAnalysisResult,
@@ -706,13 +705,13 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
       };
 
       const shouldSyncLatestDraft =
-        latestDraftStory !== (nextAnalysisResult.story || '').trim()
+        latestStory !== (nextAnalysisResult.story || '').trim()
         || latestAudioDraft !== (nextAnalysisResult.audioUrl || '');
 
       if (shouldSyncLatestDraft && onUpdateItem) {
         const latestDraftItem: CollectedItem = {
           ...nextAnalysisResult,
-          story: latestDraftStory,
+          story: latestStory,
           audioUrl: latestAudioDraft,
         };
 
@@ -730,10 +729,10 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
           } else {
             nextAnalysisResult = latestDraftItem;
           }
-          setMemorySaveState('等待归档时补充的故事已自动保存。');
+          setMemorySaveState('\u7b49\u5f85\u5f52\u6863\u65f6\u8865\u5145\u7684\u6545\u4e8b\u5df2\u81ea\u52a8\u4fdd\u5b58\u3002');
         } catch (saveError) {
-          console.error('同步最新故事草稿失败：', saveError);
-          setMemorySaveState('最新输入已保留在当前界面，可继续补充后再保存。');
+          console.error('\u540c\u6b65\u6700\u65b0\u6545\u4e8b\u8349\u7a3f\u5931\u8d25\uff1a', saveError);
+          setMemorySaveState('\u6700\u65b0\u8f93\u5165\u5df2\u4fdd\u7559\u5728\u5f53\u524d\u754c\u9762\uff0c\u53ef\u7ee7\u7eed\u8865\u5145\u540e\u518d\u4fdd\u5b58\u3002');
         }
       } else {
         setMemorySaveState(null);
@@ -744,19 +743,17 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
       setAnalysisResult(nextAnalysisResult);
       stopMemoryCapture();
       setIsAnalyzing(false);
-
     } catch (err: unknown) {
-      if (controller.signal.aborted) return; // Ignore aborted requests
+      if (controller.signal.aborted) return;
       const error = err as Record<string, unknown>;
-      // 结构化错误：如果是 classifyError 返回的已分类错误，直接使用
       if (error && error.category && error.title && error.suggestion) {
         setErrorInfo(error as unknown as AnalysisError);
       } else {
         setErrorInfo({
           category: 'UNKNOWN',
-          title: '分析失败',
-          message: (error?.message as string) || '未知错误',
-          suggestion: '请重试。如果问题持续出现，尝试更换图片。',
+          title: '\u5206\u6790\u5931\u8d25',
+          message: (error?.message as string) || '\u672a\u77e5\u9519\u8bef',
+          suggestion: '\u8bf7\u91cd\u8bd5\u3002\u5982\u679c\u95ee\u9898\u6301\u7eed\u51fa\u73b0\uff0c\u5c1d\u8bd5\u66f4\u6362\u56fe\u7247\u3002',
         });
       }
       stopMemoryCapture();
@@ -768,7 +765,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
     if (!analysisResult) return;
     
     if (onGenerateStickerRequest) {
-      setStatusText('正在生成专属贴纸与藏品物语');
+      setStatusText('\u6b63\u5728\u751f\u6210\u4e13\u5c5e\u8d34\u7eb8...');
       onGenerateStickerRequest({
         ...analysisResult,
         imageUrl: analysisSourceImageUrl || analysisResult.imageUrl,
@@ -777,7 +774,7 @@ const Scanner: React.FC<ScannerProps> = ({ halls = [], onItemAdded, onStickerCre
     }
 
     setIsGeneratingSticker(true);
-    setStatusText("正在生成专属贴纸与藏品物语");
+    setStatusText('\u6b63\u5728\u751f\u6210\u4e13\u5c5e\u8d34\u7eb8...');
 
     try {
         const base64 = await imageUrlToBase64(analysisSourceImageUrl || analysisResult.imageUrl, {

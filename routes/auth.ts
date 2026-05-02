@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware, getRefreshTokenFromCookies } from '../middleware/authMiddleware.ts';
@@ -90,6 +90,7 @@ const authAttemptLimiter = rateLimit({
   max: 12,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: authIdentityKeyGenerator,
   message: { error: AUTH_MESSAGE_AUTH_ATTEMPT_LIMIT },
 });
 
@@ -114,6 +115,7 @@ const authMailLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: authIdentityKeyGenerator,
   message: { error: AUTH_MESSAGE_MAIL_LIMIT },
 });
 
@@ -172,6 +174,11 @@ const preferencesSchema = z.object({
   toolbox: z.array(toolSchema).max(32).optional(),
 }).refine((value) => Object.keys(value).length > 0, {
   message: '\u81f3\u5c11\u9700\u8981\u63d0\u4ea4\u4e00\u9879\u504f\u597d\u8bbe\u7f6e\u3002',
+});
+
+router.use((_req: Request, res: Response, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
 });
 
 router.post('/guest', guestBootstrapLimiter, (_req: Request, res: Response) => {
@@ -890,6 +897,16 @@ function getRequestIp(req: Request): string | undefined {
   }
 
   return req.ip || undefined;
+}
+
+function authIdentityKeyGenerator(req: Request) {
+  const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : null;
+  const email = typeof body?.email === 'string' ? normalizeEmailAddress(body.email) : '';
+  if (email) {
+    return `email:${email}`;
+  }
+
+  return ipKeyGenerator(getRequestIp(req) || req.ip || '');
 }
 
 function maskEmail(email: string): string {

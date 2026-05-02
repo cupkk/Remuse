@@ -1,0 +1,321 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - link "返回入口" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img [ref=e7]
+      - text: 返回入口
+    - button "复制这页好运" [ref=e9] [cursor=pointer]:
+      - img [ref=e10]
+      - text: 复制这页好运
+  - main [ref=e13]:
+    - generic [ref=e14]:
+      - link [ref=e15] [cursor=pointer]:
+        - /url: /campus-cup
+        - article [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]:
+              - generic [ref=e19]: 夏
+              - generic [ref=e20]: 午
+              - generic [ref=e21]: 珍
+              - generic [ref=e22]: 珠
+              - generic [ref=e23]: 奶
+              - generic [ref=e24]: 茶
+              - generic [ref=e25]: 夏
+              - generic [ref=e26]: 日
+              - generic [ref=e27]: 旧
+              - generic [ref=e28]: 物
+              - generic [ref=e29]: 奶
+              - generic [ref=e30]: 茶
+              - generic [ref=e31]: 记
+              - generic [ref=e32]: 忆
+              - generic [ref=e33]: 午
+              - generic [ref=e34]: 后
+              - generic [ref=e35]: 微
+              - generic [ref=e36]: 甜
+              - generic [ref=e37]: R
+              - generic [ref=e38]: E
+              - generic [ref=e39]: M
+              - generic [ref=e40]: U
+              - generic [ref=e41]: S
+              - generic [ref=e42]: E
+              - generic [ref=e43]: L
+              - generic [ref=e44]: U
+              - generic [ref=e45]: C
+              - generic [ref=e46]: K
+              - generic [ref=e47]: 夏
+              - generic [ref=e48]: 午
+              - generic [ref=e49]: 珍
+              - generic [ref=e50]: 珠
+              - generic [ref=e51]: 奶
+              - generic [ref=e52]: 茶
+              - generic [ref=e53]: 夏
+              - generic [ref=e54]: 日
+              - generic [ref=e55]: 旧
+              - generic [ref=e56]: 物
+              - generic [ref=e57]: 奶
+              - generic [ref=e58]: 茶
+              - generic [ref=e59]: 记
+              - generic [ref=e60]: 忆
+              - generic [ref=e61]: 午
+              - generic [ref=e62]: 后
+              - generic [ref=e63]: 微
+              - generic [ref=e64]: 甜
+              - generic [ref=e65]: R
+              - generic [ref=e66]: E
+              - generic [ref=e67]: M
+              - generic [ref=e68]: U
+              - generic [ref=e69]: S
+              - generic [ref=e70]: E
+              - generic [ref=e71]: L
+              - generic [ref=e72]: U
+              - generic [ref=e73]: C
+              - generic [ref=e74]: K
+              - generic [ref=e75]: 夏
+              - generic [ref=e76]: 午
+              - generic [ref=e77]: 珍
+              - generic [ref=e78]: 珠
+              - generic [ref=e79]: 奶
+              - generic [ref=e80]: 茶
+              - generic [ref=e81]: 夏
+              - generic [ref=e82]: 日
+              - generic [ref=e83]: 旧
+              - generic [ref=e84]: 物
+              - generic [ref=e85]: 奶
+              - generic [ref=e86]: 茶
+              - generic [ref=e87]: 记
+              - generic [ref=e88]: 忆
+              - generic [ref=e89]: 午
+              - generic [ref=e90]: 后
+              - generic [ref=e91]: 微
+              - generic [ref=e92]: 甜
+              - generic [ref=e93]: R
+              - generic [ref=e94]: E
+              - generic [ref=e95]: M
+              - generic [ref=e96]: U
+              - generic [ref=e97]: S
+              - generic [ref=e98]: E
+              - generic [ref=e99]: L
+              - generic [ref=e100]: U
+              - generic [ref=e101]: C
+              - generic [ref=e102]: K
+              - generic [ref=e103]: 夏
+              - generic [ref=e104]: 午
+              - generic [ref=e105]: 珍
+              - generic [ref=e106]: 珠
+              - generic [ref=e107]: 奶
+              - generic [ref=e108]: 茶
+              - generic [ref=e109]: 夏
+              - generic [ref=e110]: 日
+              - generic [ref=e111]: 旧
+              - generic [ref=e112]: 物
+              - generic [ref=e113]: 奶
+              - generic [ref=e114]: 茶
+              - generic [ref=e115]: 记
+              - generic [ref=e116]: 忆
+              - generic [ref=e117]: 午
+              - generic [ref=e118]: 后
+              - generic [ref=e119]: 微
+              - generic [ref=e120]: 甜
+              - generic [ref=e121]: R
+              - generic [ref=e122]: E
+              - generic [ref=e123]: M
+              - generic [ref=e124]: U
+              - generic [ref=e125]: S
+              - generic [ref=e126]: E
+              - generic [ref=e127]: L
+              - generic [ref=e128]: U
+              - generic [ref=e129]: C
+              - generic [ref=e130]: K
+              - generic [ref=e131]: 夏
+              - generic [ref=e132]: 午
+              - generic [ref=e133]: 珍
+              - generic [ref=e134]: 珠
+              - generic [ref=e135]: 奶
+              - generic [ref=e136]: 茶
+              - generic [ref=e137]: 夏
+              - generic [ref=e138]: 日
+              - generic [ref=e139]: 旧
+              - generic [ref=e140]: 物
+              - generic [ref=e141]: 奶
+              - generic [ref=e142]: 茶
+              - generic [ref=e143]: 记
+              - generic [ref=e144]: 忆
+              - generic [ref=e145]: 午
+              - generic [ref=e146]: 后
+              - generic [ref=e147]: 微
+              - generic [ref=e148]: 甜
+              - generic [ref=e149]: R
+              - generic [ref=e150]: E
+              - generic [ref=e151]: M
+              - generic [ref=e152]: U
+              - generic [ref=e153]: S
+              - generic [ref=e154]: E
+              - generic [ref=e155]: L
+              - generic [ref=e156]: U
+              - generic [ref=e157]: C
+              - generic [ref=e158]: K
+              - generic [ref=e159]: 夏
+              - generic [ref=e160]: 午
+              - generic [ref=e161]: 珍
+              - generic [ref=e162]: 珠
+              - generic [ref=e163]: 奶
+              - generic [ref=e164]: 茶
+              - generic [ref=e165]: 夏
+              - generic [ref=e166]: 日
+              - generic [ref=e167]: 旧
+              - generic [ref=e168]: 物
+            - img "夏午珍珠奶茶 的真实原图" [ref=e171]
+            - generic [ref=e173]:
+              - paragraph [ref=e174]: Lucky Object
+              - heading "夏午珍珠奶茶" [level=2] [ref=e175]
+              - paragraph [ref=e176]: 冰摇珍珠奶茶
+      - generic [ref=e177]:
+        - generic [ref=e178]:
+          - img [ref=e179]
+          - text: 每日幸运物品
+        - heading "每日幸运物品" [level=1] [ref=e185]
+        - paragraph [ref=e186]: 请接受来自物品的幸运与力量
+        - link "夏午珍珠奶茶 的真实原图 2026年4月24日星期五 夏午珍珠奶茶 今日幸运好物" [ref=e187] [cursor=pointer]:
+          - /url: /campus-cup
+          - img "夏午珍珠奶茶 的真实原图" [ref=e189]
+          - generic [ref=e190]:
+            - paragraph [ref=e191]: 2026年4月24日星期五
+            - paragraph [ref=e192]: 夏午珍珠奶茶
+          - generic [ref=e193]: 今日幸运好物
+        - generic [ref=e194]:
+          - generic [ref=e195]:
+            - generic [ref=e196]:
+              - img [ref=e197]
+              - generic [ref=e199]: 今日日期
+            - paragraph [ref=e200]: 2026年4月24日星期五
+          - generic [ref=e201]:
+            - generic [ref=e202]:
+              - img [ref=e203]
+              - generic [ref=e207]: 幸运好物
+            - paragraph [ref=e208]: 夏午珍珠奶茶
+          - generic [ref=e209]:
+            - generic [ref=e210]:
+              - img [ref=e211]
+              - generic [ref=e214]: 好运来源
+            - paragraph [ref=e215]: 冰摇珍珠奶茶
+    - generic [ref=e216]:
+      - generic [ref=e218]:
+        - paragraph [ref=e219]: 光落此页
+        - button "光落此页，等你开启 点击纸张，让好运文字慢慢显现" [ref=e220] [cursor=pointer]:
+          - generic [ref=e221]:
+            - generic [ref=e222]: 光落此页，等你开启
+            - generic [ref=e223]: 点击纸张，让好运文字慢慢显现
+      - generic [ref=e224]:
+        - generic [ref=e225]:
+          - paragraph [ref=e226]: 收下好运
+          - heading "夏午珍珠奶茶" [level=2] [ref=e227]
+          - paragraph [ref=e228]: 这份好运会留存在当前设备里。后续接入账号后，可以同步到“收到的好运”入口。
+        - button "收下好运" [ref=e229] [cursor=pointer]:
+          - img [ref=e230]
+          - text: 收下好运
+  - generic [ref=e232]:
+    - generic [ref=e233]:
+      - generic [ref=e234]:
+        - paragraph [ref=e235]: MORE LUCK
+        - heading "更多今日好物" [level=2] [ref=e236]
+      - paragraph [ref=e237]: 同一批 NFC 地址保留不变，视觉已经更新为每日幸运物品体验。
+    - generic [ref=e238]:
+      - 'link "陪我四年的牛仔外套 的真实原图 每日幸运物品 陪我四年的牛仔外套 袖口磨起的毛边、口袋里遗落的票根，都还留在这件旧外套里。轻触 NFC，就能把这段穿了四年的旧时光，完整地收进这份礼物里。 #校园旧衣 #单宁记忆 #演唱会票根" [ref=e239] [cursor=pointer]':
+        - /url: /denim-pocket
+        - img "陪我四年的牛仔外套 的真实原图" [ref=e242]
+        - generic [ref=e243]:
+          - paragraph [ref=e244]: 每日幸运物品
+          - heading "陪我四年的牛仔外套" [level=3] [ref=e245]
+          - paragraph [ref=e246]: 袖口磨起的毛边、口袋里遗落的票根，都还留在这件旧外套里。轻触 NFC，就能把这段穿了四年的旧时光，完整地收进这份礼物里。
+          - generic [ref=e247]:
+            - generic [ref=e248]: "#校园旧衣"
+            - generic [ref=e249]: "#单宁记忆"
+            - generic [ref=e250]: "#演唱会票根"
+      - 'link "放课后的秘密色纸 的真实原图 每日幸运物品 放课后的秘密色纸 这张色纸像被课本夹住的一小段青春，安静，却一直没有褪色。轻触 NFC，把那段没说出口的心事重新翻出来看看。 #青春收藏 #纸品档案 #放课后" [ref=e251] [cursor=pointer]':
+        - /url: /midnight-ticket
+        - img "放课后的秘密色纸 的真实原图" [ref=e254]
+        - generic [ref=e255]:
+          - paragraph [ref=e256]: 每日幸运物品
+          - heading "放课后的秘密色纸" [level=3] [ref=e257]
+          - paragraph [ref=e258]: 这张色纸像被课本夹住的一小段青春，安静，却一直没有褪色。轻触 NFC，把那段没说出口的心事重新翻出来看看。
+          - generic [ref=e259]:
+            - generic [ref=e260]: "#青春收藏"
+            - generic [ref=e261]: "#纸品档案"
+            - generic [ref=e262]: "#放课后"
+      - 'link "复古玻璃汽水瓶 的真实原图 每日幸运物品 复古玻璃汽水瓶 它原本只是旧货店货架上的一只玻璃瓶，现在成了装住季节碎片的小容器。轻触 NFC，看看这件真实旧物怎样被重新整理成一份可以送出去的礼物。 #玻璃器物 #复古小店 #桌面收藏" [ref=e263] [cursor=pointer]':
+        - /url: /bottlecap-badge
+        - img "复古玻璃汽水瓶 的真实原图" [ref=e266]
+        - generic [ref=e267]:
+          - paragraph [ref=e268]: 每日幸运物品
+          - heading "复古玻璃汽水瓶" [level=3] [ref=e269]
+          - paragraph [ref=e270]: 它原本只是旧货店货架上的一只玻璃瓶，现在成了装住季节碎片的小容器。轻触 NFC，看看这件真实旧物怎样被重新整理成一份可以送出去的礼物。
+          - generic [ref=e271]:
+            - generic [ref=e272]: "#玻璃器物"
+            - generic [ref=e273]: "#复古小店"
+            - generic [ref=e274]: "#桌面收藏"
+      - 'link "排排站的小伙伴 的真实原图 每日幸运物品 排排站的小伙伴 它们挨在一起站好的样子，很像把今天的小小开心也排整齐了。轻触 NFC，看看我怎样把这一排软乎乎的陪伴，整理成一份可以送出去的小礼物。 #毛绒收藏 #小伙伴 #治愈时刻" [ref=e275] [cursor=pointer]':
+        - /url: /metro-pass
+        - img "排排站的小伙伴 的真实原图" [ref=e278]
+        - generic [ref=e279]:
+          - paragraph [ref=e280]: 每日幸运物品
+          - heading "排排站的小伙伴" [level=3] [ref=e281]
+          - paragraph [ref=e282]: 它们挨在一起站好的样子，很像把今天的小小开心也排整齐了。轻触 NFC，看看我怎样把这一排软乎乎的陪伴，整理成一份可以送出去的小礼物。
+          - generic [ref=e283]:
+            - generic [ref=e284]: "#毛绒收藏"
+            - generic [ref=e285]: "#小伙伴"
+            - generic [ref=e286]: "#治愈时刻"
+      - 'link "云端入梦小像 的真实原图 每日幸运物品 云端入梦小像 小小的睡脸像把噪音按下静音键，让人一眼就慢下来。轻触 NFC，看看它怎样从桌角摆件变成一份柔软的公开礼物。 #治愈摆件 #云朵小像 #柔软时刻" [ref=e287] [cursor=pointer]':
+        - /url: /sweater-button
+        - img "云端入梦小像 的真实原图" [ref=e290]
+        - generic [ref=e291]:
+          - paragraph [ref=e292]: 每日幸运物品
+          - heading "云端入梦小像" [level=3] [ref=e293]
+          - paragraph [ref=e294]: 小小的睡脸像把噪音按下静音键，让人一眼就慢下来。轻触 NFC，看看它怎样从桌角摆件变成一份柔软的公开礼物。
+          - generic [ref=e295]:
+            - generic [ref=e296]: "#治愈摆件"
+            - generic [ref=e297]: "#云朵小像"
+            - generic [ref=e298]: "#柔软时刻"
+      - 'link "库迪×柯南联名纸袋 的真实原图 每日幸运物品 库迪×柯南联名纸袋 一只纸袋也可以被认真收藏，因为它背后站着一整段熟悉的角色记忆。轻触 NFC，看看这份联名周边怎样被重新装进一份轻巧的小礼物里。 #联名周边 #角色收藏 #咖啡纸袋" [ref=e299] [cursor=pointer]':
+        - /url: /cassette-ribbon
+        - img "库迪×柯南联名纸袋 的真实原图" [ref=e302]
+        - generic [ref=e303]:
+          - paragraph [ref=e304]: 每日幸运物品
+          - heading "库迪×柯南联名纸袋" [level=3] [ref=e305]
+          - paragraph [ref=e306]: 一只纸袋也可以被认真收藏，因为它背后站着一整段熟悉的角色记忆。轻触 NFC，看看这份联名周边怎样被重新装进一份轻巧的小礼物里。
+          - generic [ref=e307]:
+            - generic [ref=e308]: "#联名周边"
+            - generic [ref=e309]: "#角色收藏"
+            - generic [ref=e310]: "#咖啡纸袋"
+      - 'link "童话毛绒小队 的真实原图 每日幸运物品 童话毛绒小队 这组玩偶像从旧童话里一起走出来，负责把人重新带回软软的安全区。轻触 NFC，看看它们的真实照片、封面和贴纸怎样被串成同一份礼物体验。 #毛绒收藏 #童话感 #治愈玩偶" [ref=e311] [cursor=pointer]':
+        - /url: /paper-crane
+        - img "童话毛绒小队 的真实原图" [ref=e314]
+        - generic [ref=e315]:
+          - paragraph [ref=e316]: 每日幸运物品
+          - heading "童话毛绒小队" [level=3] [ref=e317]
+          - paragraph [ref=e318]: 这组玩偶像从旧童话里一起走出来，负责把人重新带回软软的安全区。轻触 NFC，看看它们的真实照片、封面和贴纸怎样被串成同一份礼物体验。
+          - generic [ref=e319]:
+            - generic [ref=e320]: "#毛绒收藏"
+            - generic [ref=e321]: "#童话感"
+            - generic [ref=e322]: "#治愈玩偶"
+      - 'link "城市限定咖啡杯 的真实原图 每日幸运物品 城市限定咖啡杯 旅行结束之后，最容易留下来的往往不是照片，而是一只每天还会继续使用的杯子。轻触 NFC，看看这件城市限定周边如何把一个下午重新端回眼前。 #旅行纪念 #咖啡杯 #城市限定" [ref=e323] [cursor=pointer]':
+        - /url: /film-roll
+        - img "城市限定咖啡杯 的真实原图" [ref=e326]
+        - generic [ref=e327]:
+          - paragraph [ref=e328]: 每日幸运物品
+          - heading "城市限定咖啡杯" [level=3] [ref=e329]
+          - paragraph [ref=e330]: 旅行结束之后，最容易留下来的往往不是照片，而是一只每天还会继续使用的杯子。轻触 NFC，看看这件城市限定周边如何把一个下午重新端回眼前。
+          - generic [ref=e331]:
+            - generic [ref=e332]: "#旅行纪念"
+            - generic [ref=e333]: "#咖啡杯"
+            - generic [ref=e334]: "#城市限定"
+      - 'link "瑞幸万店纪念套装 的真实原图 每日幸运物品 瑞幸万店纪念套装 深蓝色包材把一次品牌庆典变成了能拿在手里的具体时刻。轻触 NFC，看看这套纪念周边怎样被整理成一份能直接送到朋友手里的数字礼物。 #品牌周边 #纪念套装 #蓝色包装" [ref=e335] [cursor=pointer]':
+        - /url: /concert-band
+        - img "瑞幸万店纪念套装 的真实原图" [ref=e338]
+        - generic [ref=e339]:
+          - paragraph [ref=e340]: 每日幸运物品
+          - heading "瑞幸万店纪念套装" [level=3] [ref=e341]
+          - paragraph [ref=e342]: 深蓝色包材把一次品牌庆典变成了能拿在手里的具体时刻。轻触 NFC，看看这套纪念周边怎样被整理成一份能直接送到朋友手里的数字礼物。
+          - generic [ref=e343]:
+            - generic [ref=e344]: "#品牌周边"
+            - generic [ref=e345]: "#纪念套装"
+            - generic [ref=e346]: "#蓝色包装"

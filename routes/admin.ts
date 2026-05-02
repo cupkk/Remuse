@@ -11,7 +11,7 @@ import {
 const router = Router();
 
 const ADMIN_MESSAGE_SEARCH_KEYWORD_REQUIRED = '请先输入搜索关键词。';
-const ADMIN_MESSAGE_FEEDBACK_UPDATE_INVALID = '反馈更新请求无效。';
+const ADMIN_MESSAGE_FEEDBACK_UPDATE_INVALID = '反馈状态更新请求无效。';
 const ADMIN_MESSAGE_USER_SEARCH_INVALID = '用户搜索条件无效。';
 const ADMIN_MESSAGE_USER_NOT_FOUND = '未找到该用户。';
 const ADMIN_MESSAGE_USER_FLAG_INVALID = '用户标记更新请求无效。';
@@ -55,9 +55,7 @@ router.patch('/feedback/:id', (req: Request, res: Response) => {
   }
 
   updateFeedbackSubmissionStatus(readRouteParam(req.params.id), parsed.data.status);
-  res.json({
-    success: true,
-  });
+  res.json({ success: true });
 });
 
 router.get('/users', (req: Request, res: Response) => {

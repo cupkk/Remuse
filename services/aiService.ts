@@ -1,9 +1,16 @@
-﻿import { GoogleGenAI, Type } from '@google/genai';
+﻿import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
 import { EMOJI_STYLE_PRESETS, EmojiStylePreset, ItemCategory, TransformationGuide } from '../types.js';
 import { APP_CONFIG } from './appConfig.ts';
 import { composeCollectionCoverDataUrl } from './collectionCoverComposer.ts';
 import { serverLogger } from './serverLogger.ts';
+import {
+  parseJsonFromModelText,
+  requestStepfunChatCompletion,
+  StepfunMultipartContentPart,
+  STEPFUN_TEXT_MODEL_CANDIDATES,
+  STEPFUN_VISION_MODEL_CANDIDATES,
+} from './stepfunTextService.ts';
 import {
   assessCutoutQualityDataUrl,
   canUseLocalCoverCutout,
@@ -11,20 +18,25 @@ import {
   removeSolidBackgroundDataUrl,
 } from './subjectCutout.ts';
 
-const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3-pro-preview';
 const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview';
-const TEXT_MODEL_CANDIDATES = parseModelCandidates(
-  process.env.GEMINI_TEXT_MODEL_CANDIDATES,
-  [TEXT_MODEL, 'gemini-2.5-flash'],
-);
 const GUIDE_TEXT_MODEL_CANDIDATES = parseModelCandidates(
-  process.env.GEMINI_GUIDE_TEXT_MODEL_CANDIDATES,
-  [process.env.GEMINI_GUIDE_TEXT_MODEL || 'gemini-2.5-flash', ...TEXT_MODEL_CANDIDATES],
+  process.env.STEPFUN_GUIDE_TEXT_MODEL_CANDIDATES,
+  STEPFUN_TEXT_MODEL_CANDIDATES,
 );
 const GUIDE_IMAGE_MODEL_CANDIDATES = parseModelCandidates(
   process.env.GEMINI_GUIDE_IMAGE_MODEL_CANDIDATES,
   [process.env.GEMINI_GUIDE_IMAGE_MODEL || 'gemini-3.1-flash-image-preview', IMAGE_MODEL, 'gemini-2.5-flash-image-preview'],
 );
+const STEPFUN_SCAN_TIMEOUT_MS = parseIntegerEnv(process.env.STEPFUN_SCAN_TIMEOUT_MS, 30_000);
+const STEPFUN_GUIDE_TIMEOUT_MS = parseIntegerEnv(process.env.STEPFUN_GUIDE_TIMEOUT_MS, 35_000);
+const STEPFUN_SHORT_TEXT_TIMEOUT_MS = parseIntegerEnv(process.env.STEPFUN_SHORT_TEXT_TIMEOUT_MS, 12_000);
+const GUIDE_IMAGE_TIMEOUT_MS = parseIntegerEnv(process.env.GEMINI_GUIDE_IMAGE_TIMEOUT_MS, 110_000);
+const ENABLE_COVER_AI_FALLBACK = ['1', 'true', 'yes'].includes((process.env.ENABLE_COVER_AI_FALLBACK || '').trim().toLowerCase());
+const STICKER_IMAGE_TIMEOUT_MS = parseIntegerEnv(process.env.GEMINI_STICKER_IMAGE_TIMEOUT_MS, 90_000);
+const COVER_IMAGE_TIMEOUT_MS = parseIntegerEnv(process.env.GEMINI_COVER_IMAGE_TIMEOUT_MS, 90_000);
+const PERLER_IMAGE_TIMEOUT_MS = parseIntegerEnv(process.env.GEMINI_PERLER_IMAGE_TIMEOUT_MS, 90_000);
+const EMOJI_IMAGE_TIMEOUT_MS = parseIntegerEnv(process.env.GEMINI_EMOJI_IMAGE_TIMEOUT_MS, 140_000);
+const ENABLE_GUIDE_AI_IMAGE = !['0', 'false', 'no'].includes((process.env.ENABLE_GUIDE_AI_IMAGE || 'true').trim().toLowerCase());
 const IMAGE_MODEL_CANDIDATES = parseModelCandidates(
   process.env.GEMINI_IMAGE_MODEL_CANDIDATES,
   [IMAGE_MODEL, 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image-preview'],
@@ -119,6 +131,7 @@ async function generateContentWithFallback(
   feature: AiFeature,
   modelCandidates: string[],
   requestBuilder: (model: string) => Parameters<GoogleGenAI['models']['generateContent']>[0],
+  options: { attempts?: number; timeoutMs?: number } = {},
 ) {
   let lastError: unknown;
 
@@ -127,8 +140,12 @@ async function generateContentWithFallback(
     try {
       const response = await withAiRetries(
         feature,
-        () => ai.models.generateContent(requestBuilder(model)),
-        4,
+        () => withOptionalTimeout(
+          ai.models.generateContent(requestBuilder(model)),
+          options.timeoutMs,
+          `${feature}:${model}`,
+        ),
+        options.attempts ?? 4,
       );
       return response;
     } catch (error) {
@@ -150,6 +167,32 @@ async function generateContentWithFallback(
   throw lastError;
 }
 
+function parseIntegerEnv(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function withOptionalTimeout<T>(promise: Promise<T>, timeoutMs: number | undefined, label: string) {
+  if (!timeoutMs) {
+    return promise;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} AI 配图响应超时。`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function shouldFallbackModel(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return (
@@ -162,6 +205,9 @@ function shouldFallbackModel(error: unknown) {
     || message.includes('insufficient_user_quota')
     || message.includes('quota exceeded')
     || message.includes('user quota')
+    || message.includes('timeout')
+    || message.includes('timed out')
+    || message.includes('响应超时')
     || message.includes('用户额度不足')
     || message.includes('预扣费额度失败')
     || message.includes('model not found')
@@ -193,73 +239,58 @@ export async function analyzeItemImageTask(base64Image: string) {
   }
 
   try {
-    const ai = createAiClient();
-    const response = await generateContentWithFallback(ai, 'scan-analysis', TEXT_MODEL_CANDIDATES, (model) => ({
-      model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image,
-            },
+    const response = await requestStepfunChatCompletion({
+      feature: 'scan-analysis',
+      modelCandidates: STEPFUN_VISION_MODEL_CANDIDATES,
+      responseFormat: 'json_object',
+      temperature: 0.2,
+      userContent: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${base64Image}`,
           },
-          {
-            text: `请分析这张旧物图片，并返回一份适合 Re-Museum 归档的 JSON。
+        },
+        {
+          type: 'text',
+          text: `请分析这张旧物图片，并返回一份适合 Re-Museum 归档的 JSON。
 要求：
 1. 所有字段使用简体中文。
 2. category 必须严格从以下值中选择一个：${Object.values(ItemCategory).join('、')}。
-3. story 保持温柔叙事风格，控制在 30-60 字。
-4. tags 返回 3-5 个短标签。
+3. description 用 1-2 句话概括外观、材质细节、使用场景或可再生方向，控制在 45-90 字。
+4. story 保持温柔叙事风格，写出这件旧物可能承载的时间感、情绪和生活痕迹，控制在 80-140 字。
+5. tags 返回 3-5 个短标签。
+6. 只返回合法 JSON，不要补充解释。
 返回格式：
 {
   "name": "物品名称",
   "category": "分类",
   "material": "主要材质",
+  "description": "一句简介",
   "story": "带有记忆感的描述",
   "tags": ["标签1", "标签2", "标签3"]
 }`,
-          },
-        ],
-      },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            category: { type: Type.STRING },
-            material: { type: Type.STRING },
-            description: { type: Type.STRING },
-            story: { type: Type.STRING },
-            tags: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-            },
-          },
-          required: ['name', 'category', 'material', 'description', 'story', 'tags'],
         },
-      },
-    }));
+      ] satisfies StepfunMultipartContentPart[],
+      maxTokens: 900,
+      timeoutMs: STEPFUN_SCAN_TIMEOUT_MS,
+      attempts: 2,
+    });
 
-    const text = response.text?.trim();
-    if (!text) {
-      throw new Error('AI 未返回可用内容。');
-    }
-
-    const data = JSON.parse(text) as {
+    const data = parseJsonFromModelText<{
       name?: string;
       category?: string;
       material?: string;
       description?: string;
       story?: string;
       tags?: string[];
-    };
+    }>(response.text);
 
     return {
       name: (data.name || '未命名藏品').trim(),
       category: normalizeCategory(data.category),
       material: (data.material || '综合材质').trim(),
+      description: (data.description || '').trim(),
       story: (data.story || '这件旧物正在等待一次新的归档与再生。').trim(),
       tags: Array.isArray(data.tags) ? data.tags.map((tag) => `${tag || ''}`.trim()).filter(Boolean).slice(0, 5) : [],
     };
@@ -285,7 +316,6 @@ export async function generateTransformationGuideTask(items: Array<{
   }
 
   try {
-    const ai = createAiClient();
     const itemSummary = items
       .map((item, index) => {
         const parts = [
@@ -303,15 +333,23 @@ export async function generateTransformationGuideTask(items: Array<{
     let parsed: Partial<TransformationGuide>;
     let concept = '一件由旧物组合而成的温和实用改造成品。';
     try {
-      const textResponse = await generateContentWithFallback(ai, 'guide-generate', GUIDE_TEXT_MODEL_CANDIDATES, (model) => ({
-        model,
-        contents: `请基于以下藏品，生成一份综合“改造指南”JSON，用于再生工坊中的旧物新生局。
+      const textResponse = await requestStepfunChatCompletion({
+        feature: 'guide-generate',
+        modelCandidates: GUIDE_TEXT_MODEL_CANDIDATES,
+        responseFormat: 'json_object',
+        temperature: 0.35,
+        maxTokens: 1400,
+        timeoutMs: STEPFUN_GUIDE_TIMEOUT_MS,
+        attempts: 2,
+        userContent: `请基于以下藏品，生成一份综合“改造指南”JSON，用于再生工坊中的旧物新生局。
 ${itemSummary}
 
 要求：
 1. 这是综合方案，不要按单个藏品分别写重复内容。
 2. 方案要适合 1 件或多件藏品联合改造。
 3. 全部使用简体中文，语气清晰、可执行、不空泛。
+4. materials / steps / tips 都必须是字符串数组。
+5. 只返回合法 JSON，不要添加解释或代码块。
 4. 返回字段：
 {
   "title": "方案标题",
@@ -321,24 +359,9 @@ ${itemSummary}
   "steps": ["步骤1", "步骤2", "步骤3", "步骤4"],
   "tips": ["提示1", "提示2", "提示3"]
 }`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              concept: { type: Type.STRING },
-              materials: { type: Type.ARRAY, items: { type: Type.STRING } },
-              steps: { type: Type.ARRAY, items: { type: Type.STRING } },
-              tips: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['title', 'summary', 'concept', 'materials', 'steps', 'tips'],
-          },
-        },
-      }));
+      });
 
-      parsed = JSON.parse(textResponse.text?.trim() || '{}') as Partial<TransformationGuide>;
+      parsed = parseJsonFromModelText<Partial<TransformationGuide>>(textResponse.text);
       concept = (parsed.concept || parsed.summary || parsed.title || concept).trim();
     } catch (textError) {
       const classified = classifyError(textError);
@@ -369,58 +392,63 @@ ${itemSummary}
       });
     }
 
-    let imageUrl: string;
-    try {
-      const imageResponse = await generateContentWithFallback(ai, 'guide-generate', GUIDE_IMAGE_MODEL_CANDIDATES, (model) => ({
-        model,
-        contents: {
-          parts: [
-            ...items
-              .slice(0, 4)
-              .filter((item) => item.imageBase64)
-              .map((item) => ({
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: item.imageBase64!,
-                },
-              })),
-            {
-              text: buildTransformationGuidePrompt(items, concept),
-            },
-          ],
-        },
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: {
-            aspectRatio: '4:3',
+    let imageUrl = buildGuideFallbackImageDataUrl(items, concept);
+    if (ENABLE_GUIDE_AI_IMAGE) {
+      try {
+        const ai = createAiClient();
+        const imageResponse = await generateContentWithFallback(ai, 'guide-generate', GUIDE_IMAGE_MODEL_CANDIDATES, (model) => ({
+          model,
+          contents: {
+            parts: [
+              ...items
+                .slice(0, 4)
+                .filter((item) => item.imageBase64)
+                .map((item) => ({
+                  inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: item.imageBase64!,
+                  },
+                })),
+              {
+                text: buildTransformationGuidePrompt(items, concept),
+              },
+            ],
           },
-        },
-      }));
+          config: {
+            responseModalities: ['IMAGE'],
+            imageConfig: {
+              aspectRatio: '4:3',
+            },
+          },
+        }), {
+          attempts: 1,
+          timeoutMs: GUIDE_IMAGE_TIMEOUT_MS,
+        });
 
-      const imageData = extractInlineImageData(imageResponse);
-      if (!imageData) {
-        throw new Error('未能从 AI 图像生成结果中提取到图像数据。');
+        const imageData = extractInlineImageData(imageResponse);
+        if (!imageData) {
+          throw new Error('未能从 AI 图像生成结果中提取到图像数据。');
+        }
+        imageUrl = `data:image/png;base64,${imageData}`;
+      } catch (imageError) {
+        const classified = classifyError(imageError);
+        const canFallback =
+          classified.category === 'QUOTA_EXCEEDED'
+          || classified.category === 'RATE_LIMIT'
+          || classified.category === 'NETWORK'
+          || classified.category === 'IMAGE_QUALITY'
+          || classified.category === 'PARSE_ERROR'
+          || classified.category === 'UNKNOWN';
+
+        if (!canFallback) {
+          throw imageError;
+        }
+
+        serverLogger.warn('guide.image.fallback_used', {
+          category: classified.category,
+          message: classified.message,
+        });
       }
-      imageUrl = `data:image/png;base64,${imageData}`;
-    } catch (imageError) {
-      const classified = classifyError(imageError);
-      const canFallback =
-        classified.category === 'QUOTA_EXCEEDED'
-        || classified.category === 'RATE_LIMIT'
-        || classified.category === 'NETWORK'
-        || classified.category === 'IMAGE_QUALITY'
-        || classified.category === 'PARSE_ERROR'
-        || classified.category === 'UNKNOWN';
-
-      if (!canFallback) {
-        throw imageError;
-      }
-
-      serverLogger.warn('guide.image.fallback_used', {
-        category: classified.category,
-        message: classified.message,
-      });
-      imageUrl = buildGuideFallbackImageDataUrl(items, concept);
     }
 
     return {
@@ -450,22 +478,15 @@ export async function generateStickerTask(base64Image: string, itemName: string)
 
     if (canUseLocalCoverCutout()) {
       const [textResult, localStickerResult] = await Promise.allSettled([
-        generateContentWithFallback(ai, 'sticker-generate', TEXT_MODEL_CANDIDATES, (model) => ({
-          model,
-          contents: `Write one short, cute first-person sticker caption in Chinese for the object named "${itemName}".
-Requirements:
-1. Return plain text only.
-2. Keep it warm, playful, and suitable for a sticker.
-3. Avoid negative, scary, or aggressive wording.`,
-        })),
+        generateStickerCaptionText(itemName),
         generateLocalStickerDataUrl(originalDataUrl),
       ]);
 
       if (localStickerResult.status === 'fulfilled' && localStickerResult.value) {
         return {
           stickerImageUrl: localStickerResult.value,
-          dramaText: textResult.status === 'fulfilled' && textResult.value.text?.trim()
-            ? textResult.value.text.trim()
+          dramaText: textResult.status === 'fulfilled' && textResult.value.trim()
+            ? textResult.value.trim()
             : buildLocalStickerDramaText(itemName),
         };
       }
@@ -478,15 +499,8 @@ Requirements:
       }
     }
 
-    const [textResponse, imageResponse] = await Promise.all([
-      generateContentWithFallback(ai, 'sticker-generate', TEXT_MODEL_CANDIDATES, (model) => ({
-        model,
-        contents: `Write one short, cute first-person sticker caption in Chinese for the object named "${itemName}".
-Requirements:
-1. Return plain text only.
-2. Keep it warm, playful, and suitable for a sticker.
-3. Avoid negative, scary, or aggressive wording.`,
-      })),
+    const [textResult, imageResult] = await Promise.allSettled([
+      generateStickerCaptionText(itemName),
       generateContentWithFallback(ai, 'sticker-generate', IMAGE_MODEL_CANDIDATES, (model) => ({
         model,
         contents: {
@@ -508,11 +522,27 @@ Requirements:
             aspectRatio: '1:1',
           },
         },
-      })),
+      }), {
+        attempts: 1,
+        timeoutMs: STICKER_IMAGE_TIMEOUT_MS,
+      }),
     ]);
 
-    const dramaText = textResponse.text?.trim() || buildLocalStickerDramaText(itemName);
-    const generated = extractInlineImageData(imageResponse);
+    if (textResult.status === 'rejected') {
+      serverLogger.warn('sticker.caption.fallback_used', {
+        itemName,
+        message: textResult.reason instanceof Error ? textResult.reason.message : String(textResult.reason),
+      });
+    }
+
+    if (imageResult.status !== 'fulfilled') {
+      throw imageResult.reason;
+    }
+
+    const dramaText = textResult.status === 'fulfilled' && textResult.value.trim()
+      ? textResult.value.trim()
+      : buildLocalStickerDramaText(itemName);
+    const generated = extractInlineImageData(imageResult.value);
     const stickerImageUrl = generated
       ? await removeSolidBackgroundDataUrl(`data:image/png;base64,${generated}`, 34, 48)
       : originalDataUrl;
@@ -556,7 +586,8 @@ export async function generateCollectionCoverTask(base64Image: string, itemName:
       }
     }
 
-    if (!cutoutDataUrl && !AI_MOCK_MODE && !APP_CONFIG.disableLiveAi) {
+    const shouldTryAiCover = !canUseLocalCoverCutout() || ENABLE_COVER_AI_FALLBACK;
+    if (!cutoutDataUrl && !AI_MOCK_MODE && !APP_CONFIG.disableLiveAi && shouldTryAiCover) {
       const ai = createAiClient();
 
       try {
@@ -581,7 +612,10 @@ export async function generateCollectionCoverTask(base64Image: string, itemName:
               aspectRatio: '3:4',
             },
           },
-        }));
+        }), {
+          attempts: 1,
+          timeoutMs: COVER_IMAGE_TIMEOUT_MS,
+        });
 
         const generated = extractInlineImageData(imageResponse);
         if (generated) {
@@ -663,7 +697,10 @@ export async function preparePerlerSourceTask(base64Image: string, itemName: str
               aspectRatio: '1:1',
             },
           },
-        }));
+        }), {
+          attempts: 1,
+          timeoutMs: PERLER_IMAGE_TIMEOUT_MS,
+        });
 
         const generated = extractInlineImageData(response);
         if (generated) {
@@ -721,15 +758,14 @@ export async function generateEmojiPackTask(
   }
 
   try {
-    const ai = createAiClient();
     const itemCount = stickerInputs.length;
     const parsedCaptions = await planEmojiCaptions(
-      ai,
       Math.max(1, count),
       userMood,
       stickerInputs.map((item) => item.name),
       stylePreset,
     );
+    const ai = createAiClient();
     const { rows, cols } = resolveEmojiGrid(Math.max(1, count));
     const gridDescription = parsedCaptions
       .slice(0, count)
@@ -764,7 +800,10 @@ export async function generateEmojiPackTask(
           aspectRatio: cols >= rows ? '4:3' : '3:4',
         },
       },
-    }));
+    }), {
+      attempts: 1,
+      timeoutMs: EMOJI_IMAGE_TIMEOUT_MS,
+    });
 
     const imageData = extractInlineImageData(response);
     if (!imageData) {
@@ -924,6 +963,28 @@ function buildLocalStickerDramaText(itemName: string) {
   ];
   return variants[Math.abs(createStableHash(itemName)) % variants.length] || variants[0];
 }
+
+async function generateStickerCaptionText(itemName: string) {
+  const response = await requestStepfunChatCompletion({
+    feature: 'sticker-generate',
+    modelCandidates: STEPFUN_TEXT_MODEL_CANDIDATES,
+    responseFormat: 'json_object',
+    temperature: 0.7,
+    maxTokens: 900,
+    timeoutMs: STEPFUN_SHORT_TEXT_TIMEOUT_MS,
+    attempts: 1,
+    userContent: `请为名为“${itemName}”的物品写一句适合贴纸使用的中文短句，并只返回合法 JSON。
+要求：
+1. 只返回 {"text":"..."} 这一种 JSON 结构，不要加解释。
+2. 用第一人称，短、可爱、有情绪。
+3. 语气温柔俏皮，不要恐怖、攻击性或过度鸡汤。
+4. 控制在 8-18 个中文字符。`,
+  });
+
+  const parsed = parseJsonFromModelText<{ text?: string }>(response.text);
+  return (parsed.text || '').trim();
+}
+
 function buildStickerPrompt() {
   return `Turn this object photo into a die-cut sticker on a solid black background.
 
@@ -1004,7 +1065,6 @@ ${gridDescription}`;
 }
 
 async function planEmojiCaptions(
-  ai: GoogleGenAI,
   count: number,
   userMood: string,
   itemNames: string[],
@@ -1015,7 +1075,7 @@ async function planEmojiCaptions(
   }
 
   try {
-    const planned = await requestAiEmojiCaptionPlan(ai, count, userMood, itemNames, stylePreset);
+    const planned = await requestAiEmojiCaptionPlan(count, userMood, itemNames, stylePreset);
     return normalizeEmojiCaptionPlanEntries(planned, count, userMood, itemNames, stylePreset);
   } catch (error) {
     serverLogger.warn('emoji.caption_plan.fallback', {
@@ -1029,40 +1089,28 @@ async function planEmojiCaptions(
 }
 
 async function requestAiEmojiCaptionPlan(
-  ai: GoogleGenAI,
   count: number,
   userMood: string,
   itemNames: string[],
   stylePreset: EmojiStylePreset,
 ) {
-  const response = await generateContentWithFallback(ai, 'emoji-pack', TEXT_MODEL_CANDIDATES, (model) => ({
-    model,
-    contents: buildEmojiCaptionPlanningPrompt(count, userMood, itemNames, stylePreset),
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            text: { type: Type.STRING },
-            emotion: { type: Type.STRING },
-            expression: { type: Type.STRING },
-            pose: { type: Type.STRING },
-            visualCue: { type: Type.STRING },
-          },
-          required: ['text', 'emotion', 'expression', 'pose', 'visualCue'],
-        },
-      },
-    },
-  }));
+  const response = await requestStepfunChatCompletion({
+    feature: 'emoji-pack',
+    modelCandidates: STEPFUN_TEXT_MODEL_CANDIDATES,
+    responseFormat: 'json_object',
+    temperature: 0.7,
+    maxTokens: 1800,
+    timeoutMs: STEPFUN_SHORT_TEXT_TIMEOUT_MS,
+    attempts: 1,
+    userContent: buildEmojiCaptionPlanningPrompt(count, userMood, itemNames, stylePreset),
+  });
 
-  const parsed = JSON.parse(response.text?.trim() || '[]') as Array<Partial<EmojiCaptionPlanEntry>>;
-  if (!Array.isArray(parsed) || parsed.length === 0) {
+  const parsed = parseJsonFromModelText<{ entries?: Array<Partial<EmojiCaptionPlanEntry>> }>(response.text);
+  if (!Array.isArray(parsed.entries) || parsed.entries.length === 0) {
     throw new Error('\u0041\u0049 \u672a\u8fd4\u56de\u53ef\u7528\u7684\u8868\u60c5\u5305\u6587\u6848\u89c4\u5212\u3002');
   }
 
-  return parsed;
+  return parsed.entries;
 }
 
 
@@ -1090,7 +1138,7 @@ function buildEmojiCaptionPlanningPrompt(
   const itemLine = itemNames.filter(Boolean).join('\u3001') || '\u672a\u547d\u540d\u85cf\u54c1';
   const moodLine = userMood.trim() || '\u672a\u63d0\u4f9b\u989d\u5916\u60c5\u7eea\u63cf\u8ff0\uff0c\u8bf7\u6839\u636e\u85cf\u54c1\u672c\u8eab\u8054\u60f3';
 
-  return `\u4f60\u662f Re-Museum \u7684\u8868\u60c5\u5305\u6587\u6848\u7b56\u5212\u52a9\u624b\u3002\u8bf7\u56f4\u7ed5\u85cf\u54c1\u6765\u6e90\u3001\u7528\u6237\u5fc3\u60c5\u548c\u98ce\u683c\u8981\u6c42\uff0c\u8f93\u51fa\u4e00\u7ec4\u53ef\u76f4\u63a5\u7528\u4e8e\u8868\u60c5\u5305\u751f\u6210\u7684 JSON \u6570\u7ec4\u3002
+  return `\u4f60\u662f Re-Museum \u7684\u8868\u60c5\u5305\u6587\u6848\u7b56\u5212\u52a9\u624b\u3002\u8bf7\u56f4\u7ed5\u85cf\u54c1\u6765\u6e90\u3001\u7528\u6237\u5fc3\u60c5\u548c\u98ce\u683c\u8981\u6c42\uff0c\u8f93\u51fa\u4e00\u7ec4\u53ef\u76f4\u63a5\u7528\u4e8e\u8868\u60c5\u5305\u751f\u6210\u7684 JSON \u5bf9\u8c61\u3002
 \u85cf\u54c1\u6765\u6e90\uff1a${itemLine}
 \u7528\u6237\u5fc3\u60c5\uff1a${moodLine}
 \u98ce\u683c\u9884\u8bbe\uff1a${stylePreset}\uff08${preset.title}\uff09
@@ -1098,15 +1146,16 @@ function buildEmojiCaptionPlanningPrompt(
 \u6587\u6848\u53e3\u5f84\uff1a${preset.caption}
 
 \u8f93\u51fa\u8981\u6c42\uff1a
-1. \u53ea\u8fd4\u56de ${count} \u6761 JSON \u5bf9\u8c61\u7ec4\u6210\u7684\u6570\u7ec4\u3002
-2. \u6bcf\u6761\u5bf9\u8c61\u90fd\u5fc5\u987b\u5305\u542b text\u3001emotion\u3001expression\u3001pose\u3001visualCue \u4e94\u4e2a\u5b57\u6bb5\u3002
-3. text \u5fc5\u987b\u662f 2-6 \u4e2a\u4e2d\u6587\u5b57\u7b26\uff0c\u9002\u5408\u804a\u5929\u53d1\u9001\uff0c\u907f\u514d\u7a7a\u6cdb\u9e21\u6c64\u548c\u6d41\u6c34\u7ebf\u53e3\u53f7\u3002
-4. \u6587\u6848\u8981\u548c\u7528\u6237\u5fc3\u60c5\u76f4\u63a5\u76f8\u5173\uff0c\u4e5f\u8981\u80fd\u4f53\u73b0\u85cf\u54c1\u4e3b\u9898\uff0c\u4e0d\u8981\u53ea\u662f\u91cd\u590d\u201c\u597d\u53ef\u7231\u201d\u201c\u8d34\u8d34\u201d\u3002
-5. \u4e0d\u540c\u6761\u76ee\u4e4b\u95f4\u8981\u6709\u660e\u786e\u533a\u5206\uff0c\u8bed\u6c14\u3001\u52a8\u4f5c\u3001\u8868\u60c5\u3001\u6784\u56fe\u63d0\u793a\u4e0d\u80fd\u9ad8\u5ea6\u91cd\u590d\u3002
-6. expression\u3001pose\u3001visualCue \u7528\u7b80\u77ed\u4e2d\u6587\u77ed\u8bed\u63cf\u8ff0\uff0c\u4fbf\u4e8e\u56fe\u50cf\u6a21\u578b\u7406\u89e3\u3002
-7. \u4e0d\u8981\u8f93\u51fa\u82f1\u6587\u6587\u6848\uff0c\u4e0d\u8981\u5e26\u5e8f\u53f7\uff0c\u4e0d\u8981\u5e26\u89e3\u91ca\u3002
-8. \u7981\u6b62\u4f7f\u7528\u8fd9\u4e9b\u6587\u6848\uff1a${EMOJI_CAPTION_BLACKLIST.join('\u3001')}\u3002
-9. \u53ea\u8f93\u51fa\u5408\u6cd5 JSON\uff0c\u4e0d\u8981\u6dfb\u52a0\u4ee3\u7801\u5757\u3002`;
+1. \u53ea\u8fd4\u56de\u4e00\u4e2a JSON \u5bf9\u8c61\uff0c\u5bf9\u8c61\u5fc5\u987b\u662f { "entries": [...] } \u8fd9\u4e2a\u7ed3\u6784\u3002
+2. entries \u91cc\u9762\u653e ${count} \u6761 JSON \u5bf9\u8c61\u3002
+3. \u6bcf\u6761\u5bf9\u8c61\u90fd\u5fc5\u987b\u5305\u542b text\u3001emotion\u3001expression\u3001pose\u3001visualCue \u4e94\u4e2a\u5b57\u6bb5\u3002
+4. text \u5fc5\u987b\u662f 2-6 \u4e2a\u4e2d\u6587\u5b57\u7b26\uff0c\u9002\u5408\u804a\u5929\u53d1\u9001\uff0c\u907f\u514d\u7a7a\u6cdb\u9e21\u6c64\u548c\u6d41\u6c34\u7ebf\u53e3\u53f7\u3002
+5. \u6587\u6848\u8981\u548c\u7528\u6237\u5fc3\u60c5\u76f4\u63a5\u76f8\u5173\uff0c\u4e5f\u8981\u80fd\u4f53\u73b0\u85cf\u54c1\u4e3b\u9898\uff0c\u4e0d\u8981\u53ea\u662f\u91cd\u590d\u201c\u597d\u53ef\u7231\u201d\u201c\u8d34\u8d34\u201d\u3002
+6. \u4e0d\u540c\u6761\u76ee\u4e4b\u95f4\u8981\u6709\u660e\u786e\u533a\u5206\uff0c\u8bed\u6c14\u3001\u52a8\u4f5c\u3001\u8868\u60c5\u3001\u6784\u56fe\u63d0\u793a\u4e0d\u80fd\u9ad8\u5ea6\u91cd\u590d\u3002
+7. expression\u3001pose\u3001visualCue \u7528\u7b80\u77ed\u4e2d\u6587\u77ed\u8bed\u63cf\u8ff0\uff0c\u4fbf\u4e8e\u56fe\u50cf\u6a21\u578b\u7406\u89e3\u3002
+8. \u4e0d\u8981\u8f93\u51fa\u82f1\u6587\u6587\u6848\uff0c\u4e0d\u8981\u5e26\u5e8f\u53f7\uff0c\u4e0d\u8981\u5e26\u89e3\u91ca\u3002
+9. \u7981\u6b62\u4f7f\u7528\u8fd9\u4e9b\u6587\u6848\uff1a${EMOJI_CAPTION_BLACKLIST.join('\u3001')}\u3002
+10. \u53ea\u8f93\u51fa\u5408\u6cd5 JSON\uff0c\u4e0d\u8981\u6dfb\u52a0\u4ee3\u7801\u5757\u3002`;
 }
 
 function normalizeEmojiCaptionPlanEntries(
@@ -1614,7 +1663,13 @@ function classifyError(error: unknown): AnalysisError {
     );
   }
 
-  if (normalized.includes('parse') || normalized.includes('json') || normalized.includes('unexpected')) {
+  if (
+    normalized.includes('parse')
+    || normalized.includes('json')
+    || normalized.includes('unexpected')
+    || normalized.includes('未返回可用文本内容')
+    || normalized.includes('未返回可用的流式文本内容')
+  ) {
     return createAnalysisError(
       'PARSE_ERROR',
       'AI 结果异常',

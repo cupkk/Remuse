@@ -30,6 +30,20 @@ const ALLOWED_AUDIO_MIME_TYPES = new Set([
   'audio/wave',
   'audio/x-wav',
 ]);
+const ALLOWED_MANAGED_UPLOAD_TYPES = new Set([
+  'emoji-packs',
+  'halls',
+  'item-audio',
+  'item-covers',
+  'items',
+  'journals-backgrounds',
+  'journals-preview',
+  'stickers',
+  'transformation-guides',
+]);
+const SAFE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const SAFE_FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/;
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/;
 
 export class ManagedUploadError extends Error {
   statusCode: number;
@@ -62,18 +76,21 @@ export async function saveBase64Image(
   userId: string,
   entityId: string,
 ): Promise<string> {
+  const normalizedType = assertAllowedManagedUploadType(type);
+  const normalizedUserId = assertSafePathSegment(userId, '用户目录');
+  const normalizedEntityId = assertSafePathSegment(entityId, '文件标识');
   const parsed = parseIncomingData(base64Data);
   const normalized = await normalizeImage(parsed.buffer, parsed.mimeType);
 
-  const userDir = path.join(UPLOADS_DIR, type, userId);
+  const userDir = path.join(UPLOADS_DIR, normalizedType, normalizedUserId);
   await fsPromises.mkdir(userDir, { recursive: true });
 
-  const fileName = `${entityId}.webp`;
+  const fileName = `${normalizedEntityId}.webp`;
   const filePath = path.join(userDir, fileName);
   cancelPendingUploadDeletion(filePath);
   await fsPromises.writeFile(filePath, normalized.buffer);
 
-  return `/uploads/${type}/${userId}/${fileName}`;
+  return `/uploads/${normalizedType}/${normalizedUserId}/${fileName}`;
 }
 
 export async function saveBase64Audio(
@@ -82,22 +99,25 @@ export async function saveBase64Audio(
   userId: string,
   entityId: string,
 ): Promise<string> {
+  const normalizedType = assertAllowedManagedUploadType(type);
+  const normalizedUserId = assertSafePathSegment(userId, '用户目录');
+  const normalizedEntityId = assertSafePathSegment(entityId, '文件标识');
   const parsed = parseIncomingData(base64Data);
   const mimeType = normalizeAudioMimeType(parsed.mimeType);
   if (!mimeType || !ALLOWED_AUDIO_MIME_TYPES.has(mimeType)) {
-    throw new ManagedUploadError('不支持的音频格式。仅支持 WEBM、OGG、M4A、MP3、WAV。');
+    throw new ManagedUploadError('不支持的音频格式，仅支持 WEBM、OGG、M4A、MP3、WAV。');
   }
 
   const extension = extensionFromMimeType(mimeType);
-  const userDir = path.join(UPLOADS_DIR, type, userId);
+  const userDir = path.join(UPLOADS_DIR, normalizedType, normalizedUserId);
   await fsPromises.mkdir(userDir, { recursive: true });
 
-  const fileName = `${entityId}.${extension}`;
+  const fileName = `${normalizedEntityId}.${extension}`;
   const filePath = path.join(userDir, fileName);
   cancelPendingUploadDeletion(filePath);
   await fsPromises.writeFile(filePath, parsed.buffer);
 
-  return `/uploads/${type}/${userId}/${fileName}`;
+  return `/uploads/${normalizedType}/${normalizedUserId}/${fileName}`;
 }
 
 export function toClientAssetUrl(uploadPath: string): string {
@@ -125,14 +145,23 @@ export function getManagedUploadInfo(uploadPath: string): ManagedUploadInfo | nu
     .map((part) => part.trim())
     .filter(Boolean);
 
-  if (relativeParts.length < 3) {
+  if (relativeParts.length !== 3) {
     return null;
   }
 
-  const [type, userId, ...fileNameParts] = relativeParts;
-  const fileName = fileNameParts.join('/');
-  const absolutePath = path.resolve(RESOLVED_UPLOADS_DIR, ...relativeParts);
+  const [type, userId, fileName] = relativeParts;
+  if (
+    !type
+    || !userId
+    || !fileName
+    || !ALLOWED_MANAGED_UPLOAD_TYPES.has(type)
+    || !SAFE_PATH_SEGMENT_PATTERN.test(userId)
+    || !SAFE_FILE_NAME_PATTERN.test(fileName)
+  ) {
+    return null;
+  }
 
+  const absolutePath = path.resolve(RESOLVED_UPLOADS_DIR, type, userId, fileName);
   if (absolutePath !== RESOLVED_UPLOADS_DIR && !absolutePath.startsWith(`${RESOLVED_UPLOADS_DIR}${path.sep}`)) {
     return null;
   }
@@ -140,7 +169,7 @@ export function getManagedUploadInfo(uploadPath: string): ManagedUploadInfo | nu
   return {
     absolutePath,
     fileName,
-    relativePath: relativeParts.join('/'),
+    relativePath: [type, userId, fileName].join('/'),
     type,
     userId,
   };
@@ -201,9 +230,9 @@ function removeManagedUploadNow(absolutePath: string): boolean {
 }
 
 function parseIncomingData(base64Data: string): ParsedIncomingData {
-  const trimmed = base64Data.trim();
+  const trimmed = typeof base64Data === 'string' ? base64Data.trim() : '';
   if (!trimmed) {
-    throw new ManagedUploadError('上传内容为空。');
+    throw new ManagedUploadError('上传内容不能为空。');
   }
 
   let mimeType: string | null = null;
@@ -215,8 +244,14 @@ function parseIncomingData(base64Data: string): ParsedIncomingData {
     payload = match[2];
   }
 
+  payload = payload.replace(/\s+/g, '');
+
   if (payload.length > MAX_BASE64_LENGTH) {
     throw new ManagedUploadError(`上传内容过大，最大允许 ${MAX_UPLOAD_BYTES} 字节。`, 413, 'UPLOAD_TOO_LARGE');
+  }
+
+  if (!BASE64_PAYLOAD_PATTERN.test(payload) || payload.length % 4 !== 0) {
+    throw new ManagedUploadError('上传内容不是合法的 base64 数据。');
   }
 
   let buffer: Buffer;
@@ -244,7 +279,7 @@ async function normalizeImage(buffer: Buffer, mimeType: string | null): Promise<
 
   const detectedMimeType = resolveMimeType(mimeType, metadata.format);
   if (!detectedMimeType || !ALLOWED_IMAGE_MIME_TYPES.has(detectedMimeType)) {
-    throw new ManagedUploadError('不支持的图片格式。仅支持 JPEG、PNG、WEBP。');
+    throw new ManagedUploadError('不支持的图片格式，仅支持 JPEG、PNG、WEBP。');
   }
 
   if (!metadata.width || !metadata.height) {
@@ -345,4 +380,21 @@ function parseIntegerEnv(value: string | undefined, fallback: number): number {
 function parseNonNegativeIntegerEnv(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function assertAllowedManagedUploadType(type: string) {
+  if (!ALLOWED_MANAGED_UPLOAD_TYPES.has(type)) {
+    throw new ManagedUploadError('上传目录类型不受支持。', 400, 'UPLOAD_TYPE_INVALID');
+  }
+
+  return type;
+}
+
+function assertSafePathSegment(value: string, fieldLabel: string) {
+  const normalized = (value || '').trim();
+  if (!SAFE_PATH_SEGMENT_PATTERN.test(normalized)) {
+    throw new ManagedUploadError(`${fieldLabel}格式无效。`, 400, 'UPLOAD_PATH_INVALID');
+  }
+
+  return normalized;
 }

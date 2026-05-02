@@ -56,6 +56,14 @@ export async function apiFetch<T = any>(
   url: string,
   options: ApiFetchOptions = {},
 ): Promise<T> {
+  const response = await apiFetchResponse(url, options);
+  return (await response.json()) as T;
+}
+
+export async function apiFetchResponse(
+  url: string,
+  options: ApiFetchOptions = {},
+): Promise<Response> {
   const { skipAuthRefresh = false, ...requestOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -107,7 +115,7 @@ export async function apiFetch<T = any>(
     throw new ApiError(response.status, body.error || response.statusText, body);
   }
 
-  return (await response.json()) as T;
+  return response;
 }
 
 export class ApiError extends Error {

@@ -59,6 +59,9 @@ const MESSAGE_NOT_FOUND = '\u672a\u627e\u5230\u5bf9\u5e94\u8d44\u6e90\u3002';
 const MESSAGE_INTERNAL_SERVER_ERROR = '\u670d\u52a1\u5668\u5f00\u5c0f\u5dee\u4e86\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
 const MESSAGE_CURL_UNEXPECTED = '\u5907\u7528\u4ee3\u7406\u8fd4\u56de\u7684\u54cd\u5e94\u5185\u5bb9\u4e0d\u7b26\u5408\u9884\u671f';
 const MESSAGE_CURL_INVALID_STATUS = '\u5907\u7528\u4ee3\u7406\u8fd4\u56de\u7684\u72b6\u6001\u7801\u65e0\u6548';
+const MESSAGE_INVALID_JSON = '\u8bf7\u6c42\u4f53\u4e0d\u662f\u5408\u6cd5\u7684 JSON\u3002';
+const MESSAGE_REQUEST_BODY_TOO_LARGE = '\u8bf7\u6c42\u4f53\u8fc7\u5927\uff0c\u8bf7\u538b\u7f29\u540e\u91cd\u8bd5\u3002';
+const MESSAGE_REQUEST_BODY_UNSUPPORTED = '\u5f53\u524d\u8bf7\u6c42\u4f53\u7f16\u7801\u6216\u683c\u5f0f\u4e0d\u53d7\u652f\u6301\u3002';
 
 validateAppConfig();
 
@@ -94,9 +97,14 @@ export function createApp() {
   });
 
   app.use(compression());
-  app.use(express.json({ limit: '10mb' }));
   app.use((req, res, next) => {
     applySecurityHeaders(req, res);
+    next();
+  });
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/auth')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
     next();
   });
   app.use((req, res, next) => {
@@ -114,6 +122,7 @@ export function createApp() {
     });
     next();
   });
+  app.use(createJsonBodyParser({ limit: '10mb', skipGeminiProxy: true }));
 
   app.get('/api/healthz', (_req, res) => {
     res.json({
@@ -135,11 +144,11 @@ export function createApp() {
     '/api/gemini',
     authMiddleware,
     aiLimiter,
-    express.json({ limit: '20mb' }),
+    createJsonBodyParser({ limit: '20mb' }),
     async (req, res) => {
       const startedAt = Date.now();
 
-      const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
+      const quota = assertWithinUsageQuota(req.userId!, 'gemini-image');
       if (!quota.allowed) {
         res.status(429).json({
           error: MESSAGE_AI_QUOTA_EXCEEDED,
@@ -154,7 +163,7 @@ export function createApp() {
       if (APP_CONFIG.disableLiveAi) {
         recordAiUsageEvent({
           userId: req.userId!,
-          scope: 'gemini-proxy',
+          scope: 'gemini-image',
           model: extractGeminiModelFromUrl(req.url || ''),
           success: false,
           durationMs: Date.now() - startedAt,
@@ -196,7 +205,7 @@ export function createApp() {
           success = upstreamRes.ok;
           recordAiUsageEvent({
             userId: req.userId!,
-            scope: 'gemini-proxy',
+            scope: 'gemini-image',
             model,
             success,
             durationMs: Date.now() - startedAt,
@@ -220,7 +229,7 @@ export function createApp() {
               success = curlResponse.statusCode >= 200 && curlResponse.statusCode < 300;
               recordAiUsageEvent({
                 userId: req.userId!,
-                scope: 'gemini-proxy',
+                scope: 'gemini-image',
                 model,
                 success,
                 durationMs: Date.now() - startedAt,
@@ -250,7 +259,7 @@ export function createApp() {
 
       recordAiUsageEvent({
         userId: req.userId!,
-        scope: 'gemini-proxy',
+        scope: 'gemini-image',
         model,
         success: false,
         durationMs: Date.now() - startedAt,
@@ -479,8 +488,11 @@ function extractGeminiModelFromUrl(requestUrl: string) {
 
 function applySecurityHeaders(req: express.Request, res: express.Response) {
   res.setHeader('Content-Security-Policy', buildContentSecurityPolicy());
+  res.setHeader('Origin-Agent-Cluster', '?1');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -496,7 +508,7 @@ function buildContentSecurityPolicy() {
     "default-src 'self'",
     "base-uri 'self'",
     "connect-src 'self' https:",
-    "font-src 'self' data: https://fonts.gstatic.com https://fonts.gstatic.cn https://fonts.googleapis.com https://fonts.googleapis.cn",
+    "font-src 'self' data: https://fonts.gstatic.com https://fonts.gstatic.cn https://fonts.googleapis.com https://fonts.googleapis.cn https://at.alicdn.com https://cdn.yiban.io",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "img-src 'self' data: blob: https:",
@@ -509,6 +521,46 @@ function buildContentSecurityPolicy() {
 
 function isSecureRequest(req: express.Request) {
   return req.secure || req.headers['x-forwarded-proto'] === 'https';
+}
+
+function createJsonBodyParser(options: { limit: string; skipGeminiProxy?: boolean }) {
+  const parser = express.json({
+    limit: options.limit,
+    strict: true,
+    type: ['application/json', 'application/*+json'],
+  });
+
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (options.skipGeminiProxy && req.path.startsWith('/api/gemini')) {
+      next();
+      return;
+    }
+
+    parser(req, res, (error) => {
+      if (!error) {
+        next();
+        return;
+      }
+
+      const parseError = error as Error & { status?: number; type?: string };
+      if (parseError.type === 'entity.too.large' || parseError.status === 413) {
+        res.status(413).json({ error: MESSAGE_REQUEST_BODY_TOO_LARGE });
+        return;
+      }
+
+      if (parseError.type === 'entity.parse.failed' || parseError instanceof SyntaxError) {
+        res.status(400).json({ error: MESSAGE_INVALID_JSON });
+        return;
+      }
+
+      if (parseError.type === 'encoding.unsupported') {
+        res.status(415).json({ error: MESSAGE_REQUEST_BODY_UNSUPPORTED });
+        return;
+      }
+
+      next(error);
+    });
+  };
 }
 
 const currentFilePath = fileURLToPath(import.meta.url);

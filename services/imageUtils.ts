@@ -1,19 +1,10 @@
-// ============================================================
-// 客户端图片压缩工具 — 使用 Canvas API
-// 在上传/分析前压缩图片，减少体积并加快传输
-// ============================================================
+// Client-side image compression helpers.
+// Compressing before upload keeps scan and generation requests smaller and faster.
 
-/**
- * 压缩配置
- */
 export interface CompressOptions {
-  /** 最大宽度（px），默认 1200 */
   maxWidth?: number;
-  /** 最大高度（px），默认 1200 */
   maxHeight?: number;
-  /** JPEG 压缩质量 0-1，默认 0.8 */
   quality?: number;
-  /** 输出 MIME 类型，默认 image/jpeg */
   outputType?: string;
 }
 
@@ -56,7 +47,7 @@ export function getImageFetchOptions(imageUrl: string): RequestInit {
 function dataUrlToBlob(dataUrl: string): Blob {
   const commaIndex = dataUrl.indexOf(',');
   if (commaIndex < 0) {
-    throw new Error('\u56fe\u50cf Data URL \u683c\u5f0f\u65e0\u6548');
+    throw new Error('图像 Data URL 格式无效。');
   }
 
   const metadata = dataUrl.slice(5, commaIndex);
@@ -93,7 +84,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('无法解析 SVG 图片内容'));
+      img.onerror = () => reject(new Error('无法解析 SVG 图像内容。'));
       img.src = objectUrl;
     });
 
@@ -105,7 +96,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      throw new Error('\u65e0\u6cd5\u521b\u5efa SVG \u6805\u683c\u5316\u6240\u9700\u7684 Canvas \u4e0a\u4e0b\u6587');
+      throw new Error('无法创建 SVG 栅格化所需的 Canvas 上下文。');
     }
 
     ctx.drawImage(image, 0, 0, width, height);
@@ -114,7 +105,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            reject(new Error('无法将 SVG 图片栅格化'));
+            reject(new Error('无法将 SVG 图像栅格化。'));
             return;
           }
 
@@ -123,7 +114,7 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
             const result = reader.result as string;
             resolve(result.split(',')[1]);
           };
-          reader.onerror = () => reject(new Error('无法读取栅格化后的 SVG 图片'));
+          reader.onerror = () => reject(new Error('无法读取栅格化后的 SVG 图像。'));
           reader.readAsDataURL(blob);
         },
         'image/png',
@@ -137,17 +128,10 @@ async function svgSourceToPngBase64(source: string | Blob): Promise<string> {
   }
 }
 
-/**
- * 将 File 压缩后返回压缩后的 File
- * @param file 原始图片 File
- * @param options 压缩选项
- * @returns 压缩后的 File（如果图片已经够小或无法处理，返回原 File）
- */
 export async function compressImageFile(
   file: File,
   options: CompressOptions = {},
 ): Promise<File> {
-  // 非图片文件直接返回
   if (!file.type.startsWith('image/')) return file;
 
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -156,7 +140,6 @@ export async function compressImageFile(
     const bitmap = await createImageBitmap(file);
     const { width, height } = bitmap;
 
-    // 计算目标尺寸
     let targetW = width;
     let targetH = height;
 
@@ -165,12 +148,10 @@ export async function compressImageFile(
       targetW = Math.round(width * ratio);
       targetH = Math.round(height * ratio);
     } else if (file.size < 500 * 1024) {
-      // 图片小于 500KB 且尺寸在限制内，不压缩
       bitmap.close();
       return file;
     }
 
-    // Canvas 绘制压缩
     const canvas = new OffscreenCanvas(targetW, targetH);
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -186,7 +167,6 @@ export async function compressImageFile(
       quality: opts.quality,
     });
 
-    // 压缩后反而更大，返回原文件
     if (blob.size >= file.size) return file;
 
     const ext = opts.outputType === 'image/jpeg' ? '.jpg' : '.png';
@@ -197,14 +177,10 @@ export async function compressImageFile(
       lastModified: Date.now(),
     });
   } catch {
-    // OffscreenCanvas 不可用时回退
     return compressImageFileFallback(file, opts);
   }
 }
 
-/**
- * 回退方案：使用普通 Canvas（DOM）
- */
 async function compressImageFileFallback(
   file: File,
   opts: Required<CompressOptions>,
@@ -242,6 +218,7 @@ async function compressImageFileFallback(
             resolve(file);
             return;
           }
+
           const ext = opts.outputType === 'image/jpeg' ? '.jpg' : '.png';
           const compressedName = file.name.replace(/\.[^.]+$/, ext);
           resolve(
@@ -265,10 +242,6 @@ async function compressImageFileFallback(
   });
 }
 
-/**
- * 将 base64 字符串压缩后返回新的 base64（不含 data: 前缀）
- * 用于已经是 base64 的场景（如贴纸生成）
- */
 export async function compressBase64Image(
   base64: string,
   mimeType: string = 'image/jpeg',
@@ -277,10 +250,9 @@ export async function compressBase64Image(
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   try {
-    // base64 → Blob → File
     const byteChars = atob(base64);
     const byteArray = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) {
+    for (let i = 0; i < byteChars.length; i += 1) {
       byteArray[i] = byteChars.charCodeAt(i);
     }
     const blob = new Blob([byteArray], { type: mimeType });
@@ -288,7 +260,6 @@ export async function compressBase64Image(
 
     const compressed = await compressImageFile(file, opts);
 
-    // File → base64
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -337,30 +308,24 @@ function buildImageBase64CacheKey(imageUrl: string, options: Required<ImageToBas
   })}`;
 }
 
-/**
- * 将任意图片 URL 转为 base64 字符串（不含 data: 前缀）
- * - data:image/... URL → 直接提取 base64
- * - http(s):// 或 /api/uploads/ 相对路径 → fetch 后转换
- */
 export async function imageUrlToBase64(
   imageUrl: string,
   options: ImageToBase64Options = {},
 ): Promise<string> {
-  if (!imageUrl) throw new Error('??????');
+  if (!imageUrl) throw new Error('缺少图像地址。');
   const resolvedOptions: Required<ImageToBase64Options> = {
     ...DEFAULT_OPTIONS,
     ...DEFAULT_IMAGE_TO_BASE64_OPTIONS,
     ...options,
   };
 
-  // 已经是 data URL，直接提取 base64 部分
   if (imageUrl.startsWith('data:')) {
     if (imageUrl.startsWith('data:image/svg+xml')) {
       return svgSourceToPngBase64(imageUrl);
     }
 
     const parts = imageUrl.split(',');
-    if (parts.length < 2) throw new Error('\u56fe\u50cf Data URL \u683c\u5f0f\u65e0\u6548');
+    if (parts.length < 2) throw new Error('图像 Data URL 格式无效。');
     if (!resolvedOptions.compress) {
       return parts[1];
     }
@@ -369,7 +334,6 @@ export async function imageUrlToBase64(
     return compressBase64Image(parts[1], mimeType, resolvedOptions);
   }
 
-  // HTTP/HTTPS 或相对路径 → fetch 并转 base64
   const shouldUseCache = resolvedOptions.useCache && !imageUrl.startsWith('blob:');
   const cacheKey = buildImageBase64CacheKey(imageUrl, resolvedOptions);
   if (shouldUseCache) {
@@ -381,7 +345,7 @@ export async function imageUrlToBase64(
 
   const loader = (async () => {
     const response = await fetchImageAsset(imageUrl);
-    if (!response.ok) throw new Error(`读取图片失败：${response.status}`);
+    if (!response.ok) throw new Error(`读取图像失败：${response.status}`);
     const blob = await response.blob();
 
     if (blob.type === 'image/svg+xml') {

@@ -16,6 +16,7 @@
     "polish:nfc-showcase": "node --import tsx scripts/polish-nfc-showcase-copy.ts",
     "prepare:gift-release": "npm run polish:nfc-showcase && npm run build:gift",
     "check:encoding": "node scripts/check-mojibake.mjs",
+    "audit:deps": "node scripts/run-npm-audit.mjs",
     "build": "npm run check:encoding && npm run build:client && npm run build:server",
     "preview": "vite preview",
     "preview:gift": "vite preview --config vite.gift.config.ts",
@@ -48,7 +49,7 @@
     "sharp": "^0.34.5",
     "tsx": "^4.21.0",
     "undici": "^7.24.0",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.0",
     "zod": "^4.3.6"
   },
   "overrides": {
@@ -68,7 +69,6 @@
     "@types/node": "^22.19.15",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.27",
     "concurrently": "^9.2.1",

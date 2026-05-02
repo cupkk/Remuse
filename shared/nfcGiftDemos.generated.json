@@ -1,11 +1,11 @@
 [
   {
     "slug": "campus-cup",
-    "capsuleLabel": "NFC Capsule 01",
+    "capsuleLabel": "NFC 档案 01",
     "archiveCode": "RM-GIFT-213-01",
     "publicUrl": "https://gift.remuse.top/campus-cup",
     "title": "夏午珍珠奶茶",
-    "subtitle": "这杯奶茶把夏天最轻的一阵风留在了杯底。轻触 NFC，先看真实原图，再看它被重新写成礼物封面后的样子。",
+    "subtitle": "这杯奶茶把夏天最轻的一阵风留在了杯底。轻触 NFC，先看真实原图，再看它被重新写成展页封面后的样子。",
     "originalImageUrl": "/nfc-showcase/campus-cup/original.webp",
     "coverImageUrl": "/nfc-showcase/campus-cup/cover.webp",
     "stickerImageUrl": "/nfc-showcase/campus-cup/sticker.webp",
@@ -54,7 +54,7 @@
         "id": "campus-cup-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "campus-cup-step-5",
@@ -75,11 +75,11 @@
   },
   {
     "slug": "denim-pocket",
-    "capsuleLabel": "NFC Capsule 02",
+    "capsuleLabel": "NFC 档案 02",
     "archiveCode": "RM-GIFT-213-02",
     "publicUrl": "https://gift.remuse.top/denim-pocket",
     "title": "陪我四年的牛仔外套",
-    "subtitle": "袖口磨起的毛边、口袋里遗落的票根，都还留在这件旧外套里。轻触 NFC，就能把这段穿了四年的旧时光，完整地收进这份礼物里。",
+    "subtitle": "袖口磨起的毛边、口袋里遗落的票根，都还留在这件旧外套里。轻触 NFC，就能把这段穿了四年的旧时光，完整地收进这页档案里。",
     "originalImageUrl": "/nfc-showcase/denim-pocket/original.webp",
     "coverImageUrl": "/nfc-showcase/denim-pocket/cover.webp",
     "stickerImageUrl": "/nfc-showcase/denim-pocket/sticker.webp",
@@ -128,7 +128,7 @@
         "id": "denim-pocket-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "denim-pocket-step-5",
@@ -149,7 +149,7 @@
   },
   {
     "slug": "midnight-ticket",
-    "capsuleLabel": "NFC Capsule 03",
+    "capsuleLabel": "NFC 档案 03",
     "archiveCode": "RM-GIFT-213-03",
     "publicUrl": "https://gift.remuse.top/midnight-ticket",
     "title": "放课后的秘密色纸",
@@ -202,7 +202,7 @@
         "id": "midnight-ticket-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "midnight-ticket-step-5",
@@ -223,11 +223,11 @@
   },
   {
     "slug": "bottlecap-badge",
-    "capsuleLabel": "NFC Capsule 04",
+    "capsuleLabel": "NFC 档案 04",
     "archiveCode": "RM-GIFT-213-04",
     "publicUrl": "https://gift.remuse.top/bottlecap-badge",
     "title": "复古玻璃汽水瓶",
-    "subtitle": "它原本只是旧货店货架上的一只玻璃瓶，现在成了装住季节碎片的小容器。轻触 NFC，看看这件真实旧物怎样被重新整理成一份可以送出去的礼物。",
+    "subtitle": "它原本只是旧货店货架上的一只玻璃瓶，现在成了装住季节碎片的小容器。轻触 NFC，看看这件真实旧物怎样被重新整理成一页可以分享出去的好物档案。",
     "originalImageUrl": "/nfc-showcase/bottlecap-badge/original.webp",
     "coverImageUrl": "/nfc-showcase/bottlecap-badge/cover.webp",
     "stickerImageUrl": "/nfc-showcase/bottlecap-badge/sticker.webp",
@@ -277,7 +277,7 @@
         "id": "bottlecap-badge-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "bottlecap-badge-step-5",
@@ -298,11 +298,11 @@
   },
   {
     "slug": "metro-pass",
-    "capsuleLabel": "NFC Capsule 05",
+    "capsuleLabel": "NFC 档案 05",
     "archiveCode": "RM-GIFT-213-05",
     "publicUrl": "https://gift.remuse.top/metro-pass",
     "title": "排排站的小伙伴",
-    "subtitle": "它们挨在一起站好的样子，很像把今天的小小开心也排整齐了。轻触 NFC，看看我怎样把这一排软乎乎的陪伴，整理成一份可以送出去的小礼物。",
+    "subtitle": "它们挨在一起站好的样子，很像把今天的小小开心也排整齐了。轻触 NFC，看看我怎样把这一排软乎乎的陪伴，整理成一张可以分享出去的好物卡。",
     "originalImageUrl": "/nfc-showcase/metro-pass/original.webp",
     "coverImageUrl": "/nfc-showcase/metro-pass/cover.webp",
     "stickerImageUrl": "/nfc-showcase/metro-pass/sticker.webp",
@@ -352,7 +352,7 @@
         "id": "metro-pass-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "metro-pass-step-5",
@@ -373,11 +373,11 @@
   },
   {
     "slug": "sweater-button",
-    "capsuleLabel": "NFC Capsule 06",
+    "capsuleLabel": "NFC 档案 06",
     "archiveCode": "RM-GIFT-213-06",
     "publicUrl": "https://gift.remuse.top/sweater-button",
     "title": "云端入梦小像",
-    "subtitle": "小小的睡脸像把噪音按下静音键，让人一眼就慢下来。轻触 NFC，看看它怎样从桌角摆件变成一份柔软的公开礼物。",
+    "subtitle": "小小的睡脸像把噪音按下静音键，让人一眼就慢下来。轻触 NFC，看看它怎样从桌角摆件变成一页柔软的公开展页。",
     "originalImageUrl": "/nfc-showcase/sweater-button/original.webp",
     "coverImageUrl": "/nfc-showcase/sweater-button/cover.webp",
     "stickerImageUrl": "/nfc-showcase/sweater-button/sticker.webp",
@@ -427,7 +427,7 @@
         "id": "sweater-button-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "sweater-button-step-5",
@@ -448,11 +448,11 @@
   },
   {
     "slug": "cassette-ribbon",
-    "capsuleLabel": "NFC Capsule 07",
+    "capsuleLabel": "NFC 档案 07",
     "archiveCode": "RM-GIFT-213-07",
     "publicUrl": "https://gift.remuse.top/cassette-ribbon",
     "title": "库迪×柯南联名纸袋",
-    "subtitle": "一只纸袋也可以被认真收藏，因为它背后站着一整段熟悉的角色记忆。轻触 NFC，看看这份联名周边怎样被重新装进一份轻巧的小礼物里。",
+    "subtitle": "一只纸袋也可以被认真收藏，因为它背后站着一整段熟悉的角色记忆。轻触 NFC，看看这份联名周边怎样被重新装进一张轻巧的好物卡里。",
     "originalImageUrl": "/nfc-showcase/cassette-ribbon/original.webp",
     "coverImageUrl": "/nfc-showcase/cassette-ribbon/cover.webp",
     "stickerImageUrl": "/nfc-showcase/cassette-ribbon/sticker.webp",
@@ -502,7 +502,7 @@
         "id": "cassette-ribbon-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "cassette-ribbon-step-5",
@@ -523,11 +523,11 @@
   },
   {
     "slug": "paper-crane",
-    "capsuleLabel": "NFC Capsule 08",
+    "capsuleLabel": "NFC 档案 08",
     "archiveCode": "RM-GIFT-213-08",
     "publicUrl": "https://gift.remuse.top/paper-crane",
     "title": "童话毛绒小队",
-    "subtitle": "这组玩偶像从旧童话里一起走出来，负责把人重新带回软软的安全区。轻触 NFC，看看它们的真实照片、封面和贴纸怎样被串成同一份礼物体验。",
+    "subtitle": "这组玩偶像从旧童话里一起走出来，负责把人重新带回软软的安全区。轻触 NFC，看看它们的真实照片、封面和贴纸怎样被串成同一页好物体验。",
     "originalImageUrl": "/nfc-showcase/paper-crane/original.webp",
     "coverImageUrl": "/nfc-showcase/paper-crane/cover.webp",
     "stickerImageUrl": "/nfc-showcase/paper-crane/sticker.webp",
@@ -577,7 +577,7 @@
         "id": "paper-crane-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "paper-crane-step-5",
@@ -598,7 +598,7 @@
   },
   {
     "slug": "film-roll",
-    "capsuleLabel": "NFC Capsule 09",
+    "capsuleLabel": "NFC 档案 09",
     "archiveCode": "RM-GIFT-213-09",
     "publicUrl": "https://gift.remuse.top/film-roll",
     "title": "城市限定咖啡杯",
@@ -652,7 +652,7 @@
         "id": "film-roll-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "film-roll-step-5",
@@ -673,11 +673,11 @@
   },
   {
     "slug": "concert-band",
-    "capsuleLabel": "NFC Capsule 10",
+    "capsuleLabel": "NFC 档案 10",
     "archiveCode": "RM-GIFT-213-10",
     "publicUrl": "https://gift.remuse.top/concert-band",
     "title": "瑞幸万店纪念套装",
-    "subtitle": "深蓝色包材把一次品牌庆典变成了能拿在手里的具体时刻。轻触 NFC，看看这套纪念周边怎样被整理成一份能直接送到朋友手里的数字礼物。",
+    "subtitle": "深蓝色包材把一次品牌庆典变成了能拿在手里的具体时刻。轻触 NFC，看看这套纪念周边怎样被整理成一张能直接分享给朋友的数字好物卡。",
     "originalImageUrl": "/nfc-showcase/concert-band/original.webp",
     "coverImageUrl": "/nfc-showcase/concert-band/cover.webp",
     "stickerImageUrl": "/nfc-showcase/concert-band/sticker.webp",
@@ -727,7 +727,7 @@
         "id": "concert-band-step-4",
         "label": "04",
         "title": "输出贴纸结果",
-        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一份可以被带走的礼物。"
+        "description": "同步保留 AI 贴纸图和一句短文案，让现场体验更像一张可以被带走的好物卡。"
       },
       {
         "id": "concert-band-step-5",

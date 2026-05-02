@@ -376,7 +376,7 @@ export interface MemoryThreadSummary {
 }
 
 export interface UsageSnapshot {
-  scope: 'gemini-proxy' | 'memory-query';
+  scope: 'stepfun-text' | 'stepfun-vision' | 'gemini-image';
   used: number;
   limit: number;
   remaining: number;
@@ -414,11 +414,23 @@ export interface AdminUsageSummary {
   activeUsers: number;
 }
 
+export interface AdminUserVolumeSummary {
+  totalUsers: number;
+  registeredUsers: number;
+  guestUsers: number;
+  verifiedUsers: number;
+  adminUsers: number;
+}
+
 export interface AdminAiScopeSummary {
   scope: string;
   calls: number;
   successCount: number;
   avgDurationMs: number | null;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedTokens: number;
 }
 
 export interface AdminProductEventSummary {
@@ -456,8 +468,9 @@ export interface AdminUserActivity {
   isGuest: boolean;
   totalEvents: number;
   aiCalls: number;
-  geminiCalls: number;
-  memoryAiCalls: number;
+  stepfunTextCalls: number;
+  stepfunVisionCalls: number;
+  geminiImageCalls: number;
   loginCount: number;
   refreshCount: number;
   scanCount: number;
@@ -493,11 +506,13 @@ export interface AdminFeedbackSummary {
 }
 
 export interface AdminOverview {
+  userVolume: AdminUserVolumeSummary;
   summary7d: AdminUsageSummary;
   summary30d: AdminUsageSummary;
   conversion7d: AdminConversionSummary;
   conversion30d: AdminConversionSummary;
   aiScopes7d: AdminAiScopeSummary[];
+  aiScopes30d: AdminAiScopeSummary[];
   productEvents7d: AdminProductEventSummary[];
   trends7d: AdminTrendPoint[];
   trends30d: AdminTrendPoint[];

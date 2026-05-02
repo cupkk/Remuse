@@ -96,9 +96,9 @@ export interface GuideSourceItem {
 
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   const compressed = await compressImageFile(file, {
-    maxWidth: 1200,
-    maxHeight: 1200,
-    quality: 0.8,
+    maxWidth: 768,
+    maxHeight: 768,
+    quality: 0.68,
   });
 
   return new Promise((resolve, reject) => {

@@ -14,7 +14,7 @@ import {
 import { isAdminUserRestricted } from '../services/adminInsights.ts';
 import { createSticker, createTransformationGuide, getItemById, getTransformationGuideById } from '../services/database.ts';
 import { readManagedUploadAsOptimizedDataUrl } from '../services/managedImageSource.ts';
-import { assertWithinUsageQuota, recordAiUsageEvent, recordProductUsageEvent } from '../services/usageQuota.ts';
+import { assertWithinUsageQuota, recordAiUsageEvent, recordProductUsageEvent, type AiUsageScope } from '../services/usageQuota.ts';
 import { serverLogger } from '../services/serverLogger.ts';
 import { saveBase64Image, toClientAssetUrl } from '../services/storage.ts';
 import { EMOJI_STYLE_PRESETS } from '../types.ts';
@@ -120,13 +120,25 @@ const AI_MESSAGE_SOURCE_REQUIRED_TITLE = '\u7f3a\u5c11\u56fe\u7247';
 const AI_MESSAGE_SOURCE_REQUIRED = '\u8bf7\u5148\u9009\u62e9\u85cf\u54c1\u6216\u4e0a\u4f20\u56fe\u7247\u3002';
 const AI_MESSAGE_SOURCE_REQUIRED_SUGGESTION = '\u8bf7\u5148\u8865\u5145\u56fe\u7247\u6765\u6e90\u540e\u518d\u751f\u6210\u3002';
 
-function buildQuotaExceededError(quota?: { used: number; limit: number; remaining: number }) {
+const FEATURE_USAGE_SCOPES: Record<'scan-analysis' | 'sticker-generate' | 'emoji-pack' | 'guide-generate', AiUsageScope[]> = {
+  'scan-analysis': ['stepfun-vision'],
+  'sticker-generate': ['stepfun-text', 'gemini-image'],
+  'emoji-pack': ['stepfun-text', 'gemini-image'],
+  'guide-generate': ['stepfun-text', 'gemini-image'],
+};
+
+function buildQuotaExceededError(
+  quota?: { used: number; limit: number; remaining: number },
+  scope?: AiUsageScope,
+) {
+  const scopeLabel = humanizeAiScope(scope);
   return {
-    error: '\u4eca\u65e5 AI \u8c03\u7528\u989d\u5ea6\u5df2\u7528\u5b8c\u3002',
+    error: scopeLabel ? `今日${scopeLabel}额度已用完。` : '\u4eca\u65e5 AI \u8c03\u7528\u989d\u5ea6\u5df2\u7528\u5b8c\u3002',
     title: 'AI \u989d\u5ea6\u4e0d\u8db3',
     category: 'QUOTA_EXCEEDED' as const,
     suggestion: '\u8bf7\u660e\u5929\u518d\u8bd5\uff0c\u6216\u8054\u7cfb\u7ba1\u7406\u5458\u8c03\u6574\u989d\u5ea6\u914d\u7f6e\u3002',
     usage: quota,
+    scope: scope || null,
   };
 }
 
@@ -224,9 +236,9 @@ router.post('/generate-collection-cover', async (req: Request, res: Response) =>
   const startedAt = Date.now();
   const localPreferred = canUseLocalCoverCutout();
   if (!localPreferred) {
-    const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
+    const quota = assertWithinUsageQuota(req.userId!, 'gemini-image');
     if (!quota.allowed) {
-      res.status(429).json(buildQuotaExceededError(quota));
+      res.status(429).json(buildQuotaExceededError(quota, 'gemini-image'));
       return;
     }
   }
@@ -244,7 +256,7 @@ router.post('/generate-collection-cover', async (req: Request, res: Response) =>
     if (result.provider === 'gemini') {
       recordAiUsageEvent({
         userId: req.userId!,
-        scope: 'gemini-proxy',
+        scope: 'gemini-image',
         model: 'cover-generate',
         success: true,
         durationMs,
@@ -277,7 +289,7 @@ router.post('/generate-collection-cover', async (req: Request, res: Response) =>
     if (!localPreferred) {
       recordAiUsageEvent({
         userId: req.userId!,
-        scope: 'gemini-proxy',
+        scope: 'gemini-image',
         model: 'cover-generate',
         success: false,
         durationMs,
@@ -318,9 +330,9 @@ router.post('/generate-emoji-pack/tasks', async (req: Request, res: Response) =>
     return;
   }
 
-  const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
-  if (!quota.allowed) {
-    res.status(429).json(buildQuotaExceededError(quota));
+  const quotaCheck = assertWithinUsageScopes(req.userId!, FEATURE_USAGE_SCOPES['emoji-pack']);
+  if (!quotaCheck.allowed) {
+    res.status(429).json(buildQuotaExceededError(quotaCheck.quota, quotaCheck.scope));
     return;
   }
 
@@ -406,9 +418,9 @@ router.post('/prepare-perler-source', async (req: Request, res: Response) => {
   const startedAt = Date.now();
   const localPreferred = canUseLocalCoverCutout();
   if (!localPreferred) {
-    const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
+    const quota = assertWithinUsageQuota(req.userId!, 'gemini-image');
     if (!quota.allowed) {
-      res.status(429).json(buildQuotaExceededError(quota));
+      res.status(429).json(buildQuotaExceededError(quota, 'gemini-image'));
       return;
     }
   }
@@ -433,7 +445,7 @@ router.post('/prepare-perler-source', async (req: Request, res: Response) => {
     if (result.provider === 'gemini') {
       recordAiUsageEvent({
         userId: req.userId!,
-        scope: 'gemini-proxy',
+        scope: 'gemini-image',
         model: 'perler-preprocess',
         success: true,
         durationMs,
@@ -463,7 +475,7 @@ router.post('/prepare-perler-source', async (req: Request, res: Response) => {
     if (!localPreferred) {
       recordAiUsageEvent({
         userId: req.userId!,
-        scope: 'gemini-proxy',
+        scope: 'gemini-image',
         model: 'perler-preprocess',
         success: false,
         durationMs,
@@ -495,7 +507,7 @@ router.post('/prepare-perler-source', async (req: Request, res: Response) => {
 async function handleAiTask<TPayload extends z.ZodTypeAny, TResult>(
   req: Request,
   res: Response,
-  feature: 'scan-analysis' | 'sticker-generate' | 'emoji-pack' | 'cover-generate' | 'guide-generate',
+  feature: 'scan-analysis' | 'sticker-generate' | 'emoji-pack' | 'guide-generate',
   schema: TPayload,
   task: (payload: z.infer<TPayload>) => Promise<TResult>,
 ) {
@@ -504,16 +516,16 @@ async function handleAiTask<TPayload extends z.ZodTypeAny, TResult>(
     return;
   }
 
-  const startedAt = Date.now();
-  const quota = assertWithinUsageQuota(req.userId!, 'gemini-proxy');
-  if (!quota.allowed) {
-    res.status(429).json(buildQuotaExceededError(quota));
-    return;
-  }
-
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message || '\u8bf7\u6c42\u53c2\u6570\u65e0\u6548\u3002' });
+    return;
+  }
+
+  const startedAt = Date.now();
+  const quotaCheck = assertWithinUsageScopes(req.userId!, FEATURE_USAGE_SCOPES[feature]);
+  if (!quotaCheck.allowed) {
+    res.status(429).json(buildQuotaExceededError(quotaCheck.quota, quotaCheck.scope));
     return;
   }
 
@@ -526,9 +538,7 @@ async function handleAiTask<TPayload extends z.ZodTypeAny, TResult>(
     const result = await task(parsed.data);
     const durationMs = Date.now() - startedAt;
 
-    recordAiUsageEvent({
-      userId: req.userId!,
-      scope: 'gemini-proxy',
+    recordAiUsageEvents(req.userId!, FEATURE_USAGE_SCOPES[feature], {
       model: feature,
       success: true,
       durationMs,
@@ -551,14 +561,6 @@ async function handleAiTask<TPayload extends z.ZodTypeAny, TResult>(
       });
     }
 
-    if (feature === 'cover-generate') {
-      recordProductUsageEvent({
-        userId: req.userId!,
-        eventType: 'collection_cover_generate',
-        details: { feature },
-      });
-    }
-
     serverLogger.info('ai.task.completed', {
       feature,
       userId: req.userId,
@@ -570,9 +572,7 @@ async function handleAiTask<TPayload extends z.ZodTypeAny, TResult>(
     const normalized = normalizeAiError(error);
     const durationMs = Date.now() - startedAt;
 
-    recordAiUsageEvent({
-      userId: req.userId!,
-      scope: 'gemini-proxy',
+    recordAiUsageEvents(req.userId!, FEATURE_USAGE_SCOPES[feature], {
       model: feature,
       success: false,
       durationMs,
@@ -654,9 +654,7 @@ async function runEmojiPackTask(taskId: string, userId: string, payload: EmojiPa
     const result = await createEmojiPackResult(userId, payload);
     const durationMs = Date.now() - startedAt;
 
-    recordAiUsageEvent({
-      userId,
-      scope: 'gemini-proxy',
+    recordAiUsageEvents(userId, FEATURE_USAGE_SCOPES['emoji-pack'], {
       model: 'emoji-pack',
       success: true,
       durationMs,
@@ -685,9 +683,7 @@ async function runEmojiPackTask(taskId: string, userId: string, payload: EmojiPa
     const normalized = normalizeAiError(error);
     const durationMs = Date.now() - startedAt;
 
-    recordAiUsageEvent({
-      userId,
-      scope: 'gemini-proxy',
+    recordAiUsageEvents(userId, FEATURE_USAGE_SCOPES['emoji-pack'], {
       model: 'emoji-pack',
       success: false,
       durationMs,
@@ -753,6 +749,58 @@ function createClientAiError(
   suggestion: string,
 ): AnalysisError {
   return { category, title, message, suggestion };
+}
+
+function assertWithinUsageScopes(userId: string, scopes: AiUsageScope[]) {
+  for (const scope of scopes) {
+    const quota = assertWithinUsageQuota(userId, scope);
+    if (!quota.allowed) {
+      return {
+        allowed: false as const,
+        scope,
+        quota,
+      };
+    }
+  }
+
+  return {
+    allowed: true as const,
+  };
+}
+
+function recordAiUsageEvents(
+  userId: string,
+  scopes: AiUsageScope[],
+  input: {
+    model?: string | null;
+    success: boolean;
+    durationMs?: number;
+    details?: Record<string, unknown>;
+  },
+) {
+  for (const scope of scopes) {
+    recordAiUsageEvent({
+      userId,
+      scope,
+      model: input.model,
+      success: input.success,
+      durationMs: input.durationMs,
+      details: input.details,
+    });
+  }
+}
+
+function humanizeAiScope(scope?: AiUsageScope) {
+  switch (scope) {
+    case 'stepfun-text':
+      return 'StepFun 文本';
+    case 'stepfun-vision':
+      return 'StepFun 视觉';
+    case 'gemini-image':
+      return 'Gemini 图像';
+    default:
+      return '';
+  }
 }
 
 async function resolveManagedItemSource(

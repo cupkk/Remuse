@@ -13,5 +13,10 @@ console.log(JSON.stringify({
   backupDir: APP_CONFIG.backupDir,
   dailyGeminiCalls: APP_CONFIG.dailyGeminiCalls,
   dailyMemoryQueries: APP_CONFIG.dailyMemoryQueries,
+  dailyGeminiImageCalls: APP_CONFIG.dailyGeminiImageCalls,
+  dailyStepfunTextCalls: APP_CONFIG.dailyStepfunTextCalls,
+  dailyStepfunVisionCalls: APP_CONFIG.dailyStepfunVisionCalls,
   disableLiveAi: APP_CONFIG.disableLiveAi,
+  stepfunBaseUrl: APP_CONFIG.stepfunBaseUrl,
+  hasStepfunKey: Boolean(APP_CONFIG.stepfunApiKey),
 }, null, 2));

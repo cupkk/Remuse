@@ -853,7 +853,7 @@ const SharedMuseumHub: React.FC<SharedMuseumHubProps> = ({
         <div className="space-y-4 p-4">
           <div className="space-y-1">
             <h3 className="font-display text-xl font-bold text-white">{item.name}</h3>
-            <p className="text-xs text-neutral-500">鍔犲叆鏃堕棿 {new Date(item.dateShared).toLocaleDateString()}</p>
+            <p className="text-xs text-neutral-500">加入时间 {new Date(item.dateShared).toLocaleDateString()}</p>
             <p className="text-xs text-remuse-accent/80">点击进入共享藏品详情页</p>
           </div>
 
@@ -1399,7 +1399,7 @@ const SharedMuseumHub: React.FC<SharedMuseumHubProps> = ({
               </section>
 
               <section className="rounded-[30px] border border-remuse-border bg-remuse-panel p-5 shadow-[0_20px_56px_rgba(0,0,0,0.22)]">
-                <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-neutral-500">Story Triggers</p>
+                <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-neutral-500">共建触发</p>
                 <h3 className="mt-3 font-display text-2xl font-bold text-white">共建内容预览</h3>
                 <div className="mt-5 space-y-3">
                   {activeMuseum.momentCards.filter((card) => card.type !== 'report').length > 0 ? activeMuseum.momentCards.filter((card) => card.type !== 'report').map((card) => {

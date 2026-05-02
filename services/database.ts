@@ -254,6 +254,8 @@ ensureColumn('users', 'onboarding_seen', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('users', 'sample_seeded', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('users', 'toolbox_json', `TEXT NOT NULL DEFAULT '[]'`);
 ensureColumn('users', 'role', `TEXT NOT NULL DEFAULT 'user'`);
+ensureColumn('users', 'email_verified', `INTEGER NOT NULL DEFAULT 0`);
+ensureColumn('users', 'email_verified_at', `TEXT`);
 ensureColumn('collected_items', 'hall_id', `TEXT NOT NULL DEFAULT '其他'`);
 ensureColumn('collected_items', 'is_sample', `INTEGER NOT NULL DEFAULT 0`);
 ensureColumn('collected_items', 'cover_image_path', `TEXT NOT NULL DEFAULT ''`);

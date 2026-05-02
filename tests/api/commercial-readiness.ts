@@ -102,6 +102,17 @@ async function main() {
     }
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
+    const malformedJsonResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: '{"email":',
+    });
+    assert.equal(malformedJsonResponse.status, 400);
+    assert.equal(malformedJsonResponse.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await malformedJsonResponse.json(), { error: '请求体不是合法的 JSON。' });
+
     const publicCurated = await fetch(`${baseUrl}/api/curated`);
     assert.equal(publicCurated.status, 404);
 
@@ -180,7 +191,11 @@ async function main() {
     const meResponse = await admin.request(baseUrl, '/api/auth/me');
     assert.equal(meResponse.response.status, 200);
     assert.equal(meResponse.data.user.isAdmin, true);
-    assert.equal(meResponse.data.user.usage.length, 2);
+    assert.equal(meResponse.data.user.usage.length, 3);
+    assert.deepEqual(
+      meResponse.data.user.usage.map((item: { scope: string }) => item.scope).sort(),
+      ['gemini-image', 'stepfun-text', 'stepfun-vision'],
+    );
 
     const adminOverview = await admin.request(baseUrl, '/api/admin/overview');
     assert.equal(adminOverview.response.status, 200);
@@ -206,6 +221,20 @@ async function main() {
     assert.equal(userRegister.response.status, 200);
     user.accessToken = userRegister.data.accessToken;
     assert.equal(userRegister.data.user.isAdmin, false);
+
+    const invalidItemUpload = await user.request(baseUrl, '/api/items', {
+      method: 'POST',
+      body: {
+        name: 'Broken Upload',
+        hallId: 'other',
+        category: 'other',
+        imageBase64: 'not-valid-base64!!',
+        story: 'Should be rejected.',
+        status: 'raw',
+      },
+    });
+    assert.equal(invalidItemUpload.response.status, 400);
+    assert.equal(invalidItemUpload.data.error, '上传内容不是合法的 base64 数据。');
 
     const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5x3WQAAAAASUVORK5CYII=';
     const createItem = await user.request(baseUrl, '/api/items', {

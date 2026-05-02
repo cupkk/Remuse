@@ -4,7 +4,13 @@ import {
   MemoryAssistantMessage,
   MemoryAssistantResponse,
 } from '../types';
-import { apiFetch } from './apiClient';
+import { apiFetch, apiFetchResponse } from './apiClient';
+
+type MemoryQueryStreamEvent =
+  | { type: 'started'; threadId: string }
+  | { type: 'delta'; delta: string }
+  | { type: 'done'; thread: MemoryConversationSession }
+  | { type: 'error'; error: string };
 
 export async function askMemoryAssistant(
   query: string,
@@ -61,4 +67,78 @@ export async function queryMemoryThread(threadId: string, query: string): Promis
     body: JSON.stringify({ query }),
   });
   return data.thread;
+}
+
+export async function streamMemoryThreadQuery(
+  threadId: string,
+  query: string,
+  handlers: {
+    onStarted?: (threadId: string) => void;
+    onDelta?: (delta: string) => void;
+  } = {},
+): Promise<MemoryConversationSession> {
+  const response = await apiFetchResponse(`/api/memory/threads/${threadId}/query/stream`, {
+    method: 'POST',
+    body: JSON.stringify({ query }),
+    headers: {
+      Accept: 'application/x-ndjson',
+    },
+  });
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('记忆流式输出不可用。');
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      const event = JSON.parse(trimmed) as MemoryQueryStreamEvent;
+      if (event.type === 'started') {
+        handlers.onStarted?.(event.threadId);
+        continue;
+      }
+
+      if (event.type === 'delta') {
+        handlers.onDelta?.(event.delta);
+        continue;
+      }
+
+      if (event.type === 'done') {
+        return event.thread;
+      }
+
+      if (event.type === 'error') {
+        throw new Error(event.error || '记忆检索失败。');
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer.trim()) as MemoryQueryStreamEvent;
+    if (event.type === 'done') {
+      return event.thread;
+    }
+    if (event.type === 'error') {
+      throw new Error(event.error || '记忆检索失败。');
+    }
+  }
+
+  throw new Error('记忆流式输出已中断。');
 }
