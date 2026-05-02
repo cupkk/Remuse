@@ -61,3 +61,49 @@
 - 开始新会话时先读本日志，再检查 `git status`、`README.md` 和远程 tag。
 - 如果 README 后续继续修改，必须运行 `npm run check:encoding`。
 - 推送前确认 `.env`、`data/`、`uploads/`、`backups/`、构建产物和压缩包没有被误提交。
+
+## 2026-05-03 参赛提交完成记录
+
+### 完成事项
+
+- 已提交并推送 README 与进度日志更新：
+  - commit：`eed1024 docs: prepare hackathon submission`
+  - 远程分支：`origin/main`
+- 已在最新提交上创建并推送 Git tag：`#Flux南客松S2`。
+- 已通过 GitHub API 将仓库 `cupkk/Re-Museum` 从 private 改为 public。
+- 已设置 GitHub 仓库 homepage 为 `https://remuse.top`。
+- 已设置 GitHub 仓库 description 为 `Re-Museum 数字再生博物馆，#Flux南客松S2 黑客松参赛作品`。
+- 已添加 GitHub repository topics：
+  - `ai`
+  - `digital-museum`
+  - `flux-nankesong-s2`
+  - `flux-hackathon-s2`
+  - `remuseum`
+
+### 验证结果
+
+- `npm run check:encoding` 通过。
+- `git diff --check` 通过。
+- `git ls-remote --tags origin '#Flux南客松S2'` 能查到 tag，指向 `eed1024fca9e5e4a3926cc84eebedf62fed14e38`。
+- 匿名访问 GitHub API 返回：
+  - `private=False`
+  - `visibility=public`
+  - `homepage=https://remuse.top`
+- 匿名访问 GitHub topics 返回：
+  - `ai`
+  - `digital-museum`
+  - `flux-nankesong-s2`
+  - `flux-hackathon-s2`
+  - `remuseum`
+- 匿名访问 GitHub HTML 页面 `https://github.com/cupkk/Re-Museum` 返回 HTTP 200。
+- 主站 `https://remuse.top` 返回 HTTP 200。
+- NFC / 礼物子站 `https://gift.remuse.top` 返回 HTTP 200。
+
+### 决策记录
+
+- 黑客松要求的原始标签 `#Flux南客松S2` 已用 Git tag 和 README 原文满足。
+- GitHub repository topics 不支持带 `#` 的原始格式，因此额外使用规范化 topic `flux-nankesong-s2` 和 `flux-hackathon-s2`。
+
+### 当前状态
+
+参赛提交要求已经完成：代码已公开、README 已清楚写明技术栈和技术选型、已附部署实例、已设置参赛 Git tag，并补充了 GitHub topics。
