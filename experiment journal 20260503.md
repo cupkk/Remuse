@@ -205,3 +205,227 @@
 - 运行 `npm run check:encoding`。
 - 运行 `npm run build`。
 - 检查 Git diff，确认只包含清理文件、`.gitignore` 和本日志。
+
+## 2026-05-03 路演前项目理解与 UX 小修
+
+### 本次目标
+
+用户要求深入理解当前 Re-Museum 项目，梳理已开发能力、待开发任务、项目不足与可改进点，并在不影响整个平台的前提下修复少量影响路演用户体验的问题。
+
+### 项目理解
+
+当前项目不是纯前端 Demo，而是较完整的全栈产品：
+
+- 前端由 `App.tsx` 统一编排，核心页面包括登录注册、扫描归档、藏品馆、再生工坊、成果库、共建藏馆、记忆对话、馆长办公室和管理后台。
+- 后端由 `server.ts` + `routes/*` 提供 API，覆盖鉴权、藏品、展馆、贴纸、记忆、共建藏馆、管理员、反馈、错误上报和 AI 能力聚合。
+- 数据层由 `services/database.ts` 和 SQLite 支撑，上传与生成图走本地文件系统。
+- AI 能力集中在 `routes/ai.ts`、`services/aiService.ts`、`services/geminiService.ts`、`services/usageQuota.ts`，包含额度控制、失败分类、模型 fallback、mock 模式和日志。
+- 测试体系包含 API 商业化就绪测试、拼豆算法 parity 测试、Playwright E2E 用户旅程测试。E2E 使用 `.tmp/e2e-runtime` 隔离数据库和上传目录，并开启 `AI_MOCK_MODE=true`，不会触碰真实生产数据。
+
+### 已开发能力
+
+- 账号系统：游客进入、注册、登录、邮箱验证、找回密码、游客升级、退出、账号安全与管理员角色。
+- 扫描归档：上传旧物图片、AI 分析、归档到展馆、故事草稿继续补充、封面与记忆索引。
+- 藏品馆：展馆浏览、藏品详情、展馆跳转。
+- 再生工坊：从藏品生成贴纸、表情包、拼豆图纸、综合改造指南，并把结果沉淀到成果库。
+- 成果库：贴纸、表情包、拼豆图纸、手账、改造指南的集中查看、保存和删除。
+- 记忆对话：基于已归档藏品的记忆线程、查询和检索回答。
+- 共建藏馆：创建、加入、邀请、成员协作、藏品加入、状态与报告。
+- 管理后台：用户、反馈、用量、AI 调用、错误上报和治理入口。
+- NFC / 礼物子站：独立构建链路，用于活动或礼物展示。
+
+### 待开发或后续增强
+
+- 路演演示数据：建议准备一套稳定演示账号、演示藏品和备用图片，避免现场网络或 AI 上游波动影响演示节奏。
+- Demo 模式：当前测试有 `AI_MOCK_MODE`，但正式产品侧还可以增加受控的演示降级开关，让现场能在 AI 不可用时继续展示完整链路。
+- 首次体验：游客路径已经可用，但启动动画、登录页、引导页、再生工坊之间仍偏“产品内部逻辑”，后续可以做更明确的参赛演示路径。
+- 工程体积：`components/StickerLibrary.tsx`、`components/SharedMuseumHub.tsx`、`components/Scanner.tsx` 等文件较大，后续维护成本高，建议路演后拆分。
+- 自动化测试维护：E2E 曾落后于当前工坊流程，后续 UI 流程调整时要同步测试路径和稳定 `data-testid`。
+- 线上观测：已经有错误上报与管理后台，但路演前应确认生产日志、AI 配额、邮件模式、Nginx/PM2 状态和备份任务正常。
+
+### 发现的问题
+
+- 首次进入游客路径后，引导页按钮仍显示英文 `SKIP`、`NEXT`、`START JOURNEY`，与中文主体验不一致，评委体验容易割裂。
+- 登录页游客入口分隔符显示 `or`，同样是首屏中文体验中的小瑕疵。
+- Playwright E2E 测试仍按旧流程在扫描结果页查找 `scanner-generate-sticker`，但当前产品已经调整为“扫描归档 -> 前往再生工坊 -> 选择贴纸工具 -> 选择藏品 -> 生成并进入成果库”。
+- E2E 测试用英文 `verify` 过滤测试邮箱主题，但实际邮件主题是中文“请验证你的 Re-Museum 邮箱”，导致自动化验收误失败。
+
+### 修复操作
+
+- 修改 `components/Onboarding.tsx`：
+  - `SKIP` 改为 `跳过`。
+  - `NEXT` 改为 `继续`。
+  - `START JOURNEY` 改为 `开始扫描`。
+  - 补充 `aria-label="跳过引导"` 与动态继续按钮语义标签。
+- 修改 `components/LoginScreen.tsx`：
+  - 游客入口分隔符从 `or` 改为 `或`。
+- 修改 `components/StickerLibrary.tsx`：
+  - 给贴纸卡片增加稳定测试标识 `data-testid="results-sticker-card"`，不改变 UI 展示。
+- 修改 `tests/e2e/user-journey.spec.ts`：
+  - 邮箱验证主题筛选改为中文 `验证`。
+  - 引导页跳过按钮兼容中文和历史英文。
+  - 贴纸生成路径更新为当前真实工坊流程。
+  - 工坊导航状态兼容“成果库仍保持打开”的合理产品状态。
+
+### 验证结果
+
+- `npm run check:encoding` 通过，未发现可疑乱码模式。
+- `npm run build` 通过，前端 Vite 构建与后端 TypeScript 构建均成功。
+- Playwright 冷启动游客路径验证通过：
+  - 登录页分隔符显示 `或`。
+  - 引导页显示 `跳过`。
+  - 未再出现 `SKIP`、`NEXT`、`START JOURNEY`、`OR` 等英文控制文案。
+- `npm run test:e2e` 通过，覆盖注册、邮箱验证、登录、扫描归档、工坊生成贴纸、成果库、藏品馆、记忆问答和退出。
+- `npm test` 通过，包含 API 商业化就绪测试与拼豆 parity 测试。
+
+### 路演前建议
+
+- 路演当天优先走“游客进入 -> 跳过引导 -> 上传演示图 -> 归档成功 -> 前往再生工坊 -> 生成贴纸 -> 打开成果库 -> 记忆对话”的主线。
+- 提前准备 2-3 张效果稳定的旧物图片，避免现场图片质量导致 AI 识别不稳定。
+- 路演前在生产环境确认主站、NFC 子站、AI Key、配额、PM2、Nginx、磁盘空间和上传目录权限。
+- 如果现场网络不稳，优先展示已经归档的藏品和成果库，再补充说明 AI 生成链路。
+
+### 后续代理注意事项
+
+- 不要为了继续优化路演体验而大改状态流；目前主链路已经通过 E2E。
+- 如果继续改用户可见中文，必须运行 `npm run check:encoding`。
+- E2E 当前已经对齐工坊流程，后续改再生工坊入口时要同步 `tests/e2e/user-journey.spec.ts`。
+- 生产数据目录 `data/`、`uploads/`、`backups/` 和 `.env*` 仍然不要提交或清理。
+
+## 2026-05-03 服务器同步记录
+
+### 目标
+
+用户询问本次路演前 UX 修复是否已经同步到服务器，并提供服务器 PEM 密钥位置。
+
+### 服务器信息
+
+- 主站域名 `remuse.top` 解析到 `47.86.53.69`。
+- NFC 子站 `gift.remuse.top` 也解析到 `47.86.53.69`。
+- 服务器要求使用 `ecs-user` 登录，拒绝 root SSH 登录。
+- 主站部署目录确认为 `/home/ecs-user/Re-Museum`。
+- PM2 应用名为 `re-museum`。
+
+### 同步策略
+
+服务器 `/home/ecs-user/Re-Museum` 工作区存在大量历史本地修改和未跟踪文件，因此本次没有执行 `git pull`、`git reset` 或整目录覆盖。
+
+采用保守同步策略：
+
+1. 在服务器创建备份目录：
+   - `/home/ecs-user/re-museum-deploy-backups/20260503-024256-pre-ux-sync`
+2. 备份即将覆盖的服务器文件：
+   - `components/LoginScreen.tsx`
+   - `components/Onboarding.tsx`
+   - `components/StickerLibrary.tsx`
+   - `tests/e2e/user-journey.spec.ts`
+3. 只上传本次变更相关文件到服务器：
+   - `components/LoginScreen.tsx`
+   - `components/Onboarding.tsx`
+   - `components/StickerLibrary.tsx`
+   - `tests/e2e/user-journey.spec.ts`
+   - `experiment journal 20260503.md`
+4. 未覆盖服务器 `.env`、`data/`、`uploads/`、`backups/`、生产日志或其他运行数据。
+
+### 服务器验证
+
+- 服务器执行 `npm run check:encoding` 通过。
+- 服务器执行 `npm run build` 通过：
+  - 前端 Vite 构建成功。
+  - 后端 TypeScript 构建成功。
+- 执行 `pm2 restart re-museum --update-env` 成功。
+- `pm2 status` 显示 `re-museum` 在线。
+- 公网 `https://remuse.top/` 返回 HTTP 200。
+- 公网 `https://remuse.top/api/healthz` 返回 HTTP 200。
+- 公网 HTML 已指向新构建资源：
+  - `index-C49Lgc91.js`
+- Playwright 线上冷启动游客路径验证通过：
+  - 登录页分隔符为 `或`。
+  - 引导页按钮为 `跳过`。
+  - 未出现 `SKIP`、`NEXT`、`START JOURNEY`、`OR` 等英文控制文案。
+
+### 注意事项
+
+- PM2 日志中仍能看到历史客户端 `unhandledrejection` 和 AI 上游 warn，这些早于本次同步，不是本次 UX 文案修复引入。
+- 本次没有更新 `gift.remuse.top` 静态子站，因为 UX 修复只影响主站首屏与再生工坊测试链路。
+- 服务器工作区仍然不是干净 Git 状态，后续如果要做正式发布治理，应单独整理服务器目录或改成 release 包部署。
+
+## 2026-05-06 AI 模型配置核查
+
+### 目标
+
+用户询问当前项目实际调用哪些模型，尤其是中转站配置，并反馈在某处看到 `claude code opus4.7`。
+
+### 核查范围
+
+- 本地源码中的 AI 服务与配置：
+  - `services/aiService.ts`
+  - `services/stepfunTextService.ts`
+  - `services/appConfig.ts`
+  - `server.ts`
+  - `.env.example`
+- 线上服务器 `/home/ecs-user/Re-Museum/.env` 中的非敏感模型与端点配置。
+- 源码内是否存在 `claude`、`opus`、`sonnet` 等模型调用痕迹。
+
+### 核查结果
+
+- 当前业务应用没有直接调用 Claude、Opus 或 Sonnet 系列模型。
+- 线上文本与视觉理解使用 StepFun：
+  - 文本模型：`step-3.5-flash`
+  - 记忆模型：`step-3.5-flash`
+  - 视觉模型：`step-1v-8k`
+  - 端点：`https://api.stepfun.com/v1`
+- 线上图像生成使用 Gemini 兼容中转：
+  - 主端点：`https://cdn.12ai.org`
+  - 主图像模型：`gemini-3-pro-image-preview`
+  - 图像候选：`gemini-3-pro-image-preview`、`gemini-3.1-flash-image-preview`、`gemini-2.5-flash-image-preview`
+  - 改造指南配图主模型：`gemini-3.1-flash-image-preview`
+  - 改造指南配图候选：`gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`gemini-2.5-flash-image-preview`
+- 记忆 RAG 向量使用 DashScope：
+  - embedding 模型：`text-embedding-v4`
+  - 维度：`1024`
+- 源码中搜索 `claude`、`opus`、`sonnet` 未发现业务模型调用；出现的 `opus` 仅是音频 MIME 编码如 `audio/webm;codecs=opus`，不是 Claude Opus 模型。
+
+### 判断
+
+用户看到的 `claude code opus4.7` 很可能来自开发工具、代码助手、中转站后台模型列表、浏览器扩展或第三方平台展示，不是 Re-Museum 生产业务接口的当前调用模型。若该记录来自中转站后台账单，需要进一步用请求时间、API key、endpoint、request path 或调用日志来区分是否为别的工具共享了同一个中转站账号。
+
+### 后续建议
+
+- 如果要彻底排除中转站混用，应检查中转站后台的 API key 维度日志，按 key 或请求路径区分 Re-Museum 与开发工具调用。
+- 如需在管理后台展示真实模型名，可将当前 `feature -> provider -> model` 映射做成只读配置页，避免只看到抽象的 `Gemini 生图` 或 `StepFun 文本`。
+
+## 2026-05-06 Gemini 中转站密钥更新
+
+### 目标
+
+用户要求更新新的中转站密钥，并强调需要注意防控。密钥内容不写入日志、不提交 Git、不在输出中回显。
+
+### 操作范围
+
+- 本地 `.env`：更新 `GEMINI_API_KEY`。
+- 服务器 `/home/ecs-user/Re-Museum/.env`：更新 `GEMINI_API_KEY`。
+- 未修改 `.env.example`、README 或源码中的示例值。
+- 未修改 `STEPFUN_API_KEY`、`STEPFUN_BASE_URL`、`GEMINI_BASE_URL` 或模型配置。
+
+### 防控措施
+
+- 更新前备份本地 `.env` 到 ignored 目录 `.tmp/secret-backups/`。
+- 更新前备份服务器 `.env` 到 `/home/ecs-user/re-museum-secret-backups/`。
+- `.env`、`.env.local` 和 `.tmp/secret-backups/` 均被 `.gitignore` 覆盖，未进入 Git 变更。
+- 服务器 `.env` 权限收紧为 `600`，属主为 `ecs-user`。
+- 只用前缀布尔检查确认密钥已配置，没有打印完整密钥。
+
+### 验证结果
+
+- 本地 `npm run validate:env` 通过。
+- 服务器 `node --import tsx scripts/validate-env.mjs` 通过。
+- 服务器执行 `pm2 restart re-museum --update-env` 成功，`re-museum` 状态为 `online`。
+- 公网 `https://remuse.top/` 返回 HTTP 200。
+- 公网 `https://remuse.top/api/healthz` 返回 HTTP 200。
+- 本地 `npm run check:encoding` 通过。
+
+### 后续建议
+
+- 如果旧密钥可能已经暴露，应在中转站后台立即吊销旧密钥，并按 key 维度查看最近调用日志。
+- 建议为 Re-Museum 单独创建专用 key，并设置额度上限、日限额、可用模型范围和异常告警，避免开发工具与生产站共用同一个 key。

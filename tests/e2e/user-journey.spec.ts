@@ -30,7 +30,7 @@ test('registered user can verify email, login, scan, archive, generate sticker, 
   await skipOnboardingIfPresent(page);
   await expect(page.getByTestId('curator-logout')).toBeVisible();
 
-  const verifyUrl = await waitForMailboxPreviewUrl(request, email, 'verify');
+  const verifyUrl = await waitForMailboxPreviewUrl(request, email, '验证');
   const verifyToken = new URL(verifyUrl).searchParams.get('token');
   expect(verifyToken).toBeTruthy();
 
@@ -55,21 +55,31 @@ test('registered user can verify email, login, scan, archive, generate sticker, 
 
   await expect(page.getByText('归档成功')).toBeVisible({ timeout: 30_000 });
 
+  await page.getByTestId('scanner-open-workshop').click();
+  await expect(page.getByTestId('workshop-home')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('workshop-open-sticker').click();
+  await expect(page.getByTestId('workshop-picker-sticker')).toBeVisible();
+  await page.getByRole('button', { name: /选择藏品：测试旧物样本/ }).click();
+
   const createStickerResponse = page.waitForResponse((response) => (
-    response.url().includes('/api/stickers')
+    response.url().includes('/api/ai/generate-and-save-sticker')
     && response.request().method() === 'POST'
     && response.ok()
   ));
 
-  await page.getByTestId('scanner-generate-sticker').click();
+  await page.getByTestId('workshop-picker-confirm').click();
   await createStickerResponse;
-  await expect(page.getByTestId('scanner-view-sticker')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('NEW STICKER')).toBeVisible();
+  await expect(page.getByTestId('results-library')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('results-sticker-card')).toHaveCount(1, { timeout: 30_000 });
+  await expect(page.getByText(/我是测试旧物样本/)).toBeVisible();
 
-  await page.getByTestId('scanner-go-to-hall').click();
+  await page.getByTestId('desktop-nav-museum').click();
   await expect(page.getByTestId('museum-gallery')).toBeVisible({ timeout: 20_000 });
 
   await page.getByTestId('desktop-nav-workshop').click();
+  if (await page.getByTestId('results-library').waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)) {
+    await page.getByLabel('返回再生工坊').click();
+  }
   await expect(page.getByTestId('workshop-home')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('workshop-open-emoji-pack')).toBeVisible();
 
@@ -127,7 +137,7 @@ async function skipLaunchIfPresent(page: Page) {
 }
 
 async function skipOnboardingIfPresent(page: Page) {
-  const skipButton = page.getByRole('button', { name: /SKIP/i });
+  const skipButton = page.getByRole('button', { name: /跳过引导|跳过|SKIP/i });
   if (await skipButton.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)) {
     await skipButton.click();
     await page.waitForTimeout(700);

@@ -440,7 +440,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 <>
                   <div className="my-6 flex items-center gap-3">
                     <div className="h-px flex-1 bg-white/10" />
-                    <span className="text-[11px] font-mono uppercase tracking-[0.32em] text-neutral-500">or</span>
+                    <span className="text-[11px] font-mono tracking-[0.32em] text-neutral-500">或</span>
                     <div className="h-px flex-1 bg-white/10" />
                   </div>
 

@@ -869,6 +869,7 @@ const StickerCard: React.FC<{
             aria-checked={selectable ? selected : undefined}
             aria-label={selectable ? `选择贴纸: ${sticker.dramaText?.slice(0, 20)}` : undefined}
             tabIndex={selectable ? 0 : undefined}
+            data-testid="results-sticker-card"
             className={`relative group bg-neutral-900 border rounded-lg p-4 flex flex-col items-center transition-all duration-200
                 ${selectable ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-remuse-accent' : ''}
                 ${selected 

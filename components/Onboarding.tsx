@@ -88,8 +88,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       <button 
         onClick={handleComplete}
         className="absolute top-6 right-6 text-neutral-500 hover:text-white font-display text-xs z-20 flex items-center gap-1 p-2 min-h-[44px] min-w-[44px]"
+        aria-label="跳过引导"
       >
-        SKIP <X size={14} />
+        跳过 <X size={14} />
       </button>
 
       {/* Main Slider Area */}
@@ -144,8 +145,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             <button 
                 onClick={handleNext}
                 className="group flex items-center gap-2 px-6 py-3 bg-white text-black font-bold font-display text-sm hover:bg-remuse-accent transition-colors clip-corner"
+                aria-label={currentIndex === slides.length - 1 ? '开始扫描' : '继续引导'}
             >
-                {currentIndex === slides.length - 1 ? 'START JOURNEY' : 'NEXT'}
+                {currentIndex === slides.length - 1 ? '开始扫描' : '继续'}
                 {currentIndex === slides.length - 1 ? <ArrowRight size={16} /> : <ChevronRight size={16} />}
             </button>
          </div>
