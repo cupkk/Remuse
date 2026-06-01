@@ -255,3 +255,11 @@ npm run smoke:production
 npm run user:set-role -- --email admin@example.com --role admin
 ```
 
+## Open Source Maintenance
+
+This repository is maintained as an open-source full-stack AI digital regeneration museum. See:
+
+- [Open Source Maintenance](docs/OPEN_SOURCE_MAINTENANCE.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [MIT License](LICENSE)
