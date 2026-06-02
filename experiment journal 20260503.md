@@ -413,3 +413,88 @@
 
 - 如果旧密钥可能已经暴露，应在中转站后台立即吊销旧密钥，并按 key 维度查看最近调用日志。
 - 建议为 Re-Museum 单独创建专用 key，并设置额度上限、日限额、可用模型范围和异常告警，避免开发工具与生产站共用同一个 key。
+
+## 2026-06-02 线上用户体验 QA 与小修复
+
+### 目标
+
+用户要求在用户体验日之前检查线上网站功能是否正常，确保主站和礼物/NFC 子站可正常使用，并优先修复不影响整个平台的小问题。
+
+### 已完成事项
+
+- 线上基础健康检查：
+  - `https://remuse.top/` 返回 HTTP 200。
+  - `https://remuse.top/api/healthz` 返回 HTTP 200。
+  - `https://gift.remuse.top/` 返回 HTTP 200。
+  - PM2 中 `re-museum` 为 `online`。
+- 生产磁盘治理：
+  - 发现服务器根分区曾因 `backups/` 长期累积达到 100% 使用率，导致 `ENOSPC`，会影响上传、归档和备份脚本。
+  - 清理旧备份快照后，根分区恢复到约 37% 使用率，约 24G 可用。
+  - 将 `backups/` 中误放的旧源码备份移出到 `/home/ecs-user/re-museum-deploy-backups/legacy-code-backups-20260602-qa/`，避免备份脚本把源码目录误识别为数据快照。
+  - 重新执行 `npm run backup:job` 通过，并生成新快照 `/home/ecs-user/Re-Museum/backups/2026-06-02T02-28-34-308Z`。
+- 线上真实功能验证：
+  - 游客进入主站成功。
+  - 上传样例旧物图片后，AI 扫描、识别、归档成功，新增藏品为“绿色保温瓶”，积分从 15 增加到 20。
+  - 藏品馆正常展示新归档藏品。
+  - 再生工坊正常展示工具与成果库。
+  - 贴纸工具对“绿色保温瓶”执行真实 Gemini 生图成功，成果库贴纸数量从 7 增加到 8。
+  - 记忆对话、共建藏馆、管理后台均可加载。
+  - 礼物/NFC 子站桌面与移动端渲染正常，浏览器控制台无错误。
+- 修复旧数据造成的记忆页图片 404：
+  - 浏览器发现旧链接 `/api/uploads/items/5700fc67-01ce-4632-99df-2f86035893fa/017ee28b-c1b9-4ee8-837a-2647e485d1bc.webp` 返回 404。
+  - 查询确认该藏品 ID 已不在 `collected_items` 主表中，只残留在 `memory_threads.matches_json` 和两条 `transformation_guides` 的历史 JSON 快照里。
+  - 修改前备份数据库到 `/home/ecs-user/re-museum-db-manual-backups/remuse-before-stale-json-prune-2026-06-02T03-07-54-167Z.db`。
+  - 事务清理结果：记忆线程移除 1 个失效匹配，两条改造指南移除已删除藏品的来源快照。
+  - 复查同一 `.webp` 文件名，不再出现在会被前端渲染的记忆线程或改造指南 JSON 中。
+- 修复记忆页小文案问题：
+  - `components/MemoryRagStudio.tsx` 中检索结果元信息原显示为“材质 路 日期”，已修正为“材质 · 日期”。
+  - 本地执行 `npm run build` 通过，包含 `check:encoding`、前端构建和后端 TypeScript 构建。
+  - 服务器同步同一处源码修复后执行 `npm run build` 通过，并执行 `pm2 restart re-museum --update-env`。
+
+### 验证结果
+
+- 服务器 `node --import tsx scripts/validate-env.mjs` 通过，`disableLiveAi: false`。
+- 服务器根分区复查：`/dev/vda3` 约 37% 使用率，约 24G 可用。
+- 线上 `https://remuse.top/api/healthz` 返回 200。
+- 线上主站刷新后加载新主 bundle `index-DYCD2hHJ.js`。
+- 浏览器进入“记忆对话”后：
+  - 失效旧图片不再加载。
+  - 控制台当前错误数为 0。
+  - 检索结果已显示“毛绒与布料 · 2026/3/16”等正确分隔符。
+- 后台权限复查：
+  - 无 Cookie 请求 `/api/admin/overview` 返回 401。
+  - 游客 token 请求 `/api/admin/overview` 返回 403。
+- PM2 最新 out 日志显示：
+  - `server.started` 正常。
+  - `/assets/MemoryRagStudio-Si_gf_6N.js` 返回 200。
+  - `/api/memory/threads/...` 返回 304。
+  - 三个有效记忆图片返回 304。
+  - 后台权限测试分别返回 401 和 403。
+
+### 涉及文件与数据
+
+- 本地源码：
+  - `components/MemoryRagStudio.tsx`
+  - `experiment journal 20260503.md`
+- 线上数据：
+  - `memory_threads`：清理 1 条旧线程中的失效匹配项。
+  - `transformation_guides`：清理 2 条旧指南中的已删除来源藏品快照。
+- 临时脚本：
+  - 本地 `.tmp/remote-*.cjs`，仅用于远端只读查询、数据清理和单字符远端补丁；`.tmp/` 已被 Git 忽略。
+  - 服务器 `/tmp/remuse-*.cjs`，仅为本次运维临时脚本。
+
+### 当前注意事项
+
+- 本地工作区仍有未提交源码变更 `components/MemoryRagStudio.tsx`，以及本日志更新。
+- 上一轮 QA 生成在仓库根目录的截图已移动到 ignored 目录，避免污染仓库根目录：
+  - `.tmp/qa-screenshots/20260602/remuse-gift-mobile-qa.png`
+  - `.tmp/qa-screenshots/20260602/remuse-main-mobile-qa.png`
+- PM2 `error.log` 中仍能看到 5 月历史 `ENOSPC`、历史 unhandledrejection 和历史上游 warn；本次重启后的最新 out 日志未显示新的启动错误。
+- 本次创建了一个游客账号用于权限验证，这是一次性测试数据，不含后台权限。
+
+### 后续建议
+
+- 如果今天现场还要继续高频上传，建议保持磁盘监控，重点看 `/home/ecs-user/Re-Museum/backups` 和 `uploads/` 增长。
+- 备份目录建议长期只保存数据快照，不再混放源码备份；源码备份继续放在独立目录或使用 Git。
+- 记忆页和改造指南未来可增加图片 `onError` 兜底，防止其他历史数据再次出现缺图时影响控制台和观感。
+- 若要正式提交本次小修复，应只提交 `components/MemoryRagStudio.tsx` 和本日志，不提交 `.env`、`data/`、`uploads/`、`backups/`、`dist/`、`build/`、截图或 `.tmp/`。

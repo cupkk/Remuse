@@ -627,7 +627,7 @@ const MemoryRagStudio: React.FC<MemoryRagStudioProps> = ({
                             </span>
                           </div>
                           <p className="mt-1 text-[11px] font-mono uppercase tracking-[0.18em] text-neutral-500">
-                            {match.material} 路 {new Date(match.dateCollected).toLocaleDateString('zh-CN')}
+                            {match.material} · {new Date(match.dateCollected).toLocaleDateString('zh-CN')}
                           </p>
                           <p className="mt-2 line-clamp-3 text-sm leading-6 text-neutral-300">{match.storySnippet}</p>
                           <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-remuse-secondary">
