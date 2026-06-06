@@ -137,6 +137,12 @@ STEPFUN_API_KEY=your_stepfun_key
 JWT_SECRET=a_random_secret_with_at_least_16_characters
 ```
 
+**安全提醒：**
+- 不要在 `.env` 中使用生产环境的真实 API Key — 仅用于本地开发
+- 不要将 `.env`、`.env.local` 等包含密钥的文件提交到 Git
+- 不要在代码中硬编码任何 API Key、OAuth 密钥或数据库密码
+- 如果意外提交了密钥，请立即轮换该密钥并从 Git 历史中移除
+
 常用配置项：
 
 ```bash
